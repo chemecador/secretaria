@@ -1,0 +1,53 @@
+# Gradle
+.gradle/
+build/
+**/build/
+gradle/wrapper/gradle-wrapper.jar
+
+# Android
+local.properties
+
+*.apk
+*.aab
+*.ap_
+*.keystore
+*.jks
+
+# iOS / Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+
+# JVM / Kotlin
+*.class
+*.log
+hs_err_pid*
+replay_pid*
+
+# Kotlin Gradle plugin data
+.kotlin/
+
+# Artefact
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Ficheros temporales BlueJ / J2ME
+*.ctxt
+.mtj.tmp/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+/.idea
