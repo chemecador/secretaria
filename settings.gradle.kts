@@ -1,3 +1,5 @@
+@file:Suppress("UnstableApiUsage")
+
 rootProject.name = "Secretaria"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
@@ -5,9 +7,9 @@ pluginManagement {
     repositories {
         google {
             mavenContent {
-                includeGroupAndSubgroups("androidx")
-                includeGroupAndSubgroups("com.android")
-                includeGroupAndSubgroups("com.google")
+                includeGroupByRegex("androidx(\\..+)?")
+                includeGroupByRegex("com\\.android(\\..+)?")
+                includeGroupByRegex("com\\.google(\\..+)?")
             }
         }
         mavenCentral()
@@ -19,9 +21,9 @@ dependencyResolutionManagement {
     repositories {
         google {
             mavenContent {
-                includeGroupAndSubgroups("androidx")
-                includeGroupAndSubgroups("com.android")
-                includeGroupAndSubgroups("com.google")
+                includeGroupByRegex("androidx(\\..+)?")
+                includeGroupByRegex("com\\.android(\\..+)?")
+                includeGroupByRegex("com\\.google(\\..+)?")
             }
         }
         mavenCentral()
@@ -33,3 +35,4 @@ plugins {
 }
 
 include(":composeApp")
+include(":androidApp")

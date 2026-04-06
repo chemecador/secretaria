@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">Secretaria</string>
+    <string name="order_by">Ordenar por</string>
+    <string name="sort_name_asc">Nombre A-Z</string>
+    <string name="sort_name_desc">Nombre Z-A</string>
+    <string name="sort_date_asc">Fecha antigua</string>
+    <string name="sort_date_desc">Fecha reciente</string>
+    <string name="notes_lists_empty">Todavía no hay listas para mostrar.</string>
+    <string name="notes_lists_error_generic">No se han podido cargar las listas.</string>
+    <string name="list_created_by">Creada por %1$s</string>
+    <string name="list_ordered_badge">Lista ordenada</string>
+</resources>
