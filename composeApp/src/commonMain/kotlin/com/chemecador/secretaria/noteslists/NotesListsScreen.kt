@@ -1,5 +1,6 @@
 package com.chemecador.secretaria.noteslists
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +50,7 @@ import secretaria.composeapp.generated.resources.sort_name_desc
 @Composable
 fun NotesListsScreen(
     presenter: NotesListsPresenter,
+    onListSelected: (id: String, name: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by presenter.state.collectAsState()
@@ -99,7 +101,10 @@ fun NotesListsScreen(
                     )
                 }
 
-                else -> NotesListsContent(items = state.items)
+                else -> NotesListsContent(
+                    items = state.items,
+                    onListSelected = onListSelected,
+                )
             }
         }
     }
@@ -154,22 +159,33 @@ private fun SortSelector(
 }
 
 @Composable
-private fun NotesListsContent(items: List<NotesListSummary>) {
+private fun NotesListsContent(
+    items: List<NotesListSummary>,
+    onListSelected: (id: String, name: String) -> Unit,
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(items, key = { it.id }) { item ->
-            NotesListCard(item)
+            NotesListCard(
+                item = item,
+                onClick = { onListSelected(item.id, item.name) },
+            )
         }
     }
 }
 
 @Composable
-private fun NotesListCard(item: NotesListSummary) {
+private fun NotesListCard(
+    item: NotesListSummary,
+    onClick: () -> Unit,
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(
