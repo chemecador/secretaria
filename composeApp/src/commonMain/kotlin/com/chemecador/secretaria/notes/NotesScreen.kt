@@ -38,15 +38,15 @@ import secretaria.composeapp.generated.resources.notes_error_generic
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotesScreen(
-    presenter: NotesPresenter,
+    viewModel: NotesViewModel,
     listName: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val state by presenter.state.collectAsState()
+    val state by viewModel.state.collectAsState()
 
-    LaunchedEffect(presenter) {
-        presenter.load()
+    LaunchedEffect(viewModel) {
+        viewModel.load()
     }
 
     Scaffold(

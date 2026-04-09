@@ -49,14 +49,14 @@ import secretaria.composeapp.generated.resources.sort_name_desc
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotesListsScreen(
-    presenter: NotesListsPresenter,
+    viewModel: NotesListsViewModel,
     onListSelected: (id: String, name: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val state by presenter.state.collectAsState()
+    val state by viewModel.state.collectAsState()
 
-    LaunchedEffect(presenter) {
-        presenter.load()
+    LaunchedEffect(viewModel) {
+        viewModel.load()
     }
 
     Scaffold(
@@ -74,7 +74,7 @@ fun NotesListsScreen(
         ) {
             SortSelector(
                 selected = state.sortOption,
-                onSortSelected = presenter::setSort,
+                onSortSelected = viewModel::setSort,
             )
 
             when {

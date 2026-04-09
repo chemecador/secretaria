@@ -100,7 +100,7 @@
 - Shared state holder:
   - `NotesListsState`
 - Shared logic:
-  - `NotesListsPresenter`
+  - `NotesListsViewModel` (extends `androidx.lifecycle.ViewModel`)
 - Shared repository contract:
   - `NotesListsRepository`
 - Current repository implementation:
@@ -113,7 +113,7 @@
 - Shared state holder:
   - `NotesState`
 - Shared logic:
-  - `NotesPresenter`
+  - `NotesViewModel` (extends `androidx.lifecycle.ViewModel`)
 - Shared repository contract:
   - `NotesRepository`
 - Current repository implementation:
@@ -131,18 +131,17 @@
 - This is acceptable for the current two-screen state.
 - If a third screen or more complex back stack is added, navigation should be revisited instead of growing ad-hoc state in `App.kt`.
 
-## Presenter vs ViewModel
+## ViewModel layer
 
-- Current shared logic uses a `Presenter`, not a `ViewModel`.
-- Reason:
-  - keep the shared layer platform-agnostic
-  - avoid coupling early KMP code to Android lifecycle assumptions
-  - keep the first migration step simple and portable
-- The current presenter already behaves like a lightweight shared state holder:
-  - exposes `StateFlow`
-  - exposes user actions
-  - contains UI state logic
-- Revisit later only if a proper shared ViewModel abstraction becomes useful across multiple migrated features.
+- Shared logic lives in `androidx.lifecycle.ViewModel` subclasses in `commonMain`.
+- The `androidx.lifecycle` multiplatform artifacts (`viewmodelCompose`, `runtimeCompose`, version `2.10.0`) are already in `composeApp/build.gradle.kts` commonMain deps, so this works on Android, iOS, JVM/Desktop, JS and Wasm.
+- Conventions:
+  - expose state via `StateFlow<State>` backed by a private `MutableStateFlow`
+  - `load()` / `refresh()` are plain (non-suspend) functions that launch on `viewModelScope`
+  - the actual I/O lives in `private suspend fun fetch...()`
+  - screens call `viewModel.load()` from a `LaunchedEffect(viewModel)`
+  - instantiate via `androidx.lifecycle.viewmodel.compose.viewModel { ... }` in `App.kt`; use `viewModel(key = ...)` when the VM depends on a screen parameter (e.g. `listId`)
+- Do not introduce Hilt/Koin yet — constructors take their dependencies directly from the `viewModel { }` factory lambda.
 
 ## Shared Architecture Conventions
 
@@ -152,14 +151,14 @@
   - repository interface
   - fake repository
   - state
-  - presenter
+  - viewmodel
   - screen
 - Shared code currently follows a simple pattern:
   - immutable state via `data class`
   - repository methods return stdlib `Result<T>`
-  - presenter exposes `StateFlow`
-  - screens call `presenter.load()` from `LaunchedEffect`
-- Presenters should stay free of Android lifecycle APIs unless there is an explicit architecture migration.
+  - viewmodel extends `androidx.lifecycle.ViewModel` and exposes `StateFlow`
+  - `load()`/`refresh()` are non-suspend and launch on `viewModelScope`
+  - screens call `viewModel.load()` from `LaunchedEffect(viewModel)`
 
 ## Model / Data Conventions
 
@@ -245,15 +244,11 @@
   - `:composeApp:compileKotlinJs`
   - `:composeApp:compileKotlinWasmJs`
 
-### Presenter Scope Caveat
+### ViewModel scope
 
-- Presenters currently do not own a `CoroutineScope`.
-- This is fine for mock/in-memory repositories.
-- Once real I/O is introduced, cancellation/lifecycle behavior should be revisited.
-- At that point, likely choices are:
-  - inject/manage a scope explicitly
-  - migrate to a shared ViewModel approach
-  - introduce a stronger shared navigation/state framework
+- ViewModels use their built-in `viewModelScope`, which is cancelled automatically when the `viewModel { }` owner leaves composition.
+- This means fake/mock loads and future real I/O both get proper cancellation for free.
+- `viewModelScope` uses `Dispatchers.Main.immediate` by default, so tests must install a test dispatcher via `Dispatchers.setMain(StandardTestDispatcher())` in `@BeforeTest` and `Dispatchers.resetMain()` in `@AfterTest`, then drive coroutines with `runCurrent()` / `advanceUntilIdle()`.
 
 ## Current Validation Commands
 
@@ -287,11 +282,12 @@
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/noteslists/`
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/notes/`
 - Current test focus:
-  - presenter loading transitions
+  - viewmodel loading transitions
   - empty/content/error states
   - sorting logic
   - date formatting
-- Existing presenter tests use controlled repositories with `CompletableDeferred` gates to assert intermediate loading states.
+- ViewModel tests install a `StandardTestDispatcher` as Main (`Dispatchers.setMain` / `resetMain`) and use `runTest(dispatcher) { ... }` plus `runCurrent()` / `advanceUntilIdle()` to drive `viewModelScope`.
+- Controlled repositories still use `CompletableDeferred` gates to assert intermediate loading states.
 
 ## Source of Truth for the Original App
 

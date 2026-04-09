@@ -7,18 +7,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chemecador.secretaria.notes.FakeNotesRepository
-import com.chemecador.secretaria.notes.NotesPresenter
+import com.chemecador.secretaria.notes.NotesRepository
 import com.chemecador.secretaria.notes.NotesScreen
+import com.chemecador.secretaria.notes.NotesViewModel
 import com.chemecador.secretaria.noteslists.FakeNotesListsRepository
-import com.chemecador.secretaria.noteslists.NotesListsPresenter
 import com.chemecador.secretaria.noteslists.NotesListsScreen
+import com.chemecador.secretaria.noteslists.NotesListsViewModel
 
 @Composable
 @Preview
 fun App() {
-    val listsPresenter = remember { NotesListsPresenter(FakeNotesListsRepository()) }
-    val notesRepository = remember { FakeNotesRepository() }
+    val listsViewModel = viewModel { NotesListsViewModel(FakeNotesListsRepository()) }
+    val notesRepository: NotesRepository = remember { FakeNotesRepository() }
 
     var selectedListId by remember { mutableStateOf<String?>(null) }
     var selectedListName by remember { mutableStateOf("") }
@@ -27,18 +29,18 @@ fun App() {
         val currentListId = selectedListId
         if (currentListId == null) {
             NotesListsScreen(
-                presenter = listsPresenter,
+                viewModel = listsViewModel,
                 onListSelected = { id, name ->
                     selectedListId = id
                     selectedListName = name
                 },
             )
         } else {
-            val notesPresenter = remember(currentListId) {
-                NotesPresenter(notesRepository, currentListId)
+            val notesViewModel = viewModel(key = currentListId) {
+                NotesViewModel(notesRepository, currentListId)
             }
             NotesScreen(
-                presenter = notesPresenter,
+                viewModel = notesViewModel,
                 listName = selectedListName,
                 onBack = {
                     selectedListId = null

@@ -1,22 +1,42 @@
 package com.chemecador.secretaria.notes
 
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import kotlin.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class NotesPresenterTest {
+class NotesViewModelTest {
+
+    private lateinit var dispatcher: TestDispatcher
+
+    @BeforeTest
+    fun setUp() {
+        dispatcher = StandardTestDispatcher()
+        Dispatchers.setMain(dispatcher)
+    }
+
+    @AfterTest
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
 
     @Test
-    fun load_transitionsFromLoadingToContent() = runTest {
+    fun load_transitionsFromLoadingToContent() = runTest(dispatcher) {
         val repository = ControlledRepository(
             Result.success(
                 listOf(
@@ -30,67 +50,58 @@ class NotesPresenterTest {
                 ),
             ),
         )
-        val presenter = NotesPresenter(repository, listId = "shopping")
+        val viewModel = NotesViewModel(repository, listId = "shopping")
 
-        val job = backgroundScope.launch {
-            presenter.load()
-        }
-
+        viewModel.load()
         runCurrent()
-        assertTrue(presenter.state.value.isLoading)
+        assertTrue(viewModel.state.value.isLoading)
 
         repository.release()
-        job.join()
+        advanceUntilIdle()
 
-        assertFalse(presenter.state.value.isLoading)
-        assertEquals(1, presenter.state.value.notes.size)
-        assertNull(presenter.state.value.errorMessage)
+        assertFalse(viewModel.state.value.isLoading)
+        assertEquals(1, viewModel.state.value.notes.size)
+        assertNull(viewModel.state.value.errorMessage)
     }
 
     @Test
-    fun load_transitionsFromLoadingToEmptyContent() = runTest {
+    fun load_transitionsFromLoadingToEmptyContent() = runTest(dispatcher) {
         val repository = ControlledRepository(Result.success(emptyList()))
-        val presenter = NotesPresenter(repository, listId = "unknown")
+        val viewModel = NotesViewModel(repository, listId = "unknown")
 
-        val job = backgroundScope.launch {
-            presenter.load()
-        }
-
+        viewModel.load()
         runCurrent()
-        assertTrue(presenter.state.value.isLoading)
+        assertTrue(viewModel.state.value.isLoading)
 
         repository.release()
-        job.join()
+        advanceUntilIdle()
 
-        assertFalse(presenter.state.value.isLoading)
-        assertTrue(presenter.state.value.notes.isEmpty())
-        assertNull(presenter.state.value.errorMessage)
+        assertFalse(viewModel.state.value.isLoading)
+        assertTrue(viewModel.state.value.notes.isEmpty())
+        assertNull(viewModel.state.value.errorMessage)
     }
 
     @Test
-    fun load_transitionsFromLoadingToError() = runTest {
+    fun load_transitionsFromLoadingToError() = runTest(dispatcher) {
         val repository = ControlledRepository(
             Result.failure(IllegalStateException("fallo de prueba")),
         )
-        val presenter = NotesPresenter(repository, listId = "shopping")
+        val viewModel = NotesViewModel(repository, listId = "shopping")
 
-        val job = backgroundScope.launch {
-            presenter.load()
-        }
-
+        viewModel.load()
         runCurrent()
-        assertTrue(presenter.state.value.isLoading)
+        assertTrue(viewModel.state.value.isLoading)
 
         repository.release()
-        job.join()
+        advanceUntilIdle()
 
-        assertFalse(presenter.state.value.isLoading)
-        assertTrue(presenter.state.value.notes.isEmpty())
-        assertEquals("fallo de prueba", presenter.state.value.errorMessage)
+        assertFalse(viewModel.state.value.isLoading)
+        assertTrue(viewModel.state.value.notes.isEmpty())
+        assertEquals("fallo de prueba", viewModel.state.value.errorMessage)
     }
 
     @Test
-    fun refresh_recoversAfterInitialFailure() = runTest {
+    fun refresh_recoversAfterInitialFailure() = runTest(dispatcher) {
         val successNotes = listOf(
             Note(
                 id = "n1",
@@ -103,26 +114,29 @@ class NotesPresenterTest {
         val repository = SwitchableRepository(
             Result.failure(IllegalStateException("fallo inicial")),
         )
-        val presenter = NotesPresenter(repository, listId = "shopping")
+        val viewModel = NotesViewModel(repository, listId = "shopping")
 
-        presenter.load()
-        assertEquals("fallo inicial", presenter.state.value.errorMessage)
-        assertTrue(presenter.state.value.notes.isEmpty())
+        viewModel.load()
+        advanceUntilIdle()
+        assertEquals("fallo inicial", viewModel.state.value.errorMessage)
+        assertTrue(viewModel.state.value.notes.isEmpty())
 
         repository.result = Result.success(successNotes)
-        presenter.refresh()
+        viewModel.refresh()
+        advanceUntilIdle()
 
-        assertFalse(presenter.state.value.isLoading)
-        assertEquals(successNotes, presenter.state.value.notes)
-        assertNull(presenter.state.value.errorMessage)
+        assertFalse(viewModel.state.value.isLoading)
+        assertEquals(successNotes, viewModel.state.value.notes)
+        assertNull(viewModel.state.value.errorMessage)
     }
 
     @Test
-    fun presenter_passesListIdToRepository() = runTest {
+    fun viewModel_passesListIdToRepository() = runTest(dispatcher) {
         val repository = RecordingRepository()
-        val presenter = NotesPresenter(repository, listId = "travel")
+        val viewModel = NotesViewModel(repository, listId = "travel")
 
-        presenter.load()
+        viewModel.load()
+        advanceUntilIdle()
 
         assertEquals(listOf("travel"), repository.requestedIds)
     }
