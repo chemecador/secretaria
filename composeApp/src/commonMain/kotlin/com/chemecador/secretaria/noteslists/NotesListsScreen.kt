@@ -1,6 +1,7 @@
 package com.chemecador.secretaria.noteslists
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +45,9 @@ import secretaria.composeapp.generated.resources.Res
 import secretaria.composeapp.generated.resources.app_name
 import secretaria.composeapp.generated.resources.cancel
 import secretaria.composeapp.generated.resources.create_list_button
+import secretaria.composeapp.generated.resources.delete
+import secretaria.composeapp.generated.resources.delete_list_message
+import secretaria.composeapp.generated.resources.delete_list_title
 import secretaria.composeapp.generated.resources.create_list_name_hint
 import secretaria.composeapp.generated.resources.create_list_ordered
 import secretaria.composeapp.generated.resources.create_list_title
@@ -66,6 +70,7 @@ fun NotesListsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
+    var listToDelete by remember { mutableStateOf<NotesListSummary?>(null) }
 
     LaunchedEffect(viewModel) {
         viewModel.load()
@@ -91,6 +96,17 @@ fun NotesListsScreen(
                 onCreate = { name, ordered ->
                     viewModel.createList(name, ordered)
                     showCreateDialog = false
+                },
+            )
+        }
+
+        listToDelete?.let { list ->
+            DeleteListDialog(
+                listName = list.name,
+                onDismiss = { listToDelete = null },
+                onConfirm = {
+                    viewModel.deleteList(list.id)
+                    listToDelete = null
                 },
             )
         }
@@ -131,6 +147,7 @@ fun NotesListsScreen(
                 else -> NotesListsContent(
                     items = state.items,
                     onListSelected = onListSelected,
+                    onListLongClick = { listToDelete = it },
                 )
             }
         }
@@ -189,6 +206,7 @@ private fun SortSelector(
 private fun NotesListsContent(
     items: List<NotesListSummary>,
     onListSelected: (id: String, name: String, isOrdered: Boolean) -> Unit,
+    onListLongClick: (NotesListSummary) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -199,20 +217,23 @@ private fun NotesListsContent(
             NotesListCard(
                 item = item,
                 onClick = { onListSelected(item.id, item.name, item.isOrdered) },
+                onLongClick = { onListLongClick(item) },
             )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NotesListCard(
     item: NotesListSummary,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(
@@ -301,6 +322,29 @@ private fun CreateListDialog(
                 enabled = name.isNotBlank(),
             ) {
                 Text(stringResource(Res.string.create_list_button))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun DeleteListDialog(
+    listName: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.delete_list_title)) },
+        text = { Text(stringResource(Res.string.delete_list_message, listName)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(Res.string.delete))
             }
         },
         dismissButton = {

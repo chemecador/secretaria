@@ -173,6 +173,39 @@ class NotesViewModelTest {
         assertEquals("fallo al crear", viewModel.state.value.errorMessage)
     }
 
+    @Test
+    fun deleteNote_removesNoteFromState() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val viewModel = NotesViewModel(repository, listId = "test-list")
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.createNote("Para borrar", "contenido")
+        advanceUntilIdle()
+        assertEquals(1, viewModel.state.value.notes.size)
+
+        val noteId = viewModel.state.value.notes[0].id
+        viewModel.deleteNote(noteId)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.notes.isEmpty())
+    }
+
+    @Test
+    fun deleteNote_errorSetsErrorMessage() = runTest(dispatcher) {
+        val repository = FailingDeleteRepository()
+        val viewModel = NotesViewModel(repository, listId = "test-list")
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.deleteNote("any")
+        advanceUntilIdle()
+
+        assertEquals("fallo al eliminar", viewModel.state.value.errorMessage)
+    }
+
     private class ControlledRepository(
         private val result: Result<List<Note>>,
     ) : NotesRepository {
@@ -189,6 +222,9 @@ class NotesViewModelTest {
             content: String,
         ): Result<Note> = throw UnsupportedOperationException()
 
+        override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> =
+            throw UnsupportedOperationException()
+
         fun release() {
             gate.complete(Unit)
         }
@@ -204,6 +240,9 @@ class NotesViewModelTest {
             title: String,
             content: String,
         ): Result<Note> = throw UnsupportedOperationException()
+
+        override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> =
+            throw UnsupportedOperationException()
     }
 
     private class RecordingRepository : NotesRepository {
@@ -219,6 +258,9 @@ class NotesViewModelTest {
             title: String,
             content: String,
         ): Result<Note> = throw UnsupportedOperationException()
+
+        override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> =
+            throw UnsupportedOperationException()
     }
 
     private class MutableRepository : NotesRepository {
@@ -244,6 +286,11 @@ class NotesViewModelTest {
             list.add(note)
             return Result.success(note)
         }
+
+        override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> {
+            notes[listId]?.removeAll { it.id == noteId }
+            return Result.success(Unit)
+        }
     }
 
     private class FailingCreateRepository : NotesRepository {
@@ -255,5 +302,22 @@ class NotesViewModelTest {
             title: String,
             content: String,
         ): Result<Note> = Result.failure(IllegalStateException("fallo al crear"))
+
+        override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> =
+            throw UnsupportedOperationException()
+    }
+
+    private class FailingDeleteRepository : NotesRepository {
+        override suspend fun getNotesForList(listId: String): Result<List<Note>> =
+            Result.success(emptyList())
+
+        override suspend fun createNote(
+            listId: String,
+            title: String,
+            content: String,
+        ): Result<Note> = throw UnsupportedOperationException()
+
+        override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> =
+            Result.failure(IllegalStateException("fallo al eliminar"))
     }
 }

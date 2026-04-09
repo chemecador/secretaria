@@ -37,6 +37,16 @@ class NotesViewModel(
         }
     }
 
+    fun deleteNote(noteId: String) {
+        viewModelScope.launch {
+            repository.deleteNote(listId, noteId)
+                .onSuccess { fetchNotes() }
+                .onFailure { throwable ->
+                    _state.update { it.copy(errorMessage = throwable.message) }
+                }
+        }
+    }
+
     private suspend fun fetchNotes() {
         _state.update { currentState ->
             currentState.copy(isLoading = true, errorMessage = null)

@@ -21,4 +21,9 @@
     <string name="notes_empty">Esta lista todavía no tiene notas.</string>
     <string name="notes_error_generic">No se han podido cargar las notas.</string>
     <string name="note_completed_badge">Completada</string>
+    <string name="delete">Eliminar</string>
+    <string name="delete_list_title">Eliminar lista</string>
+    <string name="delete_list_message">¿Eliminar %1$s? Se borrarán todas sus notas.</string>
+    <string name="delete_note_title">Eliminar nota</string>
+    <string name="delete_note_message">¿Eliminar %1$s?</string>
 </resources>

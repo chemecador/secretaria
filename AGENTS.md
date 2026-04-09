@@ -65,11 +65,17 @@
 
 ## Current Product State
 
-- First migrated vertical is implemented:
-  - shared read-only notes lists screen
-- Second migrated vertical is also implemented:
-  - shared read-only notes screen for a selected list
+- Notes lists screen (fully implemented):
+  - read, create, delete lists
+  - sorting by name/date
+- Notes screen (fully implemented):
+  - read, create, delete notes for a selected list
+  - ordered/unordered display
+- Interaction patterns:
+  - FAB (+) to create via dialog
+  - long-press on card to delete via confirmation dialog
 - Not migrated yet:
+  - edit lists/notes
   - Firebase
   - authentication
   - Hilt
@@ -332,9 +338,9 @@
 
 ## Good Next Steps
 
-- Migrate a third small vertical, likely one of:
-  - create list locally
-  - note detail / note editing
+- Migrate the next small vertical, likely one of:
+  - edit list name / note content
+  - note detail screen
   - basic shared navigation cleanup
 - Only after a couple of successful small migrations, consider:
   - shared navigation strategy

@@ -30,6 +30,11 @@ class FakeNotesListsRepository(
         return Result.success(newList)
     }
 
+    override suspend fun deleteList(listId: String): Result<Unit> {
+        lists.removeAll { it.id == listId }
+        return Result.success(Unit)
+    }
+
     companion object {
         val seedLists = listOf(
             NotesListSummary(

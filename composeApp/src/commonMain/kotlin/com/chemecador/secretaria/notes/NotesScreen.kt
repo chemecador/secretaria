@@ -1,5 +1,7 @@
 package com.chemecador.secretaria.notes
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +43,9 @@ import org.jetbrains.compose.resources.stringResource
 import secretaria.composeapp.generated.resources.Res
 import secretaria.composeapp.generated.resources.cancel
 import secretaria.composeapp.generated.resources.create_note_button
+import secretaria.composeapp.generated.resources.delete
+import secretaria.composeapp.generated.resources.delete_note_message
+import secretaria.composeapp.generated.resources.delete_note_title
 import secretaria.composeapp.generated.resources.create_note_content_hint
 import secretaria.composeapp.generated.resources.create_note_name_hint
 import secretaria.composeapp.generated.resources.create_note_title
@@ -60,6 +65,7 @@ fun NotesScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
+    var noteToDelete by remember { mutableStateOf<Note?>(null) }
 
     LaunchedEffect(viewModel) {
         viewModel.load()
@@ -93,6 +99,17 @@ fun NotesScreen(
                 onCreate = { title, content ->
                     viewModel.createNote(title, content)
                     showCreateDialog = false
+                },
+            )
+        }
+
+        noteToDelete?.let { note ->
+            DeleteNoteDialog(
+                noteTitle = note.title,
+                onDismiss = { noteToDelete = null },
+                onConfirm = {
+                    viewModel.deleteNote(note.id)
+                    noteToDelete = null
                 },
             )
         }
@@ -132,7 +149,11 @@ fun NotesScreen(
                     } else {
                         state.notes
                     }
-                    NotesContent(notes = displayNotes, isOrdered = isOrdered)
+                    NotesContent(
+                        notes = displayNotes,
+                        isOrdered = isOrdered,
+                        onNoteLongClick = { noteToDelete = it },
+                    )
                 }
             }
         }
@@ -140,7 +161,11 @@ fun NotesScreen(
 }
 
 @Composable
-private fun NotesContent(notes: List<Note>, isOrdered: Boolean) {
+private fun NotesContent(
+    notes: List<Note>,
+    isOrdered: Boolean,
+    onNoteLongClick: (Note) -> Unit,
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -151,15 +176,19 @@ private fun NotesContent(notes: List<Note>, isOrdered: Boolean) {
                 note = note,
                 isOrdered = isOrdered,
                 orderIndex = index + 1,
+                onLongClick = { onNoteLongClick(note) },
             )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun NoteCard(note: Note, isOrdered: Boolean, orderIndex: Int) {
+private fun NoteCard(note: Note, isOrdered: Boolean, orderIndex: Int, onLongClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = {}, onLongClick = onLongClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(
@@ -215,6 +244,29 @@ private fun CenteredMessage(
     ) {
         content()
     }
+}
+
+@Composable
+private fun DeleteNoteDialog(
+    noteTitle: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.delete_note_title)) },
+        text = { Text(stringResource(Res.string.delete_note_message, noteTitle)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(Res.string.delete))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
 }
 
 @Composable

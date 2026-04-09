@@ -41,6 +41,16 @@ class NotesListsViewModel(
         }
     }
 
+    fun deleteList(listId: String) {
+        viewModelScope.launch {
+            repository.deleteList(listId)
+                .onSuccess { fetchLists() }
+                .onFailure { throwable ->
+                    _state.update { it.copy(errorMessage = throwable.message) }
+                }
+        }
+    }
+
     private suspend fun fetchLists() {
         _state.update { currentState ->
             currentState.copy(isLoading = true, errorMessage = null)

@@ -36,6 +36,11 @@ class FakeNotesRepository : NotesRepository {
         return Result.success(newNote)
     }
 
+    override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> {
+        notes[listId]?.removeAll { it.id == noteId }
+        return Result.success(Unit)
+    }
+
     companion object {
         val seedNotes: Map<String, List<Note>> = mapOf(
             "shopping" to listOf(

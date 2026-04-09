@@ -196,11 +196,46 @@ class NotesListsViewModelTest {
         assertEquals("Trabajo", viewModel.state.value.items[1].name)
     }
 
+    @Test
+    fun deleteList_removesItemFromState() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val viewModel = NotesListsViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.createList("Para borrar", false)
+        advanceUntilIdle()
+        assertEquals(1, viewModel.state.value.items.size)
+
+        val listId = viewModel.state.value.items[0].id
+        viewModel.deleteList(listId)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.items.isEmpty())
+    }
+
+    @Test
+    fun deleteList_errorSetsErrorMessage() = runTest(dispatcher) {
+        val repository = FailingDeleteRepository()
+        val viewModel = NotesListsViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.deleteList("any")
+        advanceUntilIdle()
+
+        assertEquals("error al eliminar", viewModel.state.value.errorMessage)
+    }
+
     private class ImmediateRepository(
         private val result: Result<List<NotesListSummary>>,
     ) : NotesListsRepository {
         override suspend fun getLists(): Result<List<NotesListSummary>> = result
         override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> =
+            Result.failure(UnsupportedOperationException())
+        override suspend fun deleteList(listId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
     }
 
@@ -215,6 +250,8 @@ class NotesListsViewModelTest {
         }
 
         override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> =
+            Result.failure(UnsupportedOperationException())
+        override suspend fun deleteList(listId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
 
         fun release() {
@@ -239,6 +276,11 @@ class NotesListsViewModelTest {
             lists.add(item)
             return Result.success(item)
         }
+
+        override suspend fun deleteList(listId: String): Result<Unit> {
+            lists.removeAll { it.id == listId }
+            return Result.success(Unit)
+        }
     }
 
     private class FailingCreateRepository : NotesListsRepository {
@@ -247,5 +289,16 @@ class NotesListsViewModelTest {
 
         override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> =
             Result.failure(IllegalStateException("error al crear"))
+        override suspend fun deleteList(listId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
+    }
+
+    private class FailingDeleteRepository : NotesListsRepository {
+        override suspend fun getLists(): Result<List<NotesListSummary>> =
+            Result.success(emptyList())
+        override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> =
+            Result.failure(UnsupportedOperationException())
+        override suspend fun deleteList(listId: String): Result<Unit> =
+            Result.failure(IllegalStateException("error al eliminar"))
     }
 }
