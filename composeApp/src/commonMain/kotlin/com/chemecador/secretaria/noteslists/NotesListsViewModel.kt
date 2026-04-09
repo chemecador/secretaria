@@ -31,6 +31,16 @@ class NotesListsViewModel(
         }
     }
 
+    fun createList(name: String, ordered: Boolean) {
+        viewModelScope.launch {
+            repository.createList(name, ordered)
+                .onSuccess { fetchLists() }
+                .onFailure { throwable ->
+                    _state.update { it.copy(errorMessage = throwable.message) }
+                }
+        }
+    }
+
     private suspend fun fetchLists() {
         _state.update { currentState ->
             currentState.copy(isLoading = true, errorMessage = null)

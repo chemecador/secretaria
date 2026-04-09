@@ -2,4 +2,5 @@ package com.chemecador.secretaria.noteslists
 
 interface NotesListsRepository {
     suspend fun getLists(): Result<List<NotesListSummary>>
+    suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary>
 }

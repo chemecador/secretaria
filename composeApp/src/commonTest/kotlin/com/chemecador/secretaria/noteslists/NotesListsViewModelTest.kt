@@ -135,6 +135,37 @@ class NotesListsViewModelTest {
     }
 
     @Test
+    fun createList_addsNewItemToState() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val viewModel = NotesListsViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+        assertEquals(0, viewModel.state.value.items.size)
+
+        viewModel.createList("Mi nueva lista", false)
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.state.value.items.size)
+        assertEquals("Mi nueva lista", viewModel.state.value.items[0].name)
+        assertFalse(viewModel.state.value.items[0].isOrdered)
+    }
+
+    @Test
+    fun createList_errorSetsErrorMessage() = runTest(dispatcher) {
+        val repository = FailingCreateRepository()
+        val viewModel = NotesListsViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.createList("Falla", false)
+        advanceUntilIdle()
+
+        assertEquals("error al crear", viewModel.state.value.errorMessage)
+    }
+
+    @Test
     fun load_respectsCurrentSortOption() = runTest(dispatcher) {
         val items = listOf(
             NotesListSummary(
@@ -169,6 +200,8 @@ class NotesListsViewModelTest {
         private val result: Result<List<NotesListSummary>>,
     ) : NotesListsRepository {
         override suspend fun getLists(): Result<List<NotesListSummary>> = result
+        override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> =
+            Result.failure(UnsupportedOperationException())
     }
 
     private class ControlledRepository(
@@ -181,8 +214,38 @@ class NotesListsViewModelTest {
             return result
         }
 
+        override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> =
+            Result.failure(UnsupportedOperationException())
+
         fun release() {
             gate.complete(Unit)
         }
+    }
+
+    private class MutableRepository : NotesListsRepository {
+        private val lists = mutableListOf<NotesListSummary>()
+
+        override suspend fun getLists(): Result<List<NotesListSummary>> =
+            Result.success(lists.toList())
+
+        override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> {
+            val item = NotesListSummary(
+                id = "new-${lists.size + 1}",
+                name = name,
+                creator = "Test",
+                createdAt = Instant.parse("2026-04-09T12:00:00Z"),
+                isOrdered = ordered,
+            )
+            lists.add(item)
+            return Result.success(item)
+        }
+    }
+
+    private class FailingCreateRepository : NotesListsRepository {
+        override suspend fun getLists(): Result<List<NotesListSummary>> =
+            Result.success(emptyList())
+
+        override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> =
+            Result.failure(IllegalStateException("error al crear"))
     }
 }

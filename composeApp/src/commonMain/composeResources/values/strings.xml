@@ -9,6 +9,11 @@
     <string name="notes_lists_error_generic">No se han podido cargar las listas.</string>
     <string name="list_created_by">Creada por %1$s</string>
     <string name="list_ordered_badge">Lista ordenada</string>
+    <string name="create_list_title">Nueva lista</string>
+    <string name="create_list_name_hint">Nombre de la lista</string>
+    <string name="create_list_ordered">Lista ordenada</string>
+    <string name="create_list_button">Crear</string>
+    <string name="cancel">Cancelar</string>
     <string name="notes_empty">Esta lista todavía no tiene notas.</string>
     <string name="notes_error_generic">No se han podido cargar las notas.</string>
     <string name="note_completed_badge">Completada</string>
