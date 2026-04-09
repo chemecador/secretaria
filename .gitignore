@@ -2,7 +2,12 @@
 .gradle/
 build/
 **/build/
-gradle/wrapper/gradle-wrapper.jar
+gradle-app.setting
+.gradletasknamecache
+
+# Avoid ignoring Gradle wrapper files (.jar and .properties are usually ignored)
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
 
 # Android
 local.properties
@@ -51,3 +56,4 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 /.idea
+*.iml
