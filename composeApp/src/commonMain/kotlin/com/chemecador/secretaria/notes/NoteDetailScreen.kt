@@ -11,10 +11,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,6 +24,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.chemecador.secretaria.SecretariaTopBarColor
+import com.chemecador.secretaria.SecretariaTopBarContentColor
 import org.jetbrains.compose.resources.stringResource
 import secretaria.composeapp.generated.resources.Res
 import secretaria.composeapp.generated.resources.cancel
@@ -48,6 +52,9 @@ fun NoteDetailScreen(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             title = { Text(stringResource(Res.string.delete_note_title)) },
             text = { Text(stringResource(Res.string.delete_note_message, note.title)) },
             confirmButton = {
@@ -65,9 +72,16 @@ fun NoteDetailScreen(
 
     Scaffold(
         modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text(note.title) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = SecretariaTopBarColor,
+                    titleContentColor = SecretariaTopBarContentColor,
+                    navigationIconContentColor = SecretariaTopBarContentColor,
+                    actionIconContentColor = SecretariaTopBarContentColor,
+                ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Text(
@@ -98,6 +112,12 @@ fun NoteDetailScreen(
                 onValueChange = { title = it },
                 label = { Text(stringResource(Res.string.note_detail_title_hint)) },
                 singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    cursorColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                ),
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(16.dp))
@@ -106,6 +126,12 @@ fun NoteDetailScreen(
                 onValueChange = { content = it },
                 label = { Text(stringResource(Res.string.note_detail_content_hint)) },
                 minLines = 5,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    cursorColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                ),
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(24.dp))

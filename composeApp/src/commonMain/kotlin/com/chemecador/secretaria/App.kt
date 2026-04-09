@@ -1,6 +1,5 @@
 package com.chemecador.secretaria
 
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,7 +36,7 @@ fun App() {
 
     var screen by remember { mutableStateOf<Screen>(Screen.Lists) }
 
-    MaterialTheme {
+    SecretariaTheme {
         when (val current = screen) {
             is Screen.Lists -> {
                 NotesListsScreen(
