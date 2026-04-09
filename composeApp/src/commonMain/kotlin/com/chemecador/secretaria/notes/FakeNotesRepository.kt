@@ -41,6 +41,21 @@ class FakeNotesRepository : NotesRepository {
         return Result.success(Unit)
     }
 
+    override suspend fun updateNote(
+        listId: String,
+        noteId: String,
+        title: String,
+        content: String,
+    ): Result<Note> {
+        val list = notes[listId]
+            ?: return Result.failure(IllegalStateException("List not found"))
+        val index = list.indexOfFirst { it.id == noteId }
+        if (index == -1) return Result.failure(IllegalStateException("Note not found"))
+        val updated = list[index].copy(title = title, content = content)
+        list[index] = updated
+        return Result.success(updated)
+    }
+
     companion object {
         val seedNotes: Map<String, List<Note>> = mapOf(
             "shopping" to listOf(

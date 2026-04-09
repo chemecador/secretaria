@@ -60,6 +60,7 @@ fun NotesScreen(
     viewModel: NotesViewModel,
     listName: String,
     isOrdered: Boolean,
+    onNoteClick: (Note) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -152,6 +153,7 @@ fun NotesScreen(
                     NotesContent(
                         notes = displayNotes,
                         isOrdered = isOrdered,
+                        onNoteClick = onNoteClick,
                         onNoteLongClick = { noteToDelete = it },
                     )
                 }
@@ -164,6 +166,7 @@ fun NotesScreen(
 private fun NotesContent(
     notes: List<Note>,
     isOrdered: Boolean,
+    onNoteClick: (Note) -> Unit,
     onNoteLongClick: (Note) -> Unit,
 ) {
     LazyColumn(
@@ -176,6 +179,7 @@ private fun NotesContent(
                 note = note,
                 isOrdered = isOrdered,
                 orderIndex = index + 1,
+                onClick = { onNoteClick(note) },
                 onLongClick = { onNoteLongClick(note) },
             )
         }
@@ -184,11 +188,11 @@ private fun NotesContent(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun NoteCard(note: Note, isOrdered: Boolean, orderIndex: Int, onLongClick: () -> Unit) {
+private fun NoteCard(note: Note, isOrdered: Boolean, orderIndex: Int, onClick: () -> Unit, onLongClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = {}, onLongClick = onLongClick),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(

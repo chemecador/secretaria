@@ -26,4 +26,7 @@
     <string name="delete_list_message">¿Eliminar %1$s? Se borrarán todas sus notas.</string>
     <string name="delete_note_title">Eliminar nota</string>
     <string name="delete_note_message">¿Eliminar %1$s?</string>
+    <string name="note_detail_save">Guardar</string>
+    <string name="note_detail_title_hint">Título</string>
+    <string name="note_detail_content_hint">Contenido</string>
 </resources>

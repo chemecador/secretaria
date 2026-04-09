@@ -37,6 +37,16 @@ class NotesViewModel(
         }
     }
 
+    fun updateNote(noteId: String, title: String, content: String) {
+        viewModelScope.launch {
+            repository.updateNote(listId, noteId, title, content)
+                .onSuccess { fetchNotes() }
+                .onFailure { throwable ->
+                    _state.update { it.copy(errorMessage = throwable.message) }
+                }
+        }
+    }
+
     fun deleteNote(noteId: String) {
         viewModelScope.launch {
             repository.deleteNote(listId, noteId)

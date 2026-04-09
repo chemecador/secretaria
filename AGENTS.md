@@ -71,18 +71,21 @@
 - Notes screen (fully implemented):
   - read, create, delete notes for a selected list
   - ordered/unordered display
+- Note detail screen (fully implemented):
+  - view note detail
+  - edit title and content
+  - delete with confirmation
 - Interaction patterns:
   - FAB (+) to create via dialog
+  - click on card to open detail
   - long-press on card to delete via confirmation dialog
 - Not migrated yet:
-  - edit lists/notes
+  - edit lists
   - Firebase
   - authentication
   - Hilt
   - DataStore
-  - note detail
   - friends/sharing
-  - complex navigation
   - backend integration
 
 ## Shared Feature Implemented
@@ -121,21 +124,25 @@
 - Shared logic:
   - `NotesViewModel` (extends `androidx.lifecycle.ViewModel`)
 - Shared repository contract:
-  - `NotesRepository`
+  - `NotesRepository` (getNotesForList, createNote, deleteNote, updateNote)
 - Current repository implementation:
   - `FakeNotesRepository`
+- Screens:
+  - `NotesScreen` — list of notes with create/delete
+  - `NoteDetailScreen` — edit title/content, delete with confirmation
 
 ## Current Navigation State
 
 - There is currently no navigation library.
-- `App.kt` uses a small piece of shared state:
-  - `selectedListId`
-  - `selectedListName`
+- `App.kt` uses a sealed `Screen` class to manage navigation between three screens:
+  - `Screen.Lists` — notes lists screen
+  - `Screen.Notes(listId, listName, isOrdered)` — notes for a selected list
+  - `Screen.NoteDetail(listId, listName, isOrdered, note)` — edit/delete a single note
 - Flow today:
-  - lists screen -> select list -> notes screen
-  - notes screen -> back -> lists screen
-- This is acceptable for the current two-screen state.
-- If a third screen or more complex back stack is added, navigation should be revisited instead of growing ad-hoc state in `App.kt`.
+  - lists screen -> select list -> notes screen -> click note -> note detail screen
+  - back navigation at each level
+- This is acceptable for the current three-screen state.
+- If more screens or complex back stacks are added, a navigation library should be considered.
 
 ## ViewModel layer
 
@@ -339,9 +346,8 @@
 ## Good Next Steps
 
 - Migrate the next small vertical, likely one of:
-  - edit list name / note content
-  - note detail screen
-  - basic shared navigation cleanup
+  - edit list name
+  - basic shared navigation cleanup (consider a nav library if more screens are added)
 - Only after a couple of successful small migrations, consider:
   - shared navigation strategy
   - shared persistence abstractions
