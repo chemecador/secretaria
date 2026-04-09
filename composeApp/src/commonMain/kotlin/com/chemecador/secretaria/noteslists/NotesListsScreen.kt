@@ -61,7 +61,7 @@ import secretaria.composeapp.generated.resources.sort_name_desc
 @Composable
 fun NotesListsScreen(
     viewModel: NotesListsViewModel,
-    onListSelected: (id: String, name: String) -> Unit,
+    onListSelected: (id: String, name: String, isOrdered: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
@@ -188,7 +188,7 @@ private fun SortSelector(
 @Composable
 private fun NotesListsContent(
     items: List<NotesListSummary>,
-    onListSelected: (id: String, name: String) -> Unit,
+    onListSelected: (id: String, name: String, isOrdered: Boolean) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -198,7 +198,7 @@ private fun NotesListsContent(
         items(items, key = { it.id }) { item ->
             NotesListCard(
                 item = item,
-                onClick = { onListSelected(item.id, item.name) },
+                onClick = { onListSelected(item.id, item.name, item.isOrdered) },
             )
         }
     }

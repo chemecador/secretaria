@@ -1,15 +1,40 @@
 package com.chemecador.secretaria.notes
 
+import kotlin.time.Clock
 import kotlin.time.Instant
 
-class FakeNotesRepository(
-    private val resultProvider: suspend (String) -> Result<List<Note>> = { listId ->
-        Result.success(seedNotes[listId].orEmpty())
-    },
-) : NotesRepository {
+class FakeNotesRepository : NotesRepository {
 
-    override suspend fun getNotesForList(listId: String): Result<List<Note>> =
-        resultProvider(listId)
+    private val notes = mutableMapOf<String, MutableList<Note>>()
+    private var seeded = false
+
+    override suspend fun getNotesForList(listId: String): Result<List<Note>> {
+        if (!seeded) {
+            seedNotes.forEach { (id, list) ->
+                notes[id] = list.toMutableList()
+            }
+            seeded = true
+        }
+        return Result.success(notes[listId].orEmpty())
+    }
+
+    override suspend fun createNote(
+        listId: String,
+        title: String,
+        content: String,
+    ): Result<Note> {
+        val list = notes.getOrPut(listId) { mutableListOf() }
+        val newNote = Note(
+            id = "$listId-${list.size + 1}",
+            title = title,
+            content = content,
+            createdAt = Clock.System.now(),
+            order = list.size,
+            creator = "Alex",
+        )
+        list.add(newNote)
+        return Result.success(newNote)
+    }
 
     companion object {
         val seedNotes: Map<String, List<Note>> = mapOf(

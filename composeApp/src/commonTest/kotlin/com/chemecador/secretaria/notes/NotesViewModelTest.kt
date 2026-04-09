@@ -141,6 +141,38 @@ class NotesViewModelTest {
         assertEquals(listOf("travel"), repository.requestedIds)
     }
 
+    @Test
+    fun createNote_addsNewNoteToState() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val viewModel = NotesViewModel(repository, listId = "test-list")
+
+        viewModel.load()
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.notes.isEmpty())
+
+        viewModel.createNote("Titulo", "Contenido")
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.state.value.notes.size)
+        assertEquals("Titulo", viewModel.state.value.notes.first().title)
+        assertEquals("Contenido", viewModel.state.value.notes.first().content)
+        assertNull(viewModel.state.value.errorMessage)
+    }
+
+    @Test
+    fun createNote_errorSetsErrorMessage() = runTest(dispatcher) {
+        val repository = FailingCreateRepository()
+        val viewModel = NotesViewModel(repository, listId = "test-list")
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.createNote("Titulo", "Contenido")
+        advanceUntilIdle()
+
+        assertEquals("fallo al crear", viewModel.state.value.errorMessage)
+    }
+
     private class ControlledRepository(
         private val result: Result<List<Note>>,
     ) : NotesRepository {
@@ -151,6 +183,12 @@ class NotesViewModelTest {
             return result
         }
 
+        override suspend fun createNote(
+            listId: String,
+            title: String,
+            content: String,
+        ): Result<Note> = throw UnsupportedOperationException()
+
         fun release() {
             gate.complete(Unit)
         }
@@ -160,6 +198,12 @@ class NotesViewModelTest {
         var result: Result<List<Note>>,
     ) : NotesRepository {
         override suspend fun getNotesForList(listId: String): Result<List<Note>> = result
+
+        override suspend fun createNote(
+            listId: String,
+            title: String,
+            content: String,
+        ): Result<Note> = throw UnsupportedOperationException()
     }
 
     private class RecordingRepository : NotesRepository {
@@ -169,5 +213,47 @@ class NotesViewModelTest {
             requestedIds += listId
             return Result.success(emptyList())
         }
+
+        override suspend fun createNote(
+            listId: String,
+            title: String,
+            content: String,
+        ): Result<Note> = throw UnsupportedOperationException()
+    }
+
+    private class MutableRepository : NotesRepository {
+        private val notes = mutableMapOf<String, MutableList<Note>>()
+
+        override suspend fun getNotesForList(listId: String): Result<List<Note>> =
+            Result.success(notes[listId].orEmpty())
+
+        override suspend fun createNote(
+            listId: String,
+            title: String,
+            content: String,
+        ): Result<Note> {
+            val list = notes.getOrPut(listId) { mutableListOf() }
+            val note = Note(
+                id = "note-${list.size + 1}",
+                title = title,
+                content = content,
+                createdAt = Instant.parse("2026-04-01T10:00:00Z"),
+                order = list.size,
+                creator = "Test",
+            )
+            list.add(note)
+            return Result.success(note)
+        }
+    }
+
+    private class FailingCreateRepository : NotesRepository {
+        override suspend fun getNotesForList(listId: String): Result<List<Note>> =
+            Result.success(emptyList())
+
+        override suspend fun createNote(
+            listId: String,
+            title: String,
+            content: String,
+        ): Result<Note> = Result.failure(IllegalStateException("fallo al crear"))
     }
 }

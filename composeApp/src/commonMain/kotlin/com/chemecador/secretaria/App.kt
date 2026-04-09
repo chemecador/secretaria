@@ -24,15 +24,17 @@ fun App() {
 
     var selectedListId by remember { mutableStateOf<String?>(null) }
     var selectedListName by remember { mutableStateOf("") }
+    var selectedListIsOrdered by remember { mutableStateOf(false) }
 
     MaterialTheme {
         val currentListId = selectedListId
         if (currentListId == null) {
             NotesListsScreen(
                 viewModel = listsViewModel,
-                onListSelected = { id, name ->
+                onListSelected = { id, name, isOrdered ->
                     selectedListId = id
                     selectedListName = name
+                    selectedListIsOrdered = isOrdered
                 },
             )
         } else {
@@ -42,9 +44,11 @@ fun App() {
             NotesScreen(
                 viewModel = notesViewModel,
                 listName = selectedListName,
+                isOrdered = selectedListIsOrdered,
                 onBack = {
                     selectedListId = null
                     selectedListName = ""
+                    selectedListIsOrdered = false
                 },
             )
         }

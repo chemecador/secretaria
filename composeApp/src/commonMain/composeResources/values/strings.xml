@@ -14,6 +14,10 @@
     <string name="create_list_ordered">Lista ordenada</string>
     <string name="create_list_button">Crear</string>
     <string name="cancel">Cancelar</string>
+    <string name="create_note_title">Nueva nota</string>
+    <string name="create_note_name_hint">Título</string>
+    <string name="create_note_content_hint">Contenido</string>
+    <string name="create_note_button">Crear</string>
     <string name="notes_empty">Esta lista todavía no tiene notas.</string>
     <string name="notes_error_generic">No se han podido cargar las notas.</string>
     <string name="note_completed_badge">Completada</string>

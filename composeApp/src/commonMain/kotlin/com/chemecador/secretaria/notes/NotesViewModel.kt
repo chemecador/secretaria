@@ -27,6 +27,16 @@ class NotesViewModel(
         }
     }
 
+    fun createNote(title: String, content: String) {
+        viewModelScope.launch {
+            repository.createNote(listId, title, content)
+                .onSuccess { fetchNotes() }
+                .onFailure { throwable ->
+                    _state.update { it.copy(errorMessage = throwable.message) }
+                }
+        }
+    }
+
     private suspend fun fetchNotes() {
         _state.update { currentState ->
             currentState.copy(isLoading = true, errorMessage = null)
