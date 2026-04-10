@@ -35,6 +35,14 @@ class FakeNotesListsRepository(
         return Result.success(Unit)
     }
 
+    override suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary> {
+        val index = lists.indexOfFirst { it.id == listId }
+        if (index == -1) return Result.failure(IllegalStateException("List not found"))
+        val updated = lists[index].copy(name = name, isOrdered = ordered)
+        lists[index] = updated
+        return Result.success(updated)
+    }
+
     companion object {
         val seedLists = listOf(
             NotesListSummary(

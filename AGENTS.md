@@ -80,7 +80,6 @@
   - click on card to open detail
   - long-press on card to delete via confirmation dialog
 - Not migrated yet:
-  - edit lists
   - Firebase
   - authentication
   - Hilt

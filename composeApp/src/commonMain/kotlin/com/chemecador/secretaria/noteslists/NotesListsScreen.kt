@@ -63,6 +63,9 @@ import secretaria.composeapp.generated.resources.notes_lists_error_generic
 import secretaria.composeapp.generated.resources.order_by
 import secretaria.composeapp.generated.resources.sort_date_asc
 import secretaria.composeapp.generated.resources.sort_date_desc
+import secretaria.composeapp.generated.resources.edit_list
+import secretaria.composeapp.generated.resources.edit_list_button
+import secretaria.composeapp.generated.resources.edit_list_title
 import secretaria.composeapp.generated.resources.sort_name_asc
 import secretaria.composeapp.generated.resources.sort_name_desc
 
@@ -75,6 +78,8 @@ fun NotesListsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
+    var listForOptions by remember { mutableStateOf<NotesListSummary?>(null) }
+    var listToEdit by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToDelete by remember { mutableStateOf<NotesListSummary?>(null) }
 
     LaunchedEffect(viewModel) {
@@ -110,6 +115,32 @@ fun NotesListsScreen(
                 onCreate = { name, ordered ->
                     viewModel.createList(name, ordered)
                     showCreateDialog = false
+                },
+            )
+        }
+
+        listForOptions?.let { list ->
+            ListOptionsDialog(
+                listName = list.name,
+                onEdit = {
+                    listToEdit = list
+                    listForOptions = null
+                },
+                onDelete = {
+                    listToDelete = list
+                    listForOptions = null
+                },
+                onDismiss = { listForOptions = null },
+            )
+        }
+
+        listToEdit?.let { list ->
+            EditListDialog(
+                list = list,
+                onDismiss = { listToEdit = null },
+                onSave = { name, ordered ->
+                    viewModel.updateList(list.id, name, ordered)
+                    listToEdit = null
                 },
             )
         }
@@ -161,7 +192,7 @@ fun NotesListsScreen(
                 else -> NotesListsContent(
                     items = state.items,
                     onListSelected = onListSelected,
-                    onListLongClick = { listToDelete = it },
+                    onListLongClick = { listForOptions = it },
                 )
             }
         }
@@ -375,6 +406,104 @@ private fun DeleteListDialog(
         confirmButton = {
             TextButton(onClick = onConfirm) {
                 Text(stringResource(Res.string.delete))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun ListOptionsDialog(
+    listName: String,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        title = { Text(listName) },
+        text = {
+            Column {
+                TextButton(
+                    onClick = onEdit,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(Res.string.edit_list))
+                }
+                TextButton(
+                    onClick = onDelete,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = stringResource(Res.string.delete),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun EditListDialog(
+    list: NotesListSummary,
+    onDismiss: () -> Unit,
+    onSave: (name: String, ordered: Boolean) -> Unit,
+) {
+    var name by remember { mutableStateOf(list.name) }
+    var ordered by remember { mutableStateOf(list.isOrdered) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        title = { Text(stringResource(Res.string.edit_list_title)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(Res.string.create_list_name_hint)) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(stringResource(Res.string.create_list_ordered))
+                    Switch(checked = ordered, onCheckedChange = { ordered = it })
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(name.trim(), ordered) },
+                enabled = name.isNotBlank(),
+            ) {
+                Text(stringResource(Res.string.edit_list_button))
             }
         },
         dismissButton = {

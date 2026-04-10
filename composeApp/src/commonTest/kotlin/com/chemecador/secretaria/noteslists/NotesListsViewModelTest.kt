@@ -229,6 +229,41 @@ class NotesListsViewModelTest {
         assertEquals("error al eliminar", viewModel.state.value.errorMessage)
     }
 
+    @Test
+    fun updateList_updatesItemInState() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val viewModel = NotesListsViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.createList("Original", true)
+        advanceUntilIdle()
+        assertEquals(1, viewModel.state.value.items.size)
+
+        val listId = viewModel.state.value.items[0].id
+        viewModel.updateList(listId, "Editada", false)
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.state.value.items.size)
+        assertEquals("Editada", viewModel.state.value.items[0].name)
+        assertFalse(viewModel.state.value.items[0].isOrdered)
+    }
+
+    @Test
+    fun updateList_errorSetsErrorMessage() = runTest(dispatcher) {
+        val repository = FailingUpdateRepository()
+        val viewModel = NotesListsViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.updateList("any", "Nuevo nombre", false)
+        advanceUntilIdle()
+
+        assertEquals("error al actualizar", viewModel.state.value.errorMessage)
+    }
+
     private class ImmediateRepository(
         private val result: Result<List<NotesListSummary>>,
     ) : NotesListsRepository {
@@ -236,6 +271,8 @@ class NotesListsViewModelTest {
         override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> =
             Result.failure(UnsupportedOperationException())
         override suspend fun deleteList(listId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
+        override suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary> =
             Result.failure(UnsupportedOperationException())
     }
 
@@ -252,6 +289,8 @@ class NotesListsViewModelTest {
         override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> =
             Result.failure(UnsupportedOperationException())
         override suspend fun deleteList(listId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
+        override suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary> =
             Result.failure(UnsupportedOperationException())
 
         fun release() {
@@ -281,6 +320,14 @@ class NotesListsViewModelTest {
             lists.removeAll { it.id == listId }
             return Result.success(Unit)
         }
+
+        override suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary> {
+            val index = lists.indexOfFirst { it.id == listId }
+            if (index == -1) return Result.failure(IllegalStateException("List not found"))
+            val updated = lists[index].copy(name = name, isOrdered = ordered)
+            lists[index] = updated
+            return Result.success(updated)
+        }
     }
 
     private class FailingCreateRepository : NotesListsRepository {
@@ -291,6 +338,8 @@ class NotesListsViewModelTest {
             Result.failure(IllegalStateException("error al crear"))
         override suspend fun deleteList(listId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
+        override suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary> =
+            Result.failure(UnsupportedOperationException())
     }
 
     private class FailingDeleteRepository : NotesListsRepository {
@@ -300,5 +349,18 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun deleteList(listId: String): Result<Unit> =
             Result.failure(IllegalStateException("error al eliminar"))
+        override suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary> =
+            Result.failure(UnsupportedOperationException())
+    }
+
+    private class FailingUpdateRepository : NotesListsRepository {
+        override suspend fun getLists(): Result<List<NotesListSummary>> =
+            Result.success(emptyList())
+        override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> =
+            Result.failure(UnsupportedOperationException())
+        override suspend fun deleteList(listId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
+        override suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary> =
+            Result.failure(IllegalStateException("error al actualizar"))
     }
 }
