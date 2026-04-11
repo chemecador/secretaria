@@ -11,6 +11,7 @@ gradle-app.setting
 
 # Android
 local.properties
+google-services.json
 
 *.apk
 *.aab
