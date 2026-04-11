@@ -16,8 +16,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AlternateEmail
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -98,7 +102,7 @@ fun LoginScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     leadingIcon = {
-                        Text("@", style = MaterialTheme.typography.bodyLarge)
+                        Icon(Icons.Filled.AlternateEmail, contentDescription = null)
                     },
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -110,7 +114,7 @@ fun LoginScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     leadingIcon = {
-                        Text("*", style = MaterialTheme.typography.bodyLarge)
+                        Icon(Icons.Filled.Lock, contentDescription = null)
                     },
                 )
                 Spacer(modifier = Modifier.height(16.dp))

@@ -5,7 +5,7 @@
 - Project name: `secretaria`
 - Type: Kotlin Multiplatform + Compose Multiplatform
 - Main goal: gradually migrate the existing Android app to KMP
-- Reference Android project: `/Users/alex/Proyectos/Android/Kotlin/Secretaria`
+- Reference Android project: MAC: `/Users/alex/Proyectos/Android/Kotlin/Secretaria`, Windows: C:\Proyectos\Android\Kotlin\secretaria-android
 - Migration strategy: small, low-risk vertical slices first
 - Primary repo owner profile:
   - experienced Kotlin/Android developer
@@ -237,9 +237,11 @@
 
 ### Material Icons
 
-- The project currently does not rely on the Material icons extended package.
-- In the shared notes screen, the back button is implemented with a text arrow (`←`) rather than a Material icon.
-- If more icon-heavy UI is added later, re-evaluate whether adding icon dependencies is worth it.
+- `compose.materialIconsExtended` is declared in `commonMain.dependencies` in `composeApp/build.gradle.kts`.
+- Use `Icons.AutoMirrored.Filled.ArrowBack` for back navigation buttons.
+- Use `Icons.Filled.Add` for FAB create buttons.
+- Use `Icons.Filled.AlternateEmail` / `Icons.Filled.Lock` for email/password field leading icons.
+- Do not use text characters (`←`, `+`, `@`, `*`) as icon substitutes.
 
 ### ComposeApp Android Task Names
 
