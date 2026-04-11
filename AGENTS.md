@@ -18,7 +18,8 @@
 - Reuse as much code as possible across platforms.
 - Keep platform hosts as thin as possible.
 - Avoid touching Swift unless there is a real need.
-- Do not try to migrate Firebase/auth/Hilt/DataStore too early.
+- Firebase Auth is now integrated on Android; other Firebase services (Firestore, FCM) are not yet migrated.
+- Do not try to migrate Hilt/DataStore too early.
 - Prefer learning what is truly portable before introducing heavy shared infrastructure.
 
 ## Current Architecture
@@ -79,9 +80,11 @@
   - FAB (+) to create via dialog
   - click on card to open detail
   - long-press on card to delete via confirmation dialog
+- Partially migrated:
+  - Firebase Auth (Android + JVM/Desktop for email/password and anonymous auth; Google Sign-In pending)
 - Not migrated yet:
-  - Firebase
-  - authentication
+  - Firestore
+  - FCM
   - Hilt
   - DataStore
   - friends/sharing
@@ -91,9 +94,9 @@
 
 - Shared app entry:
   - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/App.kt`
-- Shared feature package:
+- Shared feature packages:
+  - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/login/`
   - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/noteslists/`
-- Second shared feature package:
   - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/notes/`
 - Shared resources:
   - `composeApp/src/commonMain/composeResources/values/strings.xml`
@@ -130,17 +133,57 @@
   - `NotesScreen` — list of notes with create/delete
   - `NoteDetailScreen` — edit title/content, delete with confirmation
 
+### Login / Auth Feature
+
+- Shared contract:
+  - `AuthRepository` (login, signup, loginWithGoogle, loginAsGuest, currentUserId)
+- Shared error model:
+  - `AuthError` enum (INVALID_USER, WRONG_PASSWORD, USER_ALREADY_EXISTS, WEAK_PASSWORD, INVALID_EMAIL, NOT_SUPPORTED, UNKNOWN)
+  - `AuthException` wraps `AuthError` for use in `Result.failure`
+- Shared state holder:
+  - `LoginState` (isLoading, error: AuthError?, isLoggedIn)
+- Shared logic:
+  - `LoginViewModel` (extends `androidx.lifecycle.ViewModel`)
+- Platform selection:
+  - `expect fun createAuthRepository(): AuthRepository` in `commonMain`
+  - Android `actual` returns `FirebaseAuthRepository` (uses Firebase Auth SDK)
+  - JVM `actual` returns `FirebaseRestAuthRepository` (uses Firebase Auth REST API)
+  - iOS/Web `actual` returns `FakeAuthRepository`
+- Android-only implementation:
+  - `composeApp/src/androidMain/kotlin/com/chemecador/secretaria/login/FirebaseAuthRepository.kt`
+  - Uses `FirebaseAuth.getInstance()` with `.await()` from `kotlinx-coroutines-play-services`
+  - Supports: email/password login, email/password signup, anonymous login
+  - Google Sign-In: returns `NOT_SUPPORTED` (deferred — requires Activity context + Credential Manager)
+- JVM-only implementation:
+  - `composeApp/src/jvmMain/kotlin/com/chemecador/secretaria/login/FirebaseRestAuthRepository.kt`
+  - Uses Firebase Identity Toolkit REST API via `java.net.http.HttpClient`
+  - Supports: email/password login, email/password signup, anonymous login
+  - Google Sign-In: returns `NOT_SUPPORTED`
+  - API key is read from `-Dsecretaria.firebaseApiKey=...` or `SECRETARIA_FIREBASE_API_KEY`
+  - `currentUserId` is kept in memory only (no desktop session persistence yet)
+- Fake implementation:
+  - `FakeAuthRepository` — always succeeds after a short delay, used on iOS/Web and in tests that need a lightweight stub
+- Error localization:
+  - `LoginScreen` maps `AuthError` to string resources via `AuthError.toStringRes()`
+  - Error strings are in `strings.xml` (Spanish)
+- Screen:
+  - `LoginScreen` — email/password fields, login/signup buttons, Google Sign-In button, guest access link
+- Tests:
+  - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/login/LoginViewModelTest.kt`
+  - `composeApp/src/jvmTest/kotlin/com/chemecador/secretaria/login/FirebaseRestAuthRepositoryTest.kt`
+
 ## Current Navigation State
 
 - There is currently no navigation library.
-- `App.kt` uses a sealed `Screen` class to manage navigation between three screens:
+- `App.kt` uses a sealed `Screen` class to manage navigation between four screens:
+  - `Screen.Login` — login/signup screen (initial screen)
   - `Screen.Lists` — notes lists screen
   - `Screen.Notes(listId, listName, isOrdered)` — notes for a selected list
   - `Screen.NoteDetail(listId, listName, isOrdered, note)` — edit/delete a single note
 - Flow today:
-  - lists screen -> select list -> notes screen -> click note -> note detail screen
-  - back navigation at each level
-- This is acceptable for the current three-screen state.
+  - login screen -> lists screen -> select list -> notes screen -> click note -> note detail screen
+  - back navigation at each level (except login)
+- This is acceptable for the current four-screen state.
 - If more screens or complex back stacks are added, a navigation library should be considered.
 
 ## ViewModel layer
@@ -171,6 +214,12 @@
   - viewmodel extends `androidx.lifecycle.ViewModel` and exposes `StateFlow`
   - `load()`/`refresh()` are non-suspend and launch on `viewModelScope`
   - screens call `viewModel.load()` from `LaunchedEffect(viewModel)`
+- Platform-specific implementations use `expect`/`actual` factory functions:
+  - pattern: `expect fun createXxxRepository(): XxxRepository` in `commonMain`
+  - each platform provides an `actual fun` returning the appropriate implementation
+  - Android returns the real (e.g. Firebase-backed) implementation
+  - other platforms return `FakeXxxRepository` until real implementations are ready
+  - `App.kt` calls the factory via `remember { createXxxRepository() }` and injects into ViewModels
 
 ## Model / Data Conventions
 
@@ -179,7 +228,7 @@
 - Current conventions:
   - timestamps use `kotlin.time.Instant`
   - colors use `Long` ARGB values instead of Android/Compose-specific color types in the model
-  - errors are represented via `Result<T>` + `errorMessage: String?` in UI state
+  - errors are represented via `Result<T>` + typed error enums in UI state (e.g. `AuthError?` in `LoginState`)
 - Example:
   - `notes/Note.kt` uses `Instant` and `Long color`
 - Reuse `noteslists/formatNotesListDate()` for date formatting instead of creating new formatters.
@@ -293,6 +342,7 @@
 ## Test Locations and Patterns
 
 - Shared tests live in:
+  - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/login/`
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/noteslists/`
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/notes/`
 - Current test focus:
@@ -344,16 +394,34 @@
 - Preserve the idea that `androidApp` is a host, not the place for reusable business logic.
 - Prefer fake/local data first, then introduce real backends behind interfaces.
 
+## Firebase Integration State
+
+- Firebase Auth is live on Android via `FirebaseAuthRepository` in `androidMain`.
+- Firebase Auth is live on JVM/Desktop via `FirebaseRestAuthRepository` in `jvmMain`.
+- Dependencies:
+  - `firebase-auth` (version pinned directly, not via BOM — Kotlin 2.3 deprecated `platform()` in KMP source set deps)
+  - `kotlinx-coroutines-play-services` (for `.await()` on Firebase Tasks)
+  - `google-services` plugin applied in `androidApp/build.gradle.kts`
+- `google-services.json` lives in `androidApp/` and is in `.gitignore`.
+  - Contains clients for both `com.chemecador.secretaria` (release) and `com.chemecador.secretaria.debug` (debug).
+- `androidApp` has `applicationIdSuffix = ".debug"` for debug builds — this is intentional so the KMP debug app coexists with the production Android app on the same device.
+- Firebase auto-initializes via the `google-services.json` metadata in the app module.
+
+### Firebase pitfalls
+
+- Do not use `platform(libs.firebase.bom)` in KMP source set dependencies — `platform()` is deprecated in Kotlin 2.3. Pin Firebase library versions directly instead.
+- `google-services.json` must include the debug package name (`com.chemecador.secretaria.debug`) as a registered client, otherwise Firebase will fail on debug builds.
+- JVM/Desktop auth does not auto-configure Firebase. Set `SECRETARIA_FIREBASE_API_KEY` or `-Dsecretaria.firebaseApiKey=...` before running desktop auth flows.
+- For local desktop development, `:composeApp:run` can also read `secretaria.firebaseApiKey` from the repo root `local.properties` and pass it to the JVM automatically.
+- Firebase projects with email enumeration protection enabled may return `INVALID_LOGIN_CREDENTIALS` for invalid sign-in attempts. On JVM/Desktop this is mapped to `WRONG_PASSWORD` to keep the shared UI/API unchanged.
+
 ## Good Next Steps
 
-- Migrate the next small vertical, likely one of:
-  - edit list name
-  - basic shared navigation cleanup (consider a nav library if more screens are added)
-- Only after a couple of successful small migrations, consider:
-  - shared navigation strategy
-  - shared persistence abstractions
-  - Firebase/auth integration contracts
-  - whether a shared ViewModel layer is actually worth it
+- Google Sign-In on Android (requires Credential Manager + Activity context abstraction)
+- Firestore integration (shared repository contracts are ready; `currentUserId` is already exposed)
+- Auto-login / session persistence (check `FirebaseAuth.currentUser` on startup, skip login screen)
+- Logout (add to `AuthRepository` interface when settings screen is built)
+- iOS Firebase Auth (requires Firebase iOS SDK via CocoaPods/SPM)
 
 ## Known Remaining Warnings
 
@@ -367,6 +435,8 @@
 - `androidApp/build.gradle.kts`
 - `settings.gradle.kts`
 - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/App.kt`
+- `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/login/`
+- `composeApp/src/androidMain/kotlin/com/chemecador/secretaria/login/FirebaseAuthRepository.kt`
 - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/noteslists/`
 - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/notes/`
 - `composeApp/src/commonMain/composeResources/values/strings.xml`
@@ -375,6 +445,7 @@
 
 ## Notes for Future Agents
 
+- After completing any change or feature, update this `AGENTS.md` to reflect the new state (new files, conventions, migration progress, pitfalls discovered, etc.). This file is the primary context for future sessions.
 - This repo is early-stage KMP, so avoid over-architecting.
 - Favor correctness, portability, and small safe steps over completeness.
 - If a build/runtime issue appears on Android and mentions missing Compose resources, check `androidResources { enable = true }` first.

@@ -14,9 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.chemecador.secretaria.login.FakeAuthRepository
 import com.chemecador.secretaria.login.LoginScreen
 import com.chemecador.secretaria.login.LoginViewModel
+import com.chemecador.secretaria.login.createAuthRepository
 import com.chemecador.secretaria.notes.FakeNotesRepository
 import com.chemecador.secretaria.notes.Note
 import com.chemecador.secretaria.notes.NoteDetailScreen
@@ -42,7 +42,8 @@ private sealed class Screen {
 @Composable
 @Preview
 fun App() {
-    val loginViewModel = viewModel { LoginViewModel(FakeAuthRepository()) }
+    val authRepository = remember { createAuthRepository() }
+    val loginViewModel = viewModel { LoginViewModel(authRepository) }
     val listsViewModel = viewModel { NotesListsViewModel(FakeNotesListsRepository()) }
     val notesRepository: NotesRepository = remember { FakeNotesRepository() }
 

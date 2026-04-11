@@ -41,4 +41,13 @@
     <string name="label_login_google">Iniciar sesión con Google</string>
     <string name="label_login_guest">Acceder como invitado</string>
     <string name="login_or_divider">O</string>
+
+    <!-- Auth errors -->
+    <string name="error_invalid_user">El usuario no existe</string>
+    <string name="error_wrong_password">La contraseña es incorrecta</string>
+    <string name="error_user_already_exists">El usuario ya existe</string>
+    <string name="error_weak_password">La contraseña debe tener al menos 6 caracteres</string>
+    <string name="error_invalid_email">El email no es válido</string>
+    <string name="error_not_supported">Esta función no está disponible todavía</string>
+    <string name="error_unknown">Ha ocurrido un error inesperado</string>
 </resources>

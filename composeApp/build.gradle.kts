@@ -1,9 +1,20 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 val androidCompileSdk = 36
 val androidMinSdk = 26
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use(::load)
+    }
+}
+val desktopFirebaseApiKey =
+    providers.gradleProperty("secretaria.firebaseApiKey").orNull
+        ?: providers.environmentVariable("SECRETARIA_FIREBASE_API_KEY").orNull
+        ?: localProperties.getProperty("secretaria.firebaseApiKey")
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -54,7 +65,7 @@ kotlin {
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
-            implementation(compose.materialIconsExtended)
+            implementation(libs.compose.materialIconsExtended)
             implementation(libs.compose.ui)
             implementation(libs.compose.components.resources)
             implementation(libs.compose.uiToolingPreview)
@@ -66,6 +77,10 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutinesTest)
+        }
+        androidMain.dependencies {
+            implementation(libs.firebase.auth)
+            implementation(libs.kotlinx.coroutinesPlayServices)
         }
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
@@ -87,5 +102,11 @@ compose.desktop {
             packageName = "com.chemecador.secretaria"
             packageVersion = "1.0.0"
         }
+    }
+}
+
+tasks.withType<JavaExec>().configureEach {
+    if (name == "run" && !desktopFirebaseApiKey.isNullOrBlank()) {
+        jvmArgs("-Dsecretaria.firebaseApiKey=$desktopFirebaseApiKey")
     }
 }

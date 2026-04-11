@@ -17,14 +17,14 @@ class LoginViewModel(
 
     fun login(email: String, password: String) {
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, errorMessage = null) }
+            _state.update { it.copy(isLoading = true, error = null) }
             repository.login(email, password)
                 .onSuccess {
                     _state.update { it.copy(isLoading = false, isLoggedIn = true) }
                 }
                 .onFailure { throwable ->
                     _state.update {
-                        it.copy(isLoading = false, errorMessage = throwable.message)
+                        it.copy(isLoading = false, error = throwable.toAuthError())
                     }
                 }
         }
@@ -32,14 +32,14 @@ class LoginViewModel(
 
     fun signup(email: String, password: String) {
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, errorMessage = null) }
+            _state.update { it.copy(isLoading = true, error = null) }
             repository.signup(email, password)
                 .onSuccess {
                     _state.update { it.copy(isLoading = false, isLoggedIn = true) }
                 }
                 .onFailure { throwable ->
                     _state.update {
-                        it.copy(isLoading = false, errorMessage = throwable.message)
+                        it.copy(isLoading = false, error = throwable.toAuthError())
                     }
                 }
         }
@@ -47,14 +47,14 @@ class LoginViewModel(
 
     fun loginWithGoogle() {
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, errorMessage = null) }
+            _state.update { it.copy(isLoading = true, error = null) }
             repository.loginWithGoogle()
                 .onSuccess {
                     _state.update { it.copy(isLoading = false, isLoggedIn = true) }
                 }
                 .onFailure { throwable ->
                     _state.update {
-                        it.copy(isLoading = false, errorMessage = throwable.message)
+                        it.copy(isLoading = false, error = throwable.toAuthError())
                     }
                 }
         }
@@ -62,16 +62,19 @@ class LoginViewModel(
 
     fun loginAsGuest() {
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, errorMessage = null) }
+            _state.update { it.copy(isLoading = true, error = null) }
             repository.loginAsGuest()
                 .onSuccess {
                     _state.update { it.copy(isLoading = false, isLoggedIn = true) }
                 }
                 .onFailure { throwable ->
                     _state.update {
-                        it.copy(isLoading = false, errorMessage = throwable.message)
+                        it.copy(isLoading = false, error = throwable.toAuthError())
                     }
                 }
         }
     }
+
+    private fun Throwable.toAuthError(): AuthError =
+        (this as? AuthException)?.error ?: AuthError.UNKNOWN
 }

@@ -52,6 +52,13 @@ import secretaria.composeapp.generated.resources.label_login_google
 import secretaria.composeapp.generated.resources.label_login_guest
 import secretaria.composeapp.generated.resources.label_password
 import secretaria.composeapp.generated.resources.label_sign_up
+import secretaria.composeapp.generated.resources.error_invalid_email
+import secretaria.composeapp.generated.resources.error_invalid_user
+import secretaria.composeapp.generated.resources.error_not_supported
+import secretaria.composeapp.generated.resources.error_unknown
+import secretaria.composeapp.generated.resources.error_user_already_exists
+import secretaria.composeapp.generated.resources.error_weak_password
+import secretaria.composeapp.generated.resources.error_wrong_password
 import secretaria.composeapp.generated.resources.login_or_divider
 
 @Composable
@@ -136,14 +143,14 @@ fun LoginScreen(
                     }
                 }
 
-                if (state.isLoading || state.errorMessage != null) {
+                if (state.isLoading || state.error != null) {
                     Spacer(modifier = Modifier.height(8.dp))
                 }
                 if (state.isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                } else if (state.errorMessage != null) {
+                } else if (state.error != null) {
                     Text(
-                        text = state.errorMessage!!,
+                        text = stringResource(state.error!!.toStringRes()),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
@@ -197,6 +204,16 @@ fun LoginScreen(
             }
         }
     }
+}
+
+private fun AuthError.toStringRes() = when (this) {
+    AuthError.INVALID_USER -> Res.string.error_invalid_user
+    AuthError.WRONG_PASSWORD -> Res.string.error_wrong_password
+    AuthError.USER_ALREADY_EXISTS -> Res.string.error_user_already_exists
+    AuthError.WEAK_PASSWORD -> Res.string.error_weak_password
+    AuthError.INVALID_EMAIL -> Res.string.error_invalid_email
+    AuthError.NOT_SUPPORTED -> Res.string.error_not_supported
+    AuthError.UNKNOWN -> Res.string.error_unknown
 }
 
 @Composable
