@@ -18,7 +18,9 @@
 - Reuse as much code as possible across platforms.
 - Keep platform hosts as thin as possible.
 - Avoid touching Swift unless there is a real need.
-- Firebase Auth is now integrated on Android and JVM/Desktop; Firestore is integrated on Android for notes lists and notes.
+- Firebase Auth is now integrated on Android, JVM/Desktop, JS browser, and iOS.
+- Firestore is now integrated on Android, JVM/Desktop, JS browser, and iOS for notes lists and
+  notes.
 - Other Firebase services (FCM) are not yet migrated.
 - Do not try to migrate Hilt/DataStore too early.
 - Prefer learning what is truly portable before introducing heavy shared infrastructure.
@@ -82,8 +84,9 @@
   - click on card to open detail
   - long-press on card to delete via confirmation dialog
 - Partially migrated:
-  - Firebase Auth (Android + JVM/Desktop for email/password and anonymous auth; Google Sign-In pending)
-  - Firestore (Android only — notes lists and notes; JVM/iOS/Web still use fakes)
+    - Firebase Auth (Android + JVM/Desktop + JS browser + iOS for email/password and anonymous auth;
+      Google Sign-In pending)
+    - Firestore (Android + JVM/Desktop + JS browser + iOS for notes lists and notes)
 - Not migrated yet:
   - FCM
   - Hilt
@@ -119,13 +122,15 @@
   - `FirestoreNotesListsRepository` (Android, in `androidMain`)
   - `FirestoreRestNotesListsRepository` (JVM/Desktop, in `jvmMain`)
   - `FirestoreJsNotesListsRepository` (JS browser, in `jsMain`)
-  - `FakeNotesListsRepository` (iOS, Wasm)
+  - `FirestoreIosNotesListsRepository` (iOS, in `iosMain`)
+  - `FakeNotesListsRepository` (Wasm)
 - Platform selection:
   - `expect fun createNotesListsRepository(authRepository: AuthRepository): NotesListsRepository` in `commonMain`
   - Android `actual` returns `FirestoreNotesListsRepository`
   - JVM `actual` returns `FirestoreRestNotesListsRepository`
   - JS `actual` returns `FirestoreJsNotesListsRepository`
-  - iOS/Wasm `actual` return `FakeNotesListsRepository`
+  - iOS `actual` returns `FirestoreIosNotesListsRepository`
+  - Wasm `actual` returns `FakeNotesListsRepository`
 
 ### Notes Feature
 
@@ -141,13 +146,15 @@
   - `FirestoreNotesRepository` (Android, in `androidMain`)
   - `FirestoreRestNotesRepository` (JVM/Desktop, in `jvmMain`)
   - `FirestoreJsNotesRepository` (JS browser, in `jsMain`)
-  - `FakeNotesRepository` (iOS, Wasm)
+  - `FirestoreIosNotesRepository` (iOS, in `iosMain`)
+  - `FakeNotesRepository` (Wasm)
 - Platform selection:
   - `expect fun createNotesRepository(authRepository: AuthRepository): NotesRepository` in `commonMain`
   - Android `actual` returns `FirestoreNotesRepository`
   - JVM `actual` returns `FirestoreRestNotesRepository`
   - JS `actual` returns `FirestoreJsNotesRepository`
-  - iOS/Wasm `actual` return `FakeNotesRepository`
+  - iOS `actual` returns `FirestoreIosNotesRepository`
+  - Wasm `actual` returns `FakeNotesRepository`
 - Screens:
   - `NotesScreen` — list of notes with create/delete
   - `NoteDetailScreen` — edit title/content, delete with confirmation
@@ -168,7 +175,8 @@
   - Android `actual` returns `FirebaseAuthRepository` (uses Firebase Auth SDK)
   - JVM `actual` returns `FirebaseRestAuthRepository` (uses Firebase Auth REST API)
   - JS `actual` returns `FirebaseJsAuthRepository` (uses Firebase Auth REST API)
-  - iOS/Wasm `actual` return `FakeAuthRepository`
+  - iOS `actual` returns `FirebaseIosAuthRepository` (uses Firebase Auth REST API)
+  - Wasm `actual` returns `FakeAuthRepository`
 - Android-only implementation:
   - `composeApp/src/androidMain/kotlin/com/chemecador/secretaria/login/FirebaseAuthRepository.kt`
   - Uses `FirebaseAuth.getInstance()` with `.await()` from `kotlinx-coroutines-play-services`
@@ -188,8 +196,17 @@
   - Google Sign-In: returns `NOT_SUPPORTED`
   - API key is read from the generated browser resource `firebase-config.js`
   - Keeps `idToken` + `refreshToken` in memory and refreshes expired tokens through the Secure Token REST endpoint
+- iOS-only implementation:
+    - `composeApp/src/iosMain/kotlin/com/chemecador/secretaria/login/FirebaseIosAuthRepository.kt`
+    - Uses Firebase Identity Toolkit REST API through `NSURLSession`
+    - Supports: email/password login, email/password signup, anonymous login
+    - Google Sign-In: returns `NOT_SUPPORTED`
+    - API key is read from bundled `GoogleService-Info.plist`
+    - Keeps `idToken` + `refreshToken` in memory and refreshes expired tokens through the Secure
+      Token REST endpoint
 - Fake implementation:
-  - `FakeAuthRepository` — always succeeds after a short delay, used on iOS/Web and in tests that need a lightweight stub
+    - `FakeAuthRepository` — always succeeds after a short delay, used on Wasm and in tests that
+      need a lightweight stub
 - Error localization:
   - `LoginScreen` maps `AuthError` to string resources via `AuthError.toStringRes()`
   - Error strings are in `strings.xml` (Spanish)
@@ -245,7 +262,9 @@
   - pattern: `expect fun createXxxRepository(): XxxRepository` in `commonMain`
   - each platform provides an `actual fun` returning the appropriate implementation
   - Android returns the real (e.g. Firebase-backed) implementation
-  - other platforms return `FakeXxxRepository` until real implementations are ready
+  - other platforms can return either a real implementation or `FakeXxxRepository`, depending on
+    migration progress
+  - Wasm currently stays on fakes for auth, notes lists, and notes
   - `App.kt` calls the factory via `remember { createXxxRepository() }` and injects into ViewModels
 
 ## Model / Data Conventions
@@ -372,11 +391,15 @@
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/login/`
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/noteslists/`
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/notes/`
+- iOS native repository tests currently live in:
+    - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/noteslists/`
+    - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/notes/`
 - Current test focus:
   - viewmodel loading transitions
   - empty/content/error states
   - sorting logic
   - date formatting
+  - platform Firestore repository request/response mapping on JVM and iOS
 - ViewModel tests install a `StandardTestDispatcher` as Main (`Dispatchers.setMain` / `resetMain`) and use `runTest(dispatcher) { ... }` plus `runCurrent()` / `advanceUntilIdle()` to drive `viewModelScope`.
 - Controlled repositories still use `CompletableDeferred` gates to assert intermediate loading states.
 
@@ -426,15 +449,28 @@
 - Firebase Auth is live on Android via `FirebaseAuthRepository` in `androidMain`.
 - Firebase Auth is live on JVM/Desktop via `FirebaseRestAuthRepository` in `jvmMain`.
 - Firebase Auth is live on the JS browser target via `FirebaseJsAuthRepository` in `jsMain`.
+- Firebase Auth is live on iOS via `FirebaseIosAuthRepository` in `iosMain`.
 - Firestore is live on Android via `FirestoreNotesListsRepository` and `FirestoreNotesRepository` in `androidMain`.
 - Firestore is live on JVM/Desktop via `FirestoreRestNotesListsRepository` and `FirestoreRestNotesRepository` in `jvmMain`.
 - Firestore notes lists are live on the JS browser target via `FirestoreJsNotesListsRepository` in `jsMain`.
 - Firestore notes are live on the JS browser target via `FirestoreJsNotesRepository` in `jsMain`.
+- Firestore notes lists are live on iOS via `FirestoreIosNotesListsRepository` in `iosMain`.
+- Firestore notes are live on iOS via `FirestoreIosNotesRepository` in `iosMain`.
   - Firestore structure: `users/{userId}/noteslist` (lists), `users/{userId}/noteslist/{listId}/notes` (notes)
   - Lists use `contributors` array for future sharing; queried via `collectionGroup("noteslist").whereArrayContains("contributors", userId)`
   - New lists are created under `users/{currentUserId}/noteslist` with `contributors = [userId]`
   - Delete list uses `WriteBatch` to remove all notes + the list document
   - Repositories receive `AuthRepository` in constructor and read `currentUserId` lazily at each call
+- iOS auth / Firestore details:
+    - iOS auth and iOS Firestore both use Firebase REST endpoints through `NSURLSession`
+    - iOS reads Firebase `API_KEY` and `PROJECT_ID` from bundled
+      `iosApp/iosApp/GoogleService-Info.plist`
+    - `FirebaseIosAuthRepository` keeps `idToken` + `refreshToken` in memory and refreshes expired
+      tokens before Firestore calls
+    - iOS notes lists currently use direct user-scoped paths (
+      `users/{currentUserId}/noteslist/...`), so shared-list parity is still pending
+    - iOS notes currently use the same direct user-scoped paths for
+      `users/{currentUserId}/noteslist/{listId}/notes`
 - Web auth / Firestore JS details:
   - JS auth and JS Firestore both use Firebase REST endpoints through browser `fetch`
   - Web build generates `firebase-config.js` with both API key and Firestore project id, then exposes them via DOM attributes read from `jsMain`
@@ -446,6 +482,8 @@
   - `firebase-auth` (version pinned directly, not via BOM — Kotlin 2.3 deprecated `platform()` in KMP source set deps)
   - `firebase-firestore` (version pinned directly, same reason)
   - `kotlinx-coroutines-play-services` (for `.await()` on Firebase Tasks)
+  - `kotlinx-serialization-json` (used by JVM/Desktop, JS browser, and iOS REST implementations to
+    build/parse Firebase payloads)
   - `google-services` plugin applied in `androidApp/build.gradle.kts`
 - `google-services.json` lives in `androidApp/` and is in `.gitignore`.
   - Contains clients for both `com.chemecador.secretaria` (release) and `com.chemecador.secretaria.debug` (debug).
@@ -458,19 +496,25 @@
 - `google-services.json` must include the debug package name (`com.chemecador.secretaria.debug`) as a registered client, otherwise Firebase will fail on debug builds.
 - JVM/Desktop auth does not auto-configure Firebase. Set `SECRETARIA_FIREBASE_API_KEY` or `-Dsecretaria.firebaseApiKey=...` before running desktop auth flows.
 - For local desktop development, `:composeApp:run` can also read `secretaria.firebaseApiKey` from the repo root `local.properties` and pass it to the JVM automatically.
+- iOS REST auth / Firestore require `GoogleService-Info.plist` in the iOS app bundle, and it must
+  contain both `API_KEY` and `PROJECT_ID`.
 - Firebase projects with email enumeration protection enabled may return `INVALID_LOGIN_CREDENTIALS` for invalid sign-in attempts. On JVM/Desktop this is mapped to `WRONG_PASSWORD` to keep the shared UI/API unchanged.
-- The same `INVALID_LOGIN_CREDENTIALS` mapping is also applied on the JS browser auth implementation.
+- The same `INVALID_LOGIN_CREDENTIALS` mapping is also applied on the JS browser and iOS auth
+  implementations.
 - The `collectionGroup("noteslist")` query with `whereArrayContains("contributors", userId)` requires a Firestore composite index. If it does not exist, the SDK logs the exact URL to create it in the Firebase console on first query failure.
 - Firestore list deletion uses `WriteBatch` (notes + list doc). If the batch fails partway (e.g. network loss), orphaned notes may remain. This is acceptable for now.
 - Currently all lists are assumed to be under `users/{currentUserId}/noteslist`. When sharing is implemented, the owner UID will need to be stored in `NotesListSummary` to construct the correct notes subcollection path.
 - Web clients intentionally ship the Firebase API key/project id in generated browser resources; this is normal for Firebase client apps and is not a substitute for secure Firestore/Auth rules.
+- JVM/Desktop, JS browser, and iOS REST Firestore implementations currently send client-clock
+  timestamps instead of Firestore server timestamps.
 
 ## Good Next Steps
 
 - Google Sign-In on Android (requires Credential Manager + Activity context abstraction)
-- Auto-login / session persistence (check `FirebaseAuth.currentUser` on startup, skip login screen)
+- Auto-login / session persistence (check `FirebaseAuth.currentUser` on Android and add equivalent
+  persisted session restoration on JVM/JS/iOS)
 - Logout (add to `AuthRepository` interface when settings screen is built)
-- iOS Firebase Auth (requires Firebase iOS SDK via CocoaPods/SPM)
+- Sharing parity for JVM/JS/iOS Firestore (owner UID + non-user-scoped access paths)
 
 ## Known Remaining Warnings
 
@@ -485,6 +529,11 @@
 - `settings.gradle.kts`
 - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/App.kt`
 - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/login/`
+- `composeApp/src/iosMain/kotlin/com/chemecador/secretaria/login/FirebaseIosAuthRepository.kt`
+- `composeApp/src/iosMain/kotlin/com/chemecador/secretaria/firestore/`
+-
+`composeApp/src/iosMain/kotlin/com/chemecador/secretaria/noteslists/FirestoreIosNotesListsRepository.kt`
+- `composeApp/src/iosMain/kotlin/com/chemecador/secretaria/notes/FirestoreIosNotesRepository.kt`
 - `composeApp/src/androidMain/kotlin/com/chemecador/secretaria/login/FirebaseAuthRepository.kt`
 - `composeApp/src/androidMain/kotlin/com/chemecador/secretaria/noteslists/FirestoreNotesListsRepository.kt`
 - `composeApp/src/androidMain/kotlin/com/chemecador/secretaria/notes/FirestoreNotesRepository.kt`
@@ -493,6 +542,7 @@
 - `composeApp/src/commonMain/composeResources/values/strings.xml`
 - `androidApp/src/main/AndroidManifest.xml`
 - `iosApp/iosApp/ContentView.swift`
+- `iosApp/iosApp/GoogleService-Info.plist`
 
 ## Session Update (2026-04-12)
 
@@ -529,7 +579,8 @@
   - JS web auth currently supports email/password login, email/password signup, and anonymous login via Firebase Auth REST API
   - Google Sign-In remains `NOT_SUPPORTED` on web for now
   - `FirebaseJsAuthRepository` now also keeps `idToken` + `refreshToken` in memory and refreshes expired tokens through the Secure Token REST endpoint, so the same auth session can be reused by Firestore JS
-  - Wasm auth still uses `FakeAuthRepository`; only the JS browser target is wired to real Firebase auth for this slice
+  - Wasm auth still uses `FakeAuthRepository`; JS and iOS are now the non-Android targets with real
+    auth in this slice
   - The web API key is injected at build time into a generated `firebase-config.js` resource from `secretaria.firebaseApiKey` (Gradle property, env var, or `local.properties`)
   - Useful validation for this slice:
     - `./gradlew :composeApp:jsProcessResources :composeApp:wasmJsProcessResources :composeApp:compileKotlinJs :composeApp:compileKotlinWasmJs`
@@ -551,6 +602,41 @@
   - JS notes currently use direct user-scoped paths (`users/{currentUserId}/noteslist/{listId}/notes`), so shared-list parity is still pending here too
   - Useful validation for this slice:
     - `./gradlew :composeApp:compileKotlinJs :composeApp:compileKotlinWasmJs`
+
+- iOS auth follow-up:
+    - `AuthRepository` is now real on iOS via
+      `composeApp/src/iosMain/kotlin/com/chemecador/secretaria/login/FirebaseIosAuthRepository.kt`
+    - iOS auth currently supports email/password login, email/password signup, and anonymous login
+      via Firebase Auth REST API over `NSURLSession`
+    - Google Sign-In remains `NOT_SUPPORTED` on iOS for now
+    - `FirebaseIosAuthRepository` keeps `idToken` + `refreshToken` in memory and refreshes expired
+      tokens through the Secure Token REST endpoint
+    - The iOS API key is read from bundled `iosApp/iosApp/GoogleService-Info.plist`
+
+- iOS Firestore follow-up:
+    - `NotesListsRepository` is now real on iOS via
+      `composeApp/src/iosMain/kotlin/com/chemecador/secretaria/noteslists/FirestoreIosNotesListsRepository.kt`
+    - `NotesRepository` is now real on iOS via
+      `composeApp/src/iosMain/kotlin/com/chemecador/secretaria/notes/FirestoreIosNotesRepository.kt`
+    -
+    `composeApp/src/iosMain/kotlin/com/chemecador/secretaria/firestore/FirebaseIosFirestoreRestApi.kt`
+    provides a small Firestore REST client over `NSURLSession`
+    -
+    `composeApp/src/iosMain/kotlin/com/chemecador/secretaria/firestore/FirebaseIosFirestoreConfig.kt`
+    resolves Firebase `PROJECT_ID` from bundled `GoogleService-Info.plist`
+    - iOS `actual` notes lists / notes factories now wire real Firestore, while Wasm keeps using
+      fakes
+    - iOS Firestore currently uses direct user-scoped paths (`users/{currentUserId}/noteslist/...`
+      and `users/{currentUserId}/noteslist/{listId}/notes`), so shared-list parity is still pending
+    - iOS Firestore currently sends client-clock timestamps in the REST payload instead of Firestore
+      server timestamps
+    - New iOS native tests:
+        -
+        `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/noteslists/FirestoreIosNotesListsRepositoryTest.kt`
+        -
+        `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/notes/FirestoreIosNotesRepositoryTest.kt`
+    - Validation used for this slice:
+        - `./gradlew :composeApp:compileKotlinIosSimulatorArm64 :composeApp:iosSimulatorArm64Test`
 
 ## Notes for Future Agents
 
