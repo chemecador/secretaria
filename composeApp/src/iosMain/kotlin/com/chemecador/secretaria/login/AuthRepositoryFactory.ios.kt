@@ -1,3 +1,4 @@
 package com.chemecador.secretaria.login
 
-actual fun createAuthRepository(): AuthRepository = FakeAuthRepository()
+actual fun createAuthRepository(): AuthRepository =
+    FirebaseIosAuthRepository(apiKey = resolveIosFirebaseApiKey())

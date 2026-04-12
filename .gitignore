@@ -23,6 +23,7 @@ google-services.json
 xcuserdata/
 *.xcuserstate
 DerivedData/
+GoogleService-Info.plist
 
 # JVM / Kotlin
 *.class
