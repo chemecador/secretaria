@@ -17,15 +17,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chemecador.secretaria.login.LoginScreen
 import com.chemecador.secretaria.login.LoginViewModel
 import com.chemecador.secretaria.login.createAuthRepository
-import com.chemecador.secretaria.notes.FakeNotesRepository
 import com.chemecador.secretaria.notes.Note
 import com.chemecador.secretaria.notes.NoteDetailScreen
 import com.chemecador.secretaria.notes.NotesRepository
 import com.chemecador.secretaria.notes.NotesScreen
 import com.chemecador.secretaria.notes.NotesViewModel
-import com.chemecador.secretaria.noteslists.FakeNotesListsRepository
+import com.chemecador.secretaria.notes.createNotesRepository
 import com.chemecador.secretaria.noteslists.NotesListsScreen
 import com.chemecador.secretaria.noteslists.NotesListsViewModel
+import com.chemecador.secretaria.noteslists.createNotesListsRepository
 
 private sealed class Screen {
     data object Login : Screen()
@@ -44,8 +44,9 @@ private sealed class Screen {
 fun App() {
     val authRepository = remember { createAuthRepository() }
     val loginViewModel = viewModel { LoginViewModel(authRepository) }
-    val listsViewModel = viewModel { NotesListsViewModel(FakeNotesListsRepository()) }
-    val notesRepository: NotesRepository = remember { FakeNotesRepository() }
+    val notesListsRepository = remember { createNotesListsRepository(authRepository) }
+    val listsViewModel = viewModel { NotesListsViewModel(notesListsRepository) }
+    val notesRepository: NotesRepository = remember { createNotesRepository(authRepository) }
 
     var screen by remember { mutableStateOf<Screen>(Screen.Login) }
 

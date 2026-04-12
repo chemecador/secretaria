@@ -6,6 +6,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 import kotlinx.coroutines.test.runTest
 
 class FirebaseRestAuthRepositoryTest {
@@ -13,9 +14,15 @@ class FirebaseRestAuthRepositoryTest {
     @Test
     fun login_successStoresCurrentUserId() = runTest {
         val transport = RecordingFirebaseAuthTransport(
-            response = FirebaseAuthHttpResponse(
-                statusCode = 200,
-                body = """{"localId":"user-123"}""",
+            responses = listOf(
+                FirebaseAuthHttpResponse(
+                    statusCode = 200,
+                    body = successBody(
+                        userId = "user-123",
+                        idToken = "id-token-1",
+                        refreshToken = "refresh-token-1",
+                    ),
+                ),
             ),
         )
         val repository = FirebaseRestAuthRepository(
@@ -35,14 +42,24 @@ class FirebaseRestAuthRepositoryTest {
             """{"email":"alex@example.com","password":"clave123","returnSecureToken":true}""",
             transport.requests.single().body,
         )
+        assertEquals(
+            "application/json; charset=utf-8",
+            transport.requests.single().contentType,
+        )
     }
 
     @Test
     fun signup_successStoresCurrentUserId() = runTest {
         val transport = RecordingFirebaseAuthTransport(
-            response = FirebaseAuthHttpResponse(
-                statusCode = 200,
-                body = """{"localId":"new-user"}""",
+            responses = listOf(
+                FirebaseAuthHttpResponse(
+                    statusCode = 200,
+                    body = successBody(
+                        userId = "new-user",
+                        idToken = "id-token-2",
+                        refreshToken = "refresh-token-2",
+                    ),
+                ),
             ),
         )
         val repository = FirebaseRestAuthRepository(
@@ -67,9 +84,15 @@ class FirebaseRestAuthRepositoryTest {
     @Test
     fun loginAsGuest_successStoresCurrentUserId() = runTest {
         val transport = RecordingFirebaseAuthTransport(
-            response = FirebaseAuthHttpResponse(
-                statusCode = 200,
-                body = """{"localId":"guest-user"}""",
+            responses = listOf(
+                FirebaseAuthHttpResponse(
+                    statusCode = 200,
+                    body = successBody(
+                        userId = "guest-user",
+                        idToken = "guest-id-token",
+                        refreshToken = "guest-refresh-token",
+                    ),
+                ),
             ),
         )
         val repository = FirebaseRestAuthRepository(
@@ -84,6 +107,60 @@ class FirebaseRestAuthRepositoryTest {
         assertEquals(
             """{"returnSecureToken":true}""",
             transport.requests.single().body,
+        )
+    }
+
+    @Test
+    fun getFreshIdToken_refreshesExpiredSession() = runTest {
+        var now = Instant.parse("2026-04-12T10:00:00Z")
+        val transport = RecordingFirebaseAuthTransport(
+            responses = listOf(
+                FirebaseAuthHttpResponse(
+                    statusCode = 200,
+                    body = successBody(
+                        userId = "user-123",
+                        idToken = "stale-token",
+                        refreshToken = "refresh-token-1",
+                        expiresIn = 60,
+                    ),
+                ),
+                FirebaseAuthHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "user_id":"user-123",
+                          "id_token":"fresh-token",
+                          "refresh_token":"refresh-token-2",
+                          "expires_in":"3600"
+                        }
+                    """.trimIndent(),
+                ),
+            ),
+        )
+        val repository = FirebaseRestAuthRepository(
+            apiKey = "test-key",
+            transport = transport,
+            nowProvider = { now },
+        )
+
+        repository.login("alex@example.com", "secreta")
+        now = Instant.parse("2026-04-12T10:01:01Z")
+        val refreshedToken = repository.getFreshIdToken()
+
+        assertEquals("fresh-token", refreshedToken)
+        assertEquals("user-123", repository.currentUserId)
+        assertEquals(2, transport.requests.size)
+        assertEquals(
+            "https://securetoken.googleapis.com/v1/token?key=test-key",
+            transport.requests[1].url,
+        )
+        assertEquals(
+            "grant_type=refresh_token&refresh_token=refresh-token-1",
+            transport.requests[1].body,
+        )
+        assertEquals(
+            "application/x-www-form-urlencoded; charset=utf-8",
+            transport.requests[1].contentType,
         )
     }
 
@@ -136,9 +213,11 @@ class FirebaseRestAuthRepositoryTest {
     @Test
     fun login_unexpectedSuccessBodyMapsToUnknown() = runTest {
         val transport = RecordingFirebaseAuthTransport(
-            response = FirebaseAuthHttpResponse(
-                statusCode = 200,
-                body = """{"kind":"identitytoolkit#VerifyPasswordResponse"}""",
+            responses = listOf(
+                FirebaseAuthHttpResponse(
+                    statusCode = 200,
+                    body = """{"kind":"identitytoolkit#VerifyPasswordResponse"}""",
+                ),
             ),
         )
         val repository = FirebaseRestAuthRepository(
@@ -155,9 +234,11 @@ class FirebaseRestAuthRepositoryTest {
     @Test
     fun login_unexpectedStatusMapsToUnknown() = runTest {
         val transport = RecordingFirebaseAuthTransport(
-            response = FirebaseAuthHttpResponse(
-                statusCode = 500,
-                body = """{"status":"server-error"}""",
+            responses = listOf(
+                FirebaseAuthHttpResponse(
+                    statusCode = 500,
+                    body = """{"status":"server-error"}""",
+                ),
             ),
         )
         val repository = FirebaseRestAuthRepository(
@@ -177,9 +258,23 @@ class FirebaseRestAuthRepositoryTest {
                 if (name == "secretaria.firebaseApiKey") "property-key" else null
             },
             environmentProvider = { "env-key" },
+            localPropertiesProvider = { "local-key" },
         )
 
         assertEquals("property-key", key)
+    }
+
+    @Test
+    fun resolveFirebaseApiKey_fallsBackToLocalProperties() {
+        val key = resolveFirebaseApiKey(
+            propertyProvider = { null },
+            environmentProvider = { null },
+            localPropertiesProvider = { name ->
+                if (name == "secretaria.firebaseApiKey") "local-key" else null
+            },
+        )
+
+        assertEquals("local-key", key)
     }
 
     @Test
@@ -188,11 +283,13 @@ class FirebaseRestAuthRepositoryTest {
             resolveFirebaseApiKey(
                 propertyProvider = { null },
                 environmentProvider = { null },
+                localPropertiesProvider = { null },
             )
         }
 
         assertTrue(error.message!!.contains("secretaria.firebaseApiKey"))
         assertTrue(error.message!!.contains("SECRETARIA_FIREBASE_API_KEY"))
+        assertTrue(error.message!!.contains("local.properties"))
     }
 
     @Test
@@ -200,7 +297,16 @@ class FirebaseRestAuthRepositoryTest {
         val repository = FirebaseRestAuthRepository(
             apiKey = "test-key",
             transport = RecordingFirebaseAuthTransport(
-                response = FirebaseAuthHttpResponse(200, """{"localId":"unused"}"""),
+                responses = listOf(
+                    FirebaseAuthHttpResponse(
+                        statusCode = 200,
+                        body = successBody(
+                            userId = "unused",
+                            idToken = "unused-token",
+                            refreshToken = "unused-refresh",
+                        ),
+                    ),
+                ),
             ),
         )
 
@@ -213,12 +319,29 @@ class FirebaseRestAuthRepositoryTest {
         FirebaseRestAuthRepository(
             apiKey = "test-key",
             transport = RecordingFirebaseAuthTransport(
-                response = FirebaseAuthHttpResponse(
-                    statusCode = 400,
-                    body = """{"error":{"code":400,"message":"$errorMessage"}}""",
+                responses = listOf(
+                    FirebaseAuthHttpResponse(
+                        statusCode = 400,
+                        body = """{"error":{"code":400,"message":"$errorMessage"}}""",
+                    ),
                 ),
             ),
         )
+
+    private fun successBody(
+        userId: String,
+        idToken: String,
+        refreshToken: String,
+        expiresIn: Long = 3600,
+    ): String =
+        """
+            {
+              "localId":"$userId",
+              "idToken":"$idToken",
+              "refreshToken":"$refreshToken",
+              "expiresIn":"$expiresIn"
+            }
+        """.trimIndent()
 
     private fun assertAuthError(expected: AuthError, result: Result<Unit>) {
         assertTrue(result.isFailure)
@@ -227,19 +350,25 @@ class FirebaseRestAuthRepositoryTest {
     }
 
     private class RecordingFirebaseAuthTransport(
-        private val response: FirebaseAuthHttpResponse,
+        responses: List<FirebaseAuthHttpResponse>,
     ) : FirebaseAuthTransport {
 
+        private val pendingResponses = ArrayDeque(responses)
         val requests = mutableListOf<Request>()
 
-        override suspend fun post(url: String, body: String): FirebaseAuthHttpResponse {
-            requests += Request(url, body)
-            return response
+        override suspend fun post(
+            url: String,
+            body: String,
+            contentType: String,
+        ): FirebaseAuthHttpResponse {
+            requests += Request(url, body, contentType)
+            return pendingResponses.removeFirst()
         }
     }
 
     private data class Request(
         val url: String,
         val body: String,
+        val contentType: String,
     )
 }

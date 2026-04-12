@@ -18,7 +18,8 @@
 - Reuse as much code as possible across platforms.
 - Keep platform hosts as thin as possible.
 - Avoid touching Swift unless there is a real need.
-- Firebase Auth is now integrated on Android; other Firebase services (Firestore, FCM) are not yet migrated.
+- Firebase Auth is now integrated on Android and JVM/Desktop; Firestore is integrated on Android for notes lists and notes.
+- Other Firebase services (FCM) are not yet migrated.
 - Do not try to migrate Hilt/DataStore too early.
 - Prefer learning what is truly portable before introducing heavy shared infrastructure.
 
@@ -82,8 +83,8 @@
   - long-press on card to delete via confirmation dialog
 - Partially migrated:
   - Firebase Auth (Android + JVM/Desktop for email/password and anonymous auth; Google Sign-In pending)
+  - Firestore (Android only — notes lists and notes; JVM/iOS/Web still use fakes)
 - Not migrated yet:
-  - Firestore
   - FCM
   - Hilt
   - DataStore
@@ -114,8 +115,13 @@
   - `NotesListsViewModel` (extends `androidx.lifecycle.ViewModel`)
 - Shared repository contract:
   - `NotesListsRepository`
-- Current repository implementation:
-  - `FakeNotesListsRepository`
+- Repository implementations:
+  - `FirestoreNotesListsRepository` (Android, in `androidMain`)
+  - `FakeNotesListsRepository` (JVM, iOS, Web)
+- Platform selection:
+  - `expect fun createNotesListsRepository(authRepository: AuthRepository): NotesListsRepository` in `commonMain`
+  - Android `actual` returns `FirestoreNotesListsRepository`
+  - JVM/iOS/Web `actual` returns `FakeNotesListsRepository`
 
 ### Notes Feature
 
@@ -127,8 +133,13 @@
   - `NotesViewModel` (extends `androidx.lifecycle.ViewModel`)
 - Shared repository contract:
   - `NotesRepository` (getNotesForList, createNote, deleteNote, updateNote)
-- Current repository implementation:
-  - `FakeNotesRepository`
+- Repository implementations:
+  - `FirestoreNotesRepository` (Android, in `androidMain`)
+  - `FakeNotesRepository` (JVM, iOS, Web)
+- Platform selection:
+  - `expect fun createNotesRepository(authRepository: AuthRepository): NotesRepository` in `commonMain`
+  - Android `actual` returns `FirestoreNotesRepository`
+  - JVM/iOS/Web `actual` returns `FakeNotesRepository`
 - Screens:
   - `NotesScreen` — list of notes with create/delete
   - `NoteDetailScreen` — edit title/content, delete with confirmation
@@ -398,8 +409,15 @@
 
 - Firebase Auth is live on Android via `FirebaseAuthRepository` in `androidMain`.
 - Firebase Auth is live on JVM/Desktop via `FirebaseRestAuthRepository` in `jvmMain`.
+- Firestore is live on Android via `FirestoreNotesListsRepository` and `FirestoreNotesRepository` in `androidMain`.
+  - Firestore structure: `users/{userId}/noteslist` (lists), `users/{userId}/noteslist/{listId}/notes` (notes)
+  - Lists use `contributors` array for future sharing; queried via `collectionGroup("noteslist").whereArrayContains("contributors", userId)`
+  - New lists are created under `users/{currentUserId}/noteslist` with `contributors = [userId]`
+  - Delete list uses `WriteBatch` to remove all notes + the list document
+  - Repositories receive `AuthRepository` in constructor and read `currentUserId` lazily at each call
 - Dependencies:
   - `firebase-auth` (version pinned directly, not via BOM — Kotlin 2.3 deprecated `platform()` in KMP source set deps)
+  - `firebase-firestore` (version pinned directly, same reason)
   - `kotlinx-coroutines-play-services` (for `.await()` on Firebase Tasks)
   - `google-services` plugin applied in `androidApp/build.gradle.kts`
 - `google-services.json` lives in `androidApp/` and is in `.gitignore`.
@@ -414,11 +432,13 @@
 - JVM/Desktop auth does not auto-configure Firebase. Set `SECRETARIA_FIREBASE_API_KEY` or `-Dsecretaria.firebaseApiKey=...` before running desktop auth flows.
 - For local desktop development, `:composeApp:run` can also read `secretaria.firebaseApiKey` from the repo root `local.properties` and pass it to the JVM automatically.
 - Firebase projects with email enumeration protection enabled may return `INVALID_LOGIN_CREDENTIALS` for invalid sign-in attempts. On JVM/Desktop this is mapped to `WRONG_PASSWORD` to keep the shared UI/API unchanged.
+- The `collectionGroup("noteslist")` query with `whereArrayContains("contributors", userId)` requires a Firestore composite index. If it does not exist, the SDK logs the exact URL to create it in the Firebase console on first query failure.
+- Firestore list deletion uses `WriteBatch` (notes + list doc). If the batch fails partway (e.g. network loss), orphaned notes may remain. This is acceptable for now.
+- Currently all lists are assumed to be under `users/{currentUserId}/noteslist`. When sharing is implemented, the owner UID will need to be stored in `NotesListSummary` to construct the correct notes subcollection path.
 
 ## Good Next Steps
 
 - Google Sign-In on Android (requires Credential Manager + Activity context abstraction)
-- Firestore integration (shared repository contracts are ready; `currentUserId` is already exposed)
 - Auto-login / session persistence (check `FirebaseAuth.currentUser` on startup, skip login screen)
 - Logout (add to `AuthRepository` interface when settings screen is built)
 - iOS Firebase Auth (requires Firebase iOS SDK via CocoaPods/SPM)
@@ -437,11 +457,44 @@
 - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/App.kt`
 - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/login/`
 - `composeApp/src/androidMain/kotlin/com/chemecador/secretaria/login/FirebaseAuthRepository.kt`
+- `composeApp/src/androidMain/kotlin/com/chemecador/secretaria/noteslists/FirestoreNotesListsRepository.kt`
+- `composeApp/src/androidMain/kotlin/com/chemecador/secretaria/notes/FirestoreNotesRepository.kt`
 - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/noteslists/`
 - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/notes/`
 - `composeApp/src/commonMain/composeResources/values/strings.xml`
 - `androidApp/src/main/AndroidManifest.xml`
 - `iosApp/iosApp/ContentView.swift`
+
+## Session Update (2026-04-12)
+
+- JVM/Desktop Firestore is now live for notes lists and notes.
+- JVM `actual` repositories now use:
+  - `composeApp/src/jvmMain/kotlin/com/chemecador/secretaria/noteslists/FirestoreRestNotesListsRepository.kt`
+  - `composeApp/src/jvmMain/kotlin/com/chemecador/secretaria/notes/FirestoreRestNotesRepository.kt`
+- Shared app wiring did not change in `commonMain`; only the JVM factories switched from fakes to Firestore REST.
+- JVM/Desktop Firestore implementation details:
+  - Uses Firestore REST API via `java.net.http.HttpClient`
+  - Uses `kotlinx-serialization-json` in `jvmMain` to build/parse Firestore payloads
+  - Reuses the Firebase Auth REST session `idToken` as `Authorization: Bearer ...`
+  - `FirebaseRestAuthRepository` now keeps `idToken` + `refreshToken` in memory and refreshes expired tokens through the Secure Token REST endpoint
+  - Resolves Firebase `projectId` from `-Dsecretaria.firebaseProjectId=...`, `SECRETARIA_FIREBASE_PROJECT_ID`, or local `androidApp/google-services.json`
+  - For now, JVM/Desktop Firestore reads/writes direct user-scoped paths (`users/{currentUserId}/noteslist/...`) instead of collection-group queries; this is acceptable until sharing is migrated
+  - JVM/Desktop Firestore currently sends client-clock timestamps in the REST payload instead of Firestore server timestamps
+- New JVM-only support package:
+  - `composeApp/src/jvmMain/kotlin/com/chemecador/secretaria/firestore/`
+- New/updated JVM tests:
+  - `composeApp/src/jvmTest/kotlin/com/chemecador/secretaria/login/FirebaseRestAuthRepositoryTest.kt`
+  - `composeApp/src/jvmTest/kotlin/com/chemecador/secretaria/firestore/FirebaseFirestoreConfigTest.kt`
+  - `composeApp/src/jvmTest/kotlin/com/chemecador/secretaria/noteslists/FirestoreRestNotesListsRepositoryTest.kt`
+  - `composeApp/src/jvmTest/kotlin/com/chemecador/secretaria/notes/FirestoreRestNotesRepositoryTest.kt`
+- Validation used for this slice:
+  - `./gradlew :composeApp:compileKotlinJvm`
+  - `./gradlew :composeApp:jvmTest`
+- JVM/Desktop startup config follow-up:
+  - `resolveFirebaseApiKey()` now also falls back to `secretaria.firebaseApiKey` in the nearest parent `local.properties`, so desktop launches from IDE/main class do not depend on Gradle injecting `-Dsecretaria.firebaseApiKey`
+  - `resolveFirebaseProjectId()` now also accepts `secretaria.firebaseProjectId` in `local.properties` before falling back to `androidApp/google-services.json`
+  - `readLocalProperty()` no longer relies only on the process working directory; it also searches ancestor directories of the JVM code source / classpath roots, which is important for Android Studio run configurations
+  - The same nearby-file search is now used for `androidApp/google-services.json`, so JVM/Desktop runs from Android Studio can resolve the Firebase `projectId` even when the IDE uses a different working directory
 
 ## Notes for Future Agents
 

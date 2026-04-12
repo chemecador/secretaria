@@ -9,16 +9,20 @@ import java.nio.charset.StandardCharsets
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 internal class FirebaseRestAuthRepository(
     private val apiKey: String,
     private val transport: FirebaseAuthTransport = HttpClientFirebaseAuthTransport(),
-) : AuthRepository {
+    private val nowProvider: () -> Instant = { Clock.System.now() },
+) : AuthRepository, FirebaseIdTokenProvider {
 
-    private var cachedUserId: String? = null
+    private var cachedSession: FirebaseAuthSession? = null
 
     override val currentUserId: String?
-        get() = cachedUserId
+        get() = cachedSession?.userId
 
     override suspend fun login(email: String, password: String): Result<Unit> =
         authenticate(
@@ -51,9 +55,26 @@ internal class FirebaseRestAuthRepository(
             ),
         )
 
+    override suspend fun getFreshIdToken(): String {
+        val currentSession = cachedSession
+            ?: error("User not logged in")
+
+        if (!currentSession.isExpired(nowProvider())) {
+            return currentSession.idToken
+        }
+
+        val refreshedSession = refreshSession(currentSession)
+        cachedSession = refreshedSession
+        return refreshedSession.idToken
+    }
+
     private suspend fun authenticate(endpoint: String, requestBody: String): Result<Unit> {
         val response = try {
-            transport.post(urlFor(endpoint), requestBody)
+            transport.post(
+                url = urlFor(endpoint),
+                body = requestBody,
+                contentType = JSON_CONTENT_TYPE,
+            )
         } catch (exception: CancellationException) {
             throw exception
         } catch (_: Exception) {
@@ -64,27 +85,104 @@ internal class FirebaseRestAuthRepository(
             return Result.failure(AuthException(mapFirebaseRestError(response.body)))
         }
 
-        val userId = extractJsonString(response.body, "localId")
+        val session = response.body.toFirebaseAuthSession(nowProvider())
             ?: return Result.failure(AuthException(AuthError.UNKNOWN))
 
-        cachedUserId = userId
+        cachedSession = session
         return Result.success(Unit)
+    }
+
+    private suspend fun refreshSession(session: FirebaseAuthSession): FirebaseAuthSession {
+        val response = try {
+            transport.post(
+                url = secureTokenUrl(),
+                body = buildFormBody(
+                    "grant_type" to "refresh_token",
+                    "refresh_token" to session.refreshToken,
+                ),
+                contentType = FORM_CONTENT_TYPE,
+            )
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            throw IllegalStateException("Unable to refresh Firebase session", exception)
+        }
+
+        if (response.statusCode !in 200..299) {
+            throw IllegalStateException("Unable to refresh Firebase session")
+        }
+
+        val userId = extractJsonString(response.body, "user_id") ?: session.userId
+        val idToken = extractJsonString(response.body, "id_token")
+            ?: throw IllegalStateException("Missing id_token in refresh response")
+        val refreshToken = extractJsonString(response.body, "refresh_token") ?: session.refreshToken
+        val expiresInSeconds = extractJsonLong(response.body, "expires_in")
+            ?: throw IllegalStateException("Missing expires_in in refresh response")
+
+        return FirebaseAuthSession(
+            userId = userId,
+            idToken = idToken,
+            refreshToken = refreshToken,
+            expiresAt = nowProvider() + expiresInSeconds.seconds,
+        )
     }
 
     private fun urlFor(endpoint: String): String {
         val encodedApiKey = URLEncoder.encode(apiKey, StandardCharsets.UTF_8)
-        return "$BASE_URL/$endpoint?key=$encodedApiKey"
+        return "$IDENTITY_TOOLKIT_BASE_URL/$endpoint?key=$encodedApiKey"
+    }
+
+    private fun secureTokenUrl(): String {
+        val encodedApiKey = URLEncoder.encode(apiKey, StandardCharsets.UTF_8)
+        return "$SECURE_TOKEN_BASE_URL/token?key=$encodedApiKey"
     }
 
     private companion object {
-        const val BASE_URL = "https://identitytoolkit.googleapis.com/v1"
+        const val IDENTITY_TOOLKIT_BASE_URL = "https://identitytoolkit.googleapis.com/v1"
+        const val SECURE_TOKEN_BASE_URL = "https://securetoken.googleapis.com/v1"
         const val SIGN_IN_WITH_PASSWORD_ENDPOINT = "accounts:signInWithPassword"
         const val SIGN_UP_ENDPOINT = "accounts:signUp"
+        const val FORM_CONTENT_TYPE = "application/x-www-form-urlencoded; charset=utf-8"
+        const val JSON_CONTENT_TYPE = "application/json; charset=utf-8"
     }
 }
 
-internal fun interface FirebaseAuthTransport {
-    suspend fun post(url: String, body: String): FirebaseAuthHttpResponse
+internal interface FirebaseIdTokenProvider {
+    suspend fun getFreshIdToken(): String
+}
+
+private data class FirebaseAuthSession(
+    val userId: String,
+    val idToken: String,
+    val refreshToken: String,
+    val expiresAt: Instant,
+) {
+    fun isExpired(now: Instant): Boolean =
+        now >= expiresAt - 30.seconds
+}
+
+private fun String.toFirebaseAuthSession(now: Instant): FirebaseAuthSession? {
+    val userId = extractJsonString(this, "localId") ?: return null
+    val idToken = extractJsonString(this, "idToken") ?: return null
+    val refreshToken = extractJsonString(this, "refreshToken") ?: return null
+    val expiresInSeconds = extractJsonLong(this, "expiresIn")
+        ?: extractJsonLong(this, "expires_in")
+        ?: return null
+
+    return FirebaseAuthSession(
+        userId = userId,
+        idToken = idToken,
+        refreshToken = refreshToken,
+        expiresAt = now + expiresInSeconds.seconds,
+    )
+}
+
+internal interface FirebaseAuthTransport {
+    suspend fun post(
+        url: String,
+        body: String,
+        contentType: String,
+    ): FirebaseAuthHttpResponse
 }
 
 internal data class FirebaseAuthHttpResponse(
@@ -96,11 +194,15 @@ internal class HttpClientFirebaseAuthTransport(
     private val client: HttpClient = HttpClient.newHttpClient(),
 ) : FirebaseAuthTransport {
 
-    override suspend fun post(url: String, body: String): FirebaseAuthHttpResponse =
+    override suspend fun post(
+        url: String,
+        body: String,
+        contentType: String,
+    ): FirebaseAuthHttpResponse =
         withContext(Dispatchers.IO) {
             val request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .header("Content-Type", "application/json; charset=utf-8")
+                .header("Content-Type", contentType)
                 .header("Accept", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build()
@@ -151,6 +253,23 @@ internal fun extractJsonString(json: String, field: String): String? {
         ?.let(::unescapeJsonString)
 }
 
+internal fun extractJsonLong(json: String, field: String): Long? {
+    val stringLiteralPattern = Regex(
+        "\"${Regex.escape(field)}\"\\s*:\\s*\"(-?\\d+)\"",
+    )
+    val numericPattern = Regex(
+        "\"${Regex.escape(field)}\"\\s*:\\s*(-?\\d+)",
+    )
+    return stringLiteralPattern.find(json)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.toLongOrNull()
+        ?: numericPattern.find(json)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toLongOrNull()
+}
+
 internal fun buildJsonObject(vararg fields: Pair<String, Any>): String =
     fields.joinToString(
         prefix = "{",
@@ -181,6 +300,13 @@ internal fun escapeJsonString(value: String): String = buildString {
         }
     }
 }
+
+internal fun buildFormBody(vararg fields: Pair<String, String>): String =
+    fields.joinToString("&") { (name, value) ->
+        "${URLEncoder.encode(name, StandardCharsets.UTF_8)}=${
+            URLEncoder.encode(value, StandardCharsets.UTF_8)
+        }"
+    }
 
 internal fun unescapeJsonString(value: String): String = buildString {
     var index = 0

@@ -9,6 +9,7 @@ kotlin = "2.3.20"
 google-services = "4.4.4"
 kotlinx-coroutines = "1.10.2"
 kotlinx-datetime = "0.7.1"
+kotlinx-serialization = "1.11.0"
 material3 = "1.10.0-alpha05"
 
 [libraries]
@@ -30,7 +31,9 @@ kotlinx-coroutinesSwing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-s
 kotlinx-coroutinesPlayServices = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "kotlinx-coroutines" }
 kotlinx-coroutinesTest = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 firebase-auth = { module = "com.google.firebase:firebase-auth", version = "24.0.1" }
+firebase-firestore = { module = "com.google.firebase:firebase-firestore", version = "26.2.0" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
