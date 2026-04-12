@@ -1,4 +1,10 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.TaskAction
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
@@ -11,10 +17,44 @@ val localProperties = Properties().apply {
         localPropertiesFile.inputStream().use(::load)
     }
 }
-val desktopFirebaseApiKey =
+val resolvedFirebaseApiKey =
     providers.gradleProperty("secretaria.firebaseApiKey").orNull
         ?: providers.environmentVariable("SECRETARIA_FIREBASE_API_KEY").orNull
         ?: localProperties.getProperty("secretaria.firebaseApiKey")
+val desktopFirebaseApiKey = resolvedFirebaseApiKey
+val generatedWebResourcesDir = layout.buildDirectory.dir("generated/webMain/resources")
+val generateWebFirebaseConfig by tasks.registering(GenerateWebFirebaseConfigTask::class) {
+    firebaseApiKey.set(resolvedFirebaseApiKey.orEmpty())
+    outputDir.set(generatedWebResourcesDir)
+}
+
+abstract class GenerateWebFirebaseConfigTask : DefaultTask() {
+
+    @get:Input
+    abstract val firebaseApiKey: Property<String>
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val outputDir = outputDir.get().asFile
+        val outputFile = outputDir.resolve("firebase-config.js")
+        outputFile.parentFile.mkdirs()
+        val escapedApiKey = firebaseApiKey.get()
+            .replace("</", "<\\/")
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+        outputFile.writeText(
+            """
+                document.documentElement.setAttribute(
+                    "data-secretaria-firebase-api-key",
+                    "$escapedApiKey"
+                );
+            """.trimIndent(),
+        )
+    }
+}
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -88,6 +128,13 @@ kotlin {
             implementation(libs.kotlinx.coroutinesSwing)
             implementation(libs.kotlinx.serialization.json)
         }
+    }
+}
+
+tasks.matching { it.name == "jsProcessResources" || it.name == "wasmJsProcessResources" }.configureEach {
+    dependsOn(generateWebFirebaseConfig)
+    if (this is Copy) {
+        from(generateWebFirebaseConfig)
     }
 }
 

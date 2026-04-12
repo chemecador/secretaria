@@ -495,6 +495,15 @@
   - `resolveFirebaseProjectId()` now also accepts `secretaria.firebaseProjectId` in `local.properties` before falling back to `androidApp/google-services.json`
   - `readLocalProperty()` no longer relies only on the process working directory; it also searches ancestor directories of the JVM code source / classpath roots, which is important for Android Studio run configurations
   - The same nearby-file search is now used for `androidApp/google-services.json`, so JVM/Desktop runs from Android Studio can resolve the Firebase `projectId` even when the IDE uses a different working directory
+- Web auth follow-up:
+  - `AuthRepository` is now real on the JS browser target via `composeApp/src/jsMain/kotlin/com/chemecador/secretaria/login/FirebaseJsAuthRepository.kt`
+  - JS web auth currently supports email/password login, email/password signup, and anonymous login via Firebase Auth REST API
+  - Google Sign-In remains `NOT_SUPPORTED` on web for now
+  - Web notes lists / notes repositories are still fake
+  - Wasm auth still uses `FakeAuthRepository`; only the JS browser target is wired to real Firebase auth for this slice
+  - The web API key is injected at build time into a generated `firebase-config.js` resource from `secretaria.firebaseApiKey` (Gradle property, env var, or `local.properties`)
+  - Useful validation for this slice:
+    - `./gradlew :composeApp:jsProcessResources :composeApp:wasmJsProcessResources :composeApp:compileKotlinJs :composeApp:compileKotlinWasmJs`
 
 ## Notes for Future Agents
 
