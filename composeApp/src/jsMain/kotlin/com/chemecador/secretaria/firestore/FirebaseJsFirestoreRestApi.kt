@@ -1,0 +1,273 @@
+package com.chemecador.secretaria.firestore
+
+import kotlinx.browser.document
+import com.chemecador.secretaria.login.FirebaseJsIdTokenProvider
+import kotlinx.browser.window
+import kotlinx.coroutines.await
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlin.js.json
+import kotlin.time.Instant
+
+private const val WEB_FIREBASE_PROJECT_ID_ATTRIBUTE = "data-secretaria-firebase-project-id"
+
+internal class FirebaseJsFirestoreRestApi(
+    private val projectId: String,
+    private val tokenProvider: FirebaseJsIdTokenProvider,
+    private val transport: FirebaseJsFirestoreTransport = BrowserFetchFirebaseJsFirestoreTransport(),
+) {
+
+    suspend fun listDocuments(
+        collectionPath: String,
+        orderBy: String? = null,
+    ): List<FirestoreJsDocument> {
+        val response = request(
+            FirebaseJsFirestoreRequest(
+                method = "GET",
+                url = buildString {
+                    append(documentsUrl(collectionPath))
+                    orderBy?.let {
+                        append("?orderBy=")
+                        append(encodeURIComponent(it))
+                    }
+                },
+            ),
+        )
+        val root = Json.parseToJsonElement(response.body).jsonObject
+        val documents = root["documents"]?.jsonArray ?: JsonArray(emptyList())
+        return documents.mapNotNull { document ->
+            runCatching { document.asFirestoreJsDocument() }.getOrNull()
+        }
+    }
+
+    suspend fun createDocument(
+        parentPath: String,
+        collectionId: String,
+        fields: JsonObject,
+    ): FirestoreJsDocument {
+        val response = request(
+            FirebaseJsFirestoreRequest(
+                method = "POST",
+                url = "${documentsUrl(parentPath)}/$collectionId",
+                body = buildJsonObject {
+                    put("fields", fields)
+                }.toString(),
+            ),
+        )
+        return Json.parseToJsonElement(response.body).asFirestoreJsDocument()
+    }
+
+    suspend fun patchDocument(
+        documentPath: String,
+        fields: JsonObject,
+        updateMask: List<String>,
+    ): FirestoreJsDocument {
+        val query = updateMask.joinToString("&") { field ->
+            "updateMask.fieldPaths=${encodeURIComponent(field)}"
+        }
+        val response = request(
+            FirebaseJsFirestoreRequest(
+                method = "PATCH",
+                url = "${documentsUrl(documentPath)}?$query",
+                body = buildJsonObject {
+                    put("fields", fields)
+                }.toString(),
+            ),
+        )
+        return Json.parseToJsonElement(response.body).asFirestoreJsDocument()
+    }
+
+    suspend fun deleteDocument(documentPath: String) {
+        request(
+            FirebaseJsFirestoreRequest(
+                method = "DELETE",
+                url = documentsUrl(documentPath),
+            ),
+        )
+    }
+
+    suspend fun commitDeletes(documentPaths: List<String>) {
+        if (documentPaths.isEmpty()) {
+            return
+        }
+        request(
+            FirebaseJsFirestoreRequest(
+                method = "POST",
+                url = "$databaseUrl/documents:commit",
+                body = buildJsonObject {
+                    put(
+                        "writes",
+                        buildJsonArray {
+                            documentPaths.forEach { path ->
+                                add(
+                                    buildJsonObject {
+                                        put("delete", JsonPrimitive(fullDocumentName(path)))
+                                    },
+                                )
+                            }
+                        },
+                    )
+                }.toString(),
+            ),
+        )
+    }
+
+    private suspend fun request(request: FirebaseJsFirestoreRequest): FirebaseJsFirestoreHttpResponse {
+        val idToken = tokenProvider.getFreshIdToken()
+        val response = transport.execute(
+            request.copy(
+                headers = request.headers + ("Authorization" to "Bearer $idToken"),
+            ),
+        )
+        if (response.statusCode in 200..299) {
+            return response
+        }
+        error("Firestore request failed (${response.statusCode}): ${extractFirestoreErrorMessage(response.body)}")
+    }
+
+    private fun documentsUrl(path: String): String =
+        if (path.isBlank()) {
+            "$databaseUrl/documents"
+        } else {
+            "$databaseUrl/documents/$path"
+        }
+
+    private fun fullDocumentName(path: String): String =
+        "projects/$projectId/databases/(default)/documents/$path"
+
+    private val databaseUrl: String
+        get() = "$BASE_URL/projects/$projectId/databases/(default)"
+
+    private companion object {
+        const val BASE_URL = "https://firestore.googleapis.com/v1"
+    }
+}
+
+internal data class FirestoreJsDocument(
+    val name: String,
+    val fields: JsonObject,
+) {
+    val id: String
+        get() = name.substringAfterLast('/')
+}
+
+internal data class FirebaseJsFirestoreRequest(
+    val method: String,
+    val url: String,
+    val body: String? = null,
+    val headers: Map<String, String> = emptyMap(),
+)
+
+internal data class FirebaseJsFirestoreHttpResponse(
+    val statusCode: Int,
+    val body: String,
+)
+
+internal fun interface FirebaseJsFirestoreTransport {
+    suspend fun execute(request: FirebaseJsFirestoreRequest): FirebaseJsFirestoreHttpResponse
+}
+
+internal class BrowserFetchFirebaseJsFirestoreTransport : FirebaseJsFirestoreTransport {
+
+    override suspend fun execute(request: FirebaseJsFirestoreRequest): FirebaseJsFirestoreHttpResponse {
+        val init = js("{}")
+        init.method = request.method
+        init.headers = json()
+        init.headers["Accept"] = "application/json"
+        request.headers.forEach { (name, value) ->
+            init.headers[name] = value
+        }
+        if (request.body != null) {
+            init.body = request.body
+            init.headers["Content-Type"] = "application/json; charset=utf-8"
+        }
+        val response = window.fetch(request.url, init).await()
+        return FirebaseJsFirestoreHttpResponse(
+            statusCode = response.status.toInt(),
+            body = response.text().await(),
+        )
+    }
+}
+
+internal fun firestoreString(value: String): JsonObject =
+    buildJsonObject { put("stringValue", JsonPrimitive(value)) }
+
+internal fun firestoreBoolean(value: Boolean): JsonObject =
+    buildJsonObject { put("booleanValue", JsonPrimitive(value)) }
+
+internal fun firestoreInteger(value: Int): JsonObject =
+    buildJsonObject { put("integerValue", JsonPrimitive(value.toString())) }
+
+internal fun firestoreLong(value: Long): JsonObject =
+    buildJsonObject { put("integerValue", JsonPrimitive(value.toString())) }
+
+internal fun firestoreTimestamp(value: Instant): JsonObject =
+    buildJsonObject { put("timestampValue", JsonPrimitive(value.toString())) }
+
+internal fun firestoreArray(vararg values: JsonObject): JsonObject =
+    buildJsonObject {
+        put(
+            "arrayValue",
+            buildJsonObject {
+                if (values.isNotEmpty()) {
+                    put("values", JsonArray(values.toList()))
+                }
+            },
+        )
+    }
+
+internal fun JsonObject.firestoreString(field: String): String? =
+    get(field)?.jsonObject?.get("stringValue")?.jsonPrimitive?.contentOrNull
+
+internal fun JsonObject.firestoreBoolean(field: String): Boolean? =
+    get(field)?.jsonObject?.get("booleanValue")?.jsonPrimitive?.booleanOrNull
+
+internal fun JsonObject.firestoreInt(field: String): Int? =
+    get(field)?.jsonObject?.get("integerValue")?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+
+internal fun JsonObject.firestoreLong(field: String): Long? =
+    get(field)?.jsonObject?.get("integerValue")?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+
+internal fun JsonObject.firestoreInstant(field: String): Instant? =
+    get(field)?.jsonObject?.get("timestampValue")?.jsonPrimitive?.contentOrNull?.let(Instant::parse)
+
+internal fun resolveWebFirebaseProjectId(): String =
+    document.documentElement
+        ?.getAttribute(WEB_FIREBASE_PROJECT_ID_ATTRIBUTE)
+        ?.takeUnless { it.isBlank() }
+        ?: error(
+            "Missing Firebase project id for Web Firestore. " +
+                "Set secretaria.firebaseProjectId in local.properties, " +
+                "a Gradle property, SECRETARIA_FIREBASE_PROJECT_ID, " +
+                "or keep androidApp/google-services.json available locally.",
+        )
+
+private external fun encodeURIComponent(value: String): String
+
+private fun kotlinx.serialization.json.JsonElement.asFirestoreJsDocument(): FirestoreJsDocument {
+    val objectValue = jsonObject
+    return FirestoreJsDocument(
+        name = objectValue["name"]?.jsonPrimitive?.content
+            ?: error("Missing Firestore document name"),
+        fields = objectValue["fields"]?.jsonObject ?: JsonObject(emptyMap()),
+    )
+}
+
+private fun extractFirestoreErrorMessage(body: String): String =
+    runCatching {
+        Json.parseToJsonElement(body)
+            .jsonObject["error"]
+            ?.jsonObject
+            ?.get("message")
+            ?.jsonPrimitive
+            ?.content
+    }.getOrNull() ?: body

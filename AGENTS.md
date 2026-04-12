@@ -117,11 +117,15 @@
   - `NotesListsRepository`
 - Repository implementations:
   - `FirestoreNotesListsRepository` (Android, in `androidMain`)
-  - `FakeNotesListsRepository` (JVM, iOS, Web)
+  - `FirestoreRestNotesListsRepository` (JVM/Desktop, in `jvmMain`)
+  - `FirestoreJsNotesListsRepository` (JS browser, in `jsMain`)
+  - `FakeNotesListsRepository` (iOS, Wasm)
 - Platform selection:
   - `expect fun createNotesListsRepository(authRepository: AuthRepository): NotesListsRepository` in `commonMain`
   - Android `actual` returns `FirestoreNotesListsRepository`
-  - JVM/iOS/Web `actual` returns `FakeNotesListsRepository`
+  - JVM `actual` returns `FirestoreRestNotesListsRepository`
+  - JS `actual` returns `FirestoreJsNotesListsRepository`
+  - iOS/Wasm `actual` return `FakeNotesListsRepository`
 
 ### Notes Feature
 
@@ -135,11 +139,15 @@
   - `NotesRepository` (getNotesForList, createNote, deleteNote, updateNote)
 - Repository implementations:
   - `FirestoreNotesRepository` (Android, in `androidMain`)
-  - `FakeNotesRepository` (JVM, iOS, Web)
+  - `FirestoreRestNotesRepository` (JVM/Desktop, in `jvmMain`)
+  - `FirestoreJsNotesRepository` (JS browser, in `jsMain`)
+  - `FakeNotesRepository` (iOS, Wasm)
 - Platform selection:
   - `expect fun createNotesRepository(authRepository: AuthRepository): NotesRepository` in `commonMain`
   - Android `actual` returns `FirestoreNotesRepository`
-  - JVM/iOS/Web `actual` returns `FakeNotesRepository`
+  - JVM `actual` returns `FirestoreRestNotesRepository`
+  - JS `actual` returns `FirestoreJsNotesRepository`
+  - iOS/Wasm `actual` return `FakeNotesRepository`
 - Screens:
   - `NotesScreen` — list of notes with create/delete
   - `NoteDetailScreen` — edit title/content, delete with confirmation
@@ -159,7 +167,8 @@
   - `expect fun createAuthRepository(): AuthRepository` in `commonMain`
   - Android `actual` returns `FirebaseAuthRepository` (uses Firebase Auth SDK)
   - JVM `actual` returns `FirebaseRestAuthRepository` (uses Firebase Auth REST API)
-  - iOS/Web `actual` returns `FakeAuthRepository`
+  - JS `actual` returns `FirebaseJsAuthRepository` (uses Firebase Auth REST API)
+  - iOS/Wasm `actual` return `FakeAuthRepository`
 - Android-only implementation:
   - `composeApp/src/androidMain/kotlin/com/chemecador/secretaria/login/FirebaseAuthRepository.kt`
   - Uses `FirebaseAuth.getInstance()` with `.await()` from `kotlinx-coroutines-play-services`
@@ -172,6 +181,13 @@
   - Google Sign-In: returns `NOT_SUPPORTED`
   - API key is read from `-Dsecretaria.firebaseApiKey=...` or `SECRETARIA_FIREBASE_API_KEY`
   - `currentUserId` is kept in memory only (no desktop session persistence yet)
+- JS-only implementation:
+  - `composeApp/src/jsMain/kotlin/com/chemecador/secretaria/login/FirebaseJsAuthRepository.kt`
+  - Uses Firebase Identity Toolkit REST API through browser `fetch`
+  - Supports: email/password login, email/password signup, anonymous login
+  - Google Sign-In: returns `NOT_SUPPORTED`
+  - API key is read from the generated browser resource `firebase-config.js`
+  - Keeps `idToken` + `refreshToken` in memory and refreshes expired tokens through the Secure Token REST endpoint
 - Fake implementation:
   - `FakeAuthRepository` — always succeeds after a short delay, used on iOS/Web and in tests that need a lightweight stub
 - Error localization:
@@ -409,12 +425,23 @@
 
 - Firebase Auth is live on Android via `FirebaseAuthRepository` in `androidMain`.
 - Firebase Auth is live on JVM/Desktop via `FirebaseRestAuthRepository` in `jvmMain`.
+- Firebase Auth is live on the JS browser target via `FirebaseJsAuthRepository` in `jsMain`.
 - Firestore is live on Android via `FirestoreNotesListsRepository` and `FirestoreNotesRepository` in `androidMain`.
+- Firestore is live on JVM/Desktop via `FirestoreRestNotesListsRepository` and `FirestoreRestNotesRepository` in `jvmMain`.
+- Firestore notes lists are live on the JS browser target via `FirestoreJsNotesListsRepository` in `jsMain`.
+- Firestore notes are live on the JS browser target via `FirestoreJsNotesRepository` in `jsMain`.
   - Firestore structure: `users/{userId}/noteslist` (lists), `users/{userId}/noteslist/{listId}/notes` (notes)
   - Lists use `contributors` array for future sharing; queried via `collectionGroup("noteslist").whereArrayContains("contributors", userId)`
   - New lists are created under `users/{currentUserId}/noteslist` with `contributors = [userId]`
   - Delete list uses `WriteBatch` to remove all notes + the list document
   - Repositories receive `AuthRepository` in constructor and read `currentUserId` lazily at each call
+- Web auth / Firestore JS details:
+  - JS auth and JS Firestore both use Firebase REST endpoints through browser `fetch`
+  - Web build generates `firebase-config.js` with both API key and Firestore project id, then exposes them via DOM attributes read from `jsMain`
+  - `FirebaseJsAuthRepository` keeps `idToken` + `refreshToken` in memory and refreshes expired tokens before Firestore calls
+  - JS notes lists currently use direct user-scoped paths (`users/{currentUserId}/noteslist/...`), so shared-list parity is still pending
+  - JS notes currently use the same direct user-scoped paths for `users/{currentUserId}/noteslist/{listId}/notes`
+  - Wasm still uses fake auth + fake notes lists + fake notes
 - Dependencies:
   - `firebase-auth` (version pinned directly, not via BOM — Kotlin 2.3 deprecated `platform()` in KMP source set deps)
   - `firebase-firestore` (version pinned directly, same reason)
@@ -432,9 +459,11 @@
 - JVM/Desktop auth does not auto-configure Firebase. Set `SECRETARIA_FIREBASE_API_KEY` or `-Dsecretaria.firebaseApiKey=...` before running desktop auth flows.
 - For local desktop development, `:composeApp:run` can also read `secretaria.firebaseApiKey` from the repo root `local.properties` and pass it to the JVM automatically.
 - Firebase projects with email enumeration protection enabled may return `INVALID_LOGIN_CREDENTIALS` for invalid sign-in attempts. On JVM/Desktop this is mapped to `WRONG_PASSWORD` to keep the shared UI/API unchanged.
+- The same `INVALID_LOGIN_CREDENTIALS` mapping is also applied on the JS browser auth implementation.
 - The `collectionGroup("noteslist")` query with `whereArrayContains("contributors", userId)` requires a Firestore composite index. If it does not exist, the SDK logs the exact URL to create it in the Firebase console on first query failure.
 - Firestore list deletion uses `WriteBatch` (notes + list doc). If the batch fails partway (e.g. network loss), orphaned notes may remain. This is acceptable for now.
 - Currently all lists are assumed to be under `users/{currentUserId}/noteslist`. When sharing is implemented, the owner UID will need to be stored in `NotesListSummary` to construct the correct notes subcollection path.
+- Web clients intentionally ship the Firebase API key/project id in generated browser resources; this is normal for Firebase client apps and is not a substitute for secure Firestore/Auth rules.
 
 ## Good Next Steps
 
@@ -499,11 +528,29 @@
   - `AuthRepository` is now real on the JS browser target via `composeApp/src/jsMain/kotlin/com/chemecador/secretaria/login/FirebaseJsAuthRepository.kt`
   - JS web auth currently supports email/password login, email/password signup, and anonymous login via Firebase Auth REST API
   - Google Sign-In remains `NOT_SUPPORTED` on web for now
-  - Web notes lists / notes repositories are still fake
+  - `FirebaseJsAuthRepository` now also keeps `idToken` + `refreshToken` in memory and refreshes expired tokens through the Secure Token REST endpoint, so the same auth session can be reused by Firestore JS
   - Wasm auth still uses `FakeAuthRepository`; only the JS browser target is wired to real Firebase auth for this slice
   - The web API key is injected at build time into a generated `firebase-config.js` resource from `secretaria.firebaseApiKey` (Gradle property, env var, or `local.properties`)
   - Useful validation for this slice:
     - `./gradlew :composeApp:jsProcessResources :composeApp:wasmJsProcessResources :composeApp:compileKotlinJs :composeApp:compileKotlinWasmJs`
+
+- Web Firestore follow-up:
+  - `NotesListsRepository` is now real on the JS browser target via `composeApp/src/jsMain/kotlin/com/chemecador/secretaria/noteslists/FirestoreJsNotesListsRepository.kt`
+  - `composeApp/src/jsMain/kotlin/com/chemecador/secretaria/firestore/FirebaseJsFirestoreRestApi.kt` provides a small Firestore REST client over browser `fetch`
+  - `composeApp/src/jsMain/kotlin/com/chemecador/secretaria/noteslists/NotesListsRepositoryFactory.js.kt` now wires real Firestore for JS, while `composeApp/src/wasmJsMain/kotlin/com/chemecador/secretaria/noteslists/NotesListsRepositoryFactory.wasmJs.kt` keeps Wasm on fakes
+  - The generated `firebase-config.js` resource now carries both the Firebase API key and the Firestore `projectId`, which `jsMain` reads through DOM attributes
+  - JS Firestore notes lists currently use direct user-scoped paths (`users/{currentUserId}/noteslist/...`), so shared-list parity is still pending
+  - Useful validation for this slice:
+    - `./gradlew :composeApp:compileKotlinJs :composeApp:compileKotlinWasmJs`
+    - `./gradlew :composeApp:jsProcessResources :composeApp:wasmJsProcessResources :composeApp:compileKotlinJs :composeApp:compileKotlinWasmJs`
+
+- Web notes follow-up:
+  - `NotesRepository` is now real on the JS browser target via `composeApp/src/jsMain/kotlin/com/chemecador/secretaria/notes/FirestoreJsNotesRepository.kt`
+  - `composeApp/src/jsMain/kotlin/com/chemecador/secretaria/notes/NotesRepositoryFactory.js.kt` now wires real Firestore for JS notes, while `composeApp/src/wasmJsMain/kotlin/com/chemecador/secretaria/notes/NotesRepositoryFactory.wasmJs.kt` keeps Wasm on fakes
+  - `composeApp/src/jsMain/kotlin/com/chemecador/secretaria/firestore/FirebaseJsFirestoreRestApi.kt` now also exposes integer helpers used by JS notes for `order` and `color`
+  - JS notes currently use direct user-scoped paths (`users/{currentUserId}/noteslist/{listId}/notes`), so shared-list parity is still pending here too
+  - Useful validation for this slice:
+    - `./gradlew :composeApp:compileKotlinJs :composeApp:compileKotlinWasmJs`
 
 ## Notes for Future Agents
 

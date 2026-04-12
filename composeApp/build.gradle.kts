@@ -9,6 +9,12 @@ import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
+fun parseProjectIdFromGoogleServices(json: String): String? =
+    Regex("\"project_id\"\\s*:\\s*\"([^\"]+)\"")
+        .find(json)
+        ?.groupValues
+        ?.getOrNull(1)
+
 val androidCompileSdk = 36
 val androidMinSdk = 26
 val localProperties = Properties().apply {
@@ -17,14 +23,25 @@ val localProperties = Properties().apply {
         localPropertiesFile.inputStream().use(::load)
     }
 }
+val googleServicesProjectId =
+    rootProject.file("androidApp/google-services.json")
+        .takeIf { it.exists() }
+        ?.readText()
+        ?.let(::parseProjectIdFromGoogleServices)
 val resolvedFirebaseApiKey =
     providers.gradleProperty("secretaria.firebaseApiKey").orNull
         ?: providers.environmentVariable("SECRETARIA_FIREBASE_API_KEY").orNull
         ?: localProperties.getProperty("secretaria.firebaseApiKey")
+val resolvedFirebaseProjectId =
+    providers.gradleProperty("secretaria.firebaseProjectId").orNull
+        ?: providers.environmentVariable("SECRETARIA_FIREBASE_PROJECT_ID").orNull
+        ?: localProperties.getProperty("secretaria.firebaseProjectId")
+        ?: googleServicesProjectId
 val desktopFirebaseApiKey = resolvedFirebaseApiKey
 val generatedWebResourcesDir = layout.buildDirectory.dir("generated/webMain/resources")
 val generateWebFirebaseConfig by tasks.registering(GenerateWebFirebaseConfigTask::class) {
     firebaseApiKey.set(resolvedFirebaseApiKey.orEmpty())
+    firebaseProjectId.set(resolvedFirebaseProjectId.orEmpty())
     outputDir.set(generatedWebResourcesDir)
 }
 
@@ -32,6 +49,9 @@ abstract class GenerateWebFirebaseConfigTask : DefaultTask() {
 
     @get:Input
     abstract val firebaseApiKey: Property<String>
+
+    @get:Input
+    abstract val firebaseProjectId: Property<String>
 
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
@@ -45,11 +65,19 @@ abstract class GenerateWebFirebaseConfigTask : DefaultTask() {
             .replace("</", "<\\/")
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
+        val escapedProjectId = firebaseProjectId.get()
+            .replace("</", "<\\/")
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
         outputFile.writeText(
             """
                 document.documentElement.setAttribute(
                     "data-secretaria-firebase-api-key",
                     "$escapedApiKey"
+                );
+                document.documentElement.setAttribute(
+                    "data-secretaria-firebase-project-id",
+                    "$escapedProjectId"
                 );
             """.trimIndent(),
         )
@@ -126,6 +154,9 @@ kotlin {
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutinesSwing)
+            implementation(libs.kotlinx.serialization.json)
+        }
+        jsMain.dependencies {
             implementation(libs.kotlinx.serialization.json)
         }
     }
