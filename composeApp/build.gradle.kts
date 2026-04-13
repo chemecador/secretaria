@@ -10,6 +10,12 @@ fun parseProjectIdFromGoogleServices(json: String): String? =
         ?.groupValues
         ?.getOrNull(1)
 
+fun parseWebClientIdFromGoogleServices(json: String): String? =
+    Regex("\\{[^{}]*\"client_id\"\\s*:\\s*\"([^\"]+)\"[^{}]*\"client_type\"\\s*:\\s*3[^{}]*}")
+        .find(json)
+        ?.groupValues
+        ?.getOrNull(1)
+
 val androidCompileSdk = 36
 val androidMinSdk = 26
 val localProperties = Properties().apply {
@@ -23,6 +29,11 @@ val googleServicesProjectId =
         .takeIf { it.exists() }
         ?.readText()
         ?.let(::parseProjectIdFromGoogleServices)
+val googleServicesWebClientId =
+    rootProject.file("androidApp/google-services.json")
+        .takeIf { it.exists() }
+        ?.readText()
+        ?.let(::parseWebClientIdFromGoogleServices)
 val resolvedFirebaseApiKey =
     providers.gradleProperty("secretaria.firebaseApiKey").orNull
         ?: providers.environmentVariable("SECRETARIA_FIREBASE_API_KEY").orNull
@@ -40,6 +51,11 @@ val resolvedGoogleDesktopClientSecret =
     providers.gradleProperty("secretaria.googleDesktopClientSecret").orNull
         ?: providers.environmentVariable("SECRETARIA_GOOGLE_DESKTOP_CLIENT_SECRET").orNull
         ?: localProperties.getProperty("secretaria.googleDesktopClientSecret")
+val resolvedGoogleWebClientId =
+    providers.gradleProperty("secretaria.googleWebClientId").orNull
+        ?: providers.environmentVariable("SECRETARIA_GOOGLE_WEB_CLIENT_ID").orNull
+        ?: localProperties.getProperty("secretaria.googleWebClientId")
+        ?: googleServicesWebClientId
 val desktopFirebaseApiKey = resolvedFirebaseApiKey
 val generatedWebResourcesDir = layout.buildDirectory.dir("generated/webMain/resources")
 val generatedDesktopConfigDir = layout.buildDirectory.dir("generated/jvmMain/kotlin")
@@ -98,6 +114,7 @@ val generateDesktopBuildConfig by tasks.registering {
 val generateWebFirebaseConfig by tasks.registering(GenerateWebFirebaseConfigTask::class) {
     firebaseApiKey.set(resolvedFirebaseApiKey.orEmpty())
     firebaseProjectId.set(resolvedFirebaseProjectId.orEmpty())
+    googleWebClientId.set(resolvedGoogleWebClientId.orEmpty())
     outputDir.set(generatedWebResourcesDir)
 }
 
@@ -108,6 +125,9 @@ abstract class GenerateWebFirebaseConfigTask : DefaultTask() {
 
     @get:Input
     abstract val firebaseProjectId: Property<String>
+
+    @get:Input
+    abstract val googleWebClientId: Property<String>
 
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
@@ -125,6 +145,10 @@ abstract class GenerateWebFirebaseConfigTask : DefaultTask() {
             .replace("</", "<\\/")
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
+        val escapedGoogleWebClientId = googleWebClientId.get()
+            .replace("</", "<\\/")
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
         outputFile.writeText(
             """
                 document.documentElement.setAttribute(
@@ -134,6 +158,10 @@ abstract class GenerateWebFirebaseConfigTask : DefaultTask() {
                 document.documentElement.setAttribute(
                     "data-secretaria-firebase-project-id",
                     "$escapedProjectId"
+                );
+                document.documentElement.setAttribute(
+                    "data-secretaria-google-web-client-id",
+                    "$escapedGoogleWebClientId"
                 );
             """.trimIndent(),
         )

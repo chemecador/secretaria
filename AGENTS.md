@@ -63,7 +63,7 @@
 - About dialog:
   - app name, version, author
 - Pending or partial areas:
-  - Google Sign-In en JS/iOS/Wasm
+  - Google Sign-In en iOS/Wasm
   - session persistence on non-Android targets
   - sharing/friends
   - FCM
@@ -131,7 +131,8 @@
 - Supported today on real targets: email/password login, signup, anonymous login.
 - Android also supports Google Sign-In via Credential Manager + Firebase Auth.
 - JVM/Desktop also supports Google Sign-In via browser OAuth loopback + Firebase Auth REST.
-- JS and iOS still return `NOT_SUPPORTED` for Google Sign-In.
+- JS browser also supports Google Sign-In via Google Identity Services token popup + Firebase Auth REST.
+- iOS still returns `NOT_SUPPORTED` for Google Sign-In.
 - Non-Android real targets keep `idToken` + `refreshToken` in memory and refresh expired tokens.
 - Wasm still uses fake auth.
 
@@ -154,7 +155,9 @@
 - JVM/Desktop resolves Firebase config from system properties, env vars, and nearby `local.properties`; project id can also fall back to `androidApp/google-services.json`.
 - JVM/Desktop Google Sign-In needs a Desktop OAuth client id exposed as `secretaria.googleDesktopClientId` or `SECRETARIA_GOOGLE_DESKTOP_CLIENT_ID`; packaged desktop builds can embed it through generated `DesktopBuildConfig`.
 - Some JVM/Desktop Google OAuth clients also require `secretaria.googleDesktopClientSecret` or `SECRETARIA_GOOGLE_DESKTOP_CLIENT_SECRET` during the code exchange; packaged desktop builds can embed it through generated `DesktopBuildConfig`.
-- JS receives Firebase API key and Firestore project id through generated `firebase-config.js`.
+- JS receives Firebase API key, Firestore project id, and Google Web client id through generated `firebase-config.js`.
+- JS Google Sign-In can resolve the Web OAuth client id from `secretaria.googleWebClientId`, `SECRETARIA_GOOGLE_WEB_CLIENT_ID`, or the type `3` client in `androidApp/google-services.json`.
+- JS Google Sign-In uses the GIS popup token flow; register the web origin as an authorized JavaScript origin for the Google OAuth client.
 - iOS reads Firebase config from bundled `iosApp/iosApp/GoogleService-Info.plist`.
 - Web clients intentionally ship Firebase API key/project id in browser resources; security must come from Firebase rules, not secrecy.
 - Firebase projects with email enumeration protection may return `INVALID_LOGIN_CREDENTIALS`; non-Android auth maps that to `WRONG_PASSWORD` to keep shared UI behavior stable.
@@ -230,7 +233,7 @@
 
 - session persistence / auto-login on non-Android targets
 - sharing parity for JVM/JS/iOS Firestore by storing owner UID and removing direct user-scoped assumptions
-- Google Sign-In parity for JS/iOS if it becomes a product priority
+- Google Sign-In parity for iOS if it becomes a product priority
 - settings/account/notifications expansion
 
 ## Desktop Distributable (Windows .exe)

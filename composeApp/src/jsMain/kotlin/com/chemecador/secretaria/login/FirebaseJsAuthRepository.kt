@@ -38,8 +38,24 @@ internal class FirebaseJsAuthRepository(
             ),
         )
 
-    override suspend fun loginWithGoogle(idToken: String?): Result<Unit> =
-        Result.failure(AuthException(AuthError.NOT_SUPPORTED))
+    override suspend fun loginWithGoogle(idToken: String?): Result<Unit> {
+        if (idToken.isNullOrBlank()) {
+            return Result.failure(AuthException(AuthError.NOT_SUPPORTED))
+        }
+
+        return authenticate(
+            endpoint = SIGN_IN_WITH_IDP_ENDPOINT,
+            requestBody = buildJsonObject(
+                "requestUri" to window.location.origin,
+                "postBody" to buildFormBody(
+                    "access_token" to idToken,
+                    "providerId" to GOOGLE_PROVIDER_ID,
+                ),
+                "returnSecureToken" to true,
+                "returnIdpCredential" to true,
+            ),
+        )
+    }
 
     override suspend fun loginAsGuest(): Result<Unit> =
         authenticate(
@@ -128,8 +144,10 @@ internal class FirebaseJsAuthRepository(
     private companion object {
         const val IDENTITY_TOOLKIT_BASE_URL = "https://identitytoolkit.googleapis.com/v1"
         const val SECURE_TOKEN_BASE_URL = "https://securetoken.googleapis.com/v1"
+        const val SIGN_IN_WITH_IDP_ENDPOINT = "accounts:signInWithIdp"
         const val SIGN_IN_WITH_PASSWORD_ENDPOINT = "accounts:signInWithPassword"
         const val SIGN_UP_ENDPOINT = "accounts:signUp"
+        const val GOOGLE_PROVIDER_ID = "google.com"
         const val JSON_CONTENT_TYPE = "application/json; charset=utf-8"
         const val FORM_CONTENT_TYPE = "application/x-www-form-urlencoded; charset=utf-8"
     }
@@ -142,7 +160,7 @@ internal fun resolveWebFirebaseApiKey(): String =
         ?: error(
             "Missing Firebase API key for Web auth. " +
                 "Set secretaria.firebaseApiKey in local.properties, " +
-                "a Gradle property, or SECRETARIA_FIREBASE_API_KEY before building web.",
+            "a Gradle property, or SECRETARIA_FIREBASE_API_KEY before building web.",
         )
 
 internal interface FirebaseJsIdTokenProvider {
