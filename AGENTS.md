@@ -72,6 +72,7 @@
 - Notes lists screen (fully implemented):
   - read, create, delete lists
   - sorting by name/date
+  - overflow menu (⋮) with "Cerrar sesión" and "Acerca de"
 - Notes screen (fully implemented):
   - read, create, delete notes for a selected list
   - ordered/unordered display
@@ -79,10 +80,17 @@
   - view note detail
   - edit title and content
   - delete with confirmation
+- Logout (fully implemented):
+  - confirmation dialog before logout
+  - clears auth session on all platforms
+  - navigates back to login screen
+- About dialog (fully implemented):
+  - shows app name, version, author
 - Interaction patterns:
   - FAB (+) to create via dialog
   - click on card to open detail
   - long-press on card to delete via confirmation dialog
+  - overflow menu (⋮) for logout and about
 - Partially migrated:
     - Firebase Auth (Android + JVM/Desktop + JS browser + iOS for email/password and anonymous auth;
       Google Sign-In pending)
@@ -162,14 +170,14 @@
 ### Login / Auth Feature
 
 - Shared contract:
-  - `AuthRepository` (login, signup, loginWithGoogle, loginAsGuest, currentUserId)
+  - `AuthRepository` (login, signup, loginWithGoogle, loginAsGuest, logout, currentUserId)
 - Shared error model:
   - `AuthError` enum (INVALID_USER, WRONG_PASSWORD, USER_ALREADY_EXISTS, WEAK_PASSWORD, INVALID_EMAIL, NOT_SUPPORTED, UNKNOWN)
   - `AuthException` wraps `AuthError` for use in `Result.failure`
 - Shared state holder:
   - `LoginState` (isLoading, error: AuthError?, isLoggedIn)
 - Shared logic:
-  - `LoginViewModel` (extends `androidx.lifecycle.ViewModel`)
+  - `LoginViewModel` (extends `androidx.lifecycle.ViewModel`, exposes `resetState()` for logout flow)
 - Platform selection:
   - `expect fun createAuthRepository(): AuthRepository` in `commonMain`
   - Android `actual` returns `FirebaseAuthRepository` (uses Firebase Auth SDK)
@@ -513,8 +521,8 @@
 - Google Sign-In on Android (requires Credential Manager + Activity context abstraction)
 - Auto-login / session persistence (check `FirebaseAuth.currentUser` on Android and add equivalent
   persisted session restoration on JVM/JS/iOS)
-- Logout (add to `AuthRepository` interface when settings screen is built)
 - Sharing parity for JVM/JS/iOS Firestore (owner UID + non-user-scoped access paths)
+- Expand overflow menu / settings screen (theme, account, notifications)
 
 ## Known Remaining Warnings
 

@@ -49,6 +49,11 @@ internal class FirebaseJsAuthRepository(
             ),
         )
 
+    override suspend fun logout(): Result<Unit> {
+        cachedSession = null
+        return Result.success(Unit)
+    }
+
     override suspend fun getFreshIdToken(): String {
         val currentSession = cachedSession
             ?: error("User not logged in")

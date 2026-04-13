@@ -133,6 +133,24 @@ class LoginViewModelTest {
         assertEquals(1, repository.guestLoginCalls)
     }
 
+    @Test
+    fun resetState_clearsLoginState() = runTest(dispatcher) {
+        val repository = ScriptedAuthRepository().apply {
+            loginResult = Result.success(Unit)
+        }
+        val viewModel = LoginViewModel(repository)
+
+        viewModel.login("alex@example.com", "secreta")
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.isLoggedIn)
+
+        viewModel.resetState()
+
+        assertFalse(viewModel.state.value.isLoggedIn)
+        assertFalse(viewModel.state.value.isLoading)
+        assertNull(viewModel.state.value.error)
+    }
+
     private class ScriptedAuthRepository : AuthRepository {
         override var currentUserId: String? = null
 
@@ -171,6 +189,11 @@ class LoginViewModelTest {
             guestLoginCalls += 1
             awaitIfNeeded(Operation.GUEST)
             return guestResult.alsoUpdateUser("guest-user")
+        }
+
+        override suspend fun logout(): Result<Unit> {
+            currentUserId = null
+            return Result.success(Unit)
         }
 
         fun gate(operation: Operation) {

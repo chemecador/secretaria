@@ -24,6 +24,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -69,6 +71,15 @@ import secretaria.composeapp.generated.resources.sort_date_desc
 import secretaria.composeapp.generated.resources.edit_list
 import secretaria.composeapp.generated.resources.edit_list_button
 import secretaria.composeapp.generated.resources.edit_list_title
+import secretaria.composeapp.generated.resources.about_author
+import secretaria.composeapp.generated.resources.about_ok
+import secretaria.composeapp.generated.resources.about_title
+import secretaria.composeapp.generated.resources.about_version
+import secretaria.composeapp.generated.resources.logout_confirm
+import secretaria.composeapp.generated.resources.logout_message
+import secretaria.composeapp.generated.resources.logout_title
+import secretaria.composeapp.generated.resources.menu_about
+import secretaria.composeapp.generated.resources.menu_logout
 import secretaria.composeapp.generated.resources.sort_name_asc
 import secretaria.composeapp.generated.resources.sort_name_desc
 
@@ -77,6 +88,7 @@ import secretaria.composeapp.generated.resources.sort_name_desc
 fun NotesListsScreen(
     viewModel: NotesListsViewModel,
     onListSelected: (id: String, name: String, isOrdered: Boolean) -> Unit,
+    onLogout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
@@ -84,6 +96,9 @@ fun NotesListsScreen(
     var listForOptions by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToEdit by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToDelete by remember { mutableStateOf<NotesListSummary?>(null) }
+    var showOverflowMenu by remember { mutableStateOf(false) }
+    var showLogoutConfirmation by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         viewModel.load()
@@ -98,7 +113,34 @@ fun NotesListsScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = SecretariaTopBarColor,
                     titleContentColor = SecretariaTopBarContentColor,
+                    actionIconContentColor = SecretariaTopBarContentColor,
                 ),
+                actions = {
+                    Box {
+                        IconButton(onClick = { showOverflowMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = null)
+                        }
+                        DropdownMenu(
+                            expanded = showOverflowMenu,
+                            onDismissRequest = { showOverflowMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(Res.string.menu_about)) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showAboutDialog = true
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(Res.string.menu_logout)) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showLogoutConfirmation = true
+                                },
+                            )
+                        }
+                    }
+                },
             )
         },
         floatingActionButton = {
@@ -157,6 +199,20 @@ fun NotesListsScreen(
                     listToDelete = null
                 },
             )
+        }
+
+        if (showLogoutConfirmation) {
+            LogoutConfirmationDialog(
+                onDismiss = { showLogoutConfirmation = false },
+                onConfirm = {
+                    showLogoutConfirmation = false
+                    onLogout()
+                },
+            )
+        }
+
+        if (showAboutDialog) {
+            AboutDialog(onDismiss = { showAboutDialog = false })
         }
         Column(
             modifier = Modifier
@@ -512,6 +568,65 @@ private fun EditListDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun LogoutConfirmationDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        title = { Text(stringResource(Res.string.logout_title)) },
+        text = { Text(stringResource(Res.string.logout_message)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(Res.string.logout_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun AboutDialog(
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        title = { Text(stringResource(Res.string.about_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(Res.string.app_name),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = stringResource(Res.string.about_version, "1.0"),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = stringResource(Res.string.about_author, "chemecador"),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.about_ok))
             }
         },
     )

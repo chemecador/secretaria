@@ -42,6 +42,21 @@
     <string name="label_login_guest">Acceder como invitado</string>
     <string name="login_or_divider">O</string>
 
+    <!-- Menu -->
+    <string name="menu_logout">Cerrar sesión</string>
+    <string name="menu_about">Acerca de</string>
+
+    <!-- Logout -->
+    <string name="logout_title">Cerrar sesión</string>
+    <string name="logout_message">¿Estás seguro de que quieres cerrar sesión?</string>
+    <string name="logout_confirm">Cerrar sesión</string>
+
+    <!-- About -->
+    <string name="about_title">Acerca de</string>
+    <string name="about_version">Versión %1$s</string>
+    <string name="about_author">Desarrollada por %1$s</string>
+    <string name="about_ok">Aceptar</string>
+
     <!-- Auth errors -->
     <string name="error_invalid_user">El usuario no existe</string>
     <string name="error_wrong_password">La contraseña es incorrecta</string>

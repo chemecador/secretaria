@@ -30,4 +30,9 @@ class FakeAuthRepository : AuthRepository {
         _userId = "fake-guest"
         return Result.success(Unit)
     }
+
+    override suspend fun logout(): Result<Unit> {
+        _userId = null
+        return Result.success(Unit)
+    }
 }

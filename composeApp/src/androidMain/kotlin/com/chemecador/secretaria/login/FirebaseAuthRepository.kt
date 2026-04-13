@@ -54,4 +54,13 @@ class FirebaseAuthRepository : AuthRepository {
             Result.failure(AuthException(AuthError.UNKNOWN))
         }
     }
+
+    override suspend fun logout(): Result<Unit> {
+        return try {
+            auth.signOut()
+            Result.success(Unit)
+        } catch (_: Exception) {
+            Result.failure(AuthException(AuthError.UNKNOWN))
+        }
+    }
 }

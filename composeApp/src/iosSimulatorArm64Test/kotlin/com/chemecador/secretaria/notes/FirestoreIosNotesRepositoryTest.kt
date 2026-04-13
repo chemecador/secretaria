@@ -105,5 +105,6 @@ class FirestoreIosNotesRepositoryTest {
 
         override suspend fun loginWithGoogle(): Result<Unit> = Result.success(Unit)
         override suspend fun loginAsGuest(): Result<Unit> = Result.success(Unit)
+        override suspend fun logout(): Result<Unit> = Result.success(Unit)
     }
 }

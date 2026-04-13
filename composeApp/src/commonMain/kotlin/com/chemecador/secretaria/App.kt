@@ -8,12 +8,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import com.chemecador.secretaria.login.LoginScreen
 import com.chemecador.secretaria.login.LoginViewModel
 import com.chemecador.secretaria.login.createAuthRepository
@@ -49,6 +51,7 @@ fun App() {
     val notesRepository: NotesRepository = remember { createNotesRepository(authRepository) }
 
     var screen by remember { mutableStateOf<Screen>(Screen.Login) }
+    val coroutineScope = rememberCoroutineScope()
 
     SecretariaTheme {
         Box(
@@ -74,6 +77,13 @@ fun App() {
                             viewModel = listsViewModel,
                             onListSelected = { id, name, isOrdered ->
                                 screen = Screen.Notes(id, name, isOrdered)
+                            },
+                            onLogout = {
+                                coroutineScope.launch {
+                                    authRepository.logout()
+                                    loginViewModel.resetState()
+                                    screen = Screen.Login
+                                }
                             },
                         )
                     }

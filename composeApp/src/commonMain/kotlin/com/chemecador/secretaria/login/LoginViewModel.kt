@@ -75,6 +75,10 @@ class LoginViewModel(
         }
     }
 
+    fun resetState() {
+        _state.value = LoginState()
+    }
+
     private fun Throwable.toAuthError(): AuthError =
         (this as? AuthException)?.error ?: AuthError.UNKNOWN
 }
