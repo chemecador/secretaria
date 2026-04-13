@@ -6,6 +6,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
+import java.util.logging.Logger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -44,8 +45,24 @@ internal class FirebaseRestAuthRepository(
             ),
         )
 
-    override suspend fun loginWithGoogle(idToken: String?): Result<Unit> =
-        Result.failure(AuthException(AuthError.NOT_SUPPORTED))
+    override suspend fun loginWithGoogle(idToken: String?): Result<Unit> {
+        if (idToken.isNullOrBlank()) {
+            return Result.failure(AuthException(AuthError.NOT_SUPPORTED))
+        }
+
+        return authenticate(
+            endpoint = SIGN_IN_WITH_IDP_ENDPOINT,
+            requestBody = buildJsonObject(
+                "requestUri" to "http://localhost",
+                "postBody" to buildFormBody(
+                    "id_token" to idToken,
+                    "providerId" to GOOGLE_PROVIDER_ID,
+                ),
+                "returnSecureToken" to true,
+                "returnIdpCredential" to true,
+            ),
+        )
+    }
 
     override suspend fun loginAsGuest(): Result<Unit> =
         authenticate(
@@ -82,16 +99,24 @@ internal class FirebaseRestAuthRepository(
             )
         } catch (exception: CancellationException) {
             throw exception
-        } catch (_: Exception) {
+        } catch (exception: Exception) {
+            logger.warning("Firebase REST request failed for $endpoint: ${exception.message}")
             return Result.failure(AuthException(AuthError.UNKNOWN))
         }
 
         if (response.statusCode !in 200..299) {
+            logger.warning(
+                "Firebase REST auth failed for $endpoint with status=${response.statusCode} " +
+                    "error=${extractFirebaseErrorMessage(response.body) ?: response.body}",
+            )
             return Result.failure(AuthException(mapFirebaseRestError(response.body)))
         }
 
         val session = response.body.toFirebaseAuthSession(nowProvider())
-            ?: return Result.failure(AuthException(AuthError.UNKNOWN))
+            ?: run {
+                logger.warning("Firebase REST auth returned an unexpected success body for $endpoint")
+                return Result.failure(AuthException(AuthError.UNKNOWN))
+            }
 
         cachedSession = session
         return Result.success(Unit)
@@ -146,9 +171,12 @@ internal class FirebaseRestAuthRepository(
         const val IDENTITY_TOOLKIT_BASE_URL = "https://identitytoolkit.googleapis.com/v1"
         const val SECURE_TOKEN_BASE_URL = "https://securetoken.googleapis.com/v1"
         const val SIGN_IN_WITH_PASSWORD_ENDPOINT = "accounts:signInWithPassword"
+        const val SIGN_IN_WITH_IDP_ENDPOINT = "accounts:signInWithIdp"
         const val SIGN_UP_ENDPOINT = "accounts:signUp"
+        const val GOOGLE_PROVIDER_ID = "google.com"
         const val FORM_CONTENT_TYPE = "application/x-www-form-urlencoded; charset=utf-8"
         const val JSON_CONTENT_TYPE = "application/json; charset=utf-8"
+        val logger: Logger = Logger.getLogger(FirebaseRestAuthRepository::class.java.name)
     }
 }
 

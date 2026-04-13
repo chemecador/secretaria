@@ -11,7 +11,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            App()
+            App(
+                googleServerClientId = getString(R.string.default_web_client_id),
+            )
         }
     }
 }

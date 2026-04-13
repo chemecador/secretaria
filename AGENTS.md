@@ -63,7 +63,7 @@
 - About dialog:
   - app name, version, author
 - Pending or partial areas:
-  - Google Sign-In fuera de Android
+  - Google Sign-In en JS/iOS/Wasm
   - session persistence on non-Android targets
   - sharing/friends
   - FCM
@@ -130,7 +130,8 @@
 - JVM/Desktop, JS, and iOS use Firebase Auth REST.
 - Supported today on real targets: email/password login, signup, anonymous login.
 - Android also supports Google Sign-In via Credential Manager + Firebase Auth.
-- JVM/Desktop, JS, and iOS still return `NOT_SUPPORTED` for Google Sign-In.
+- JVM/Desktop also supports Google Sign-In via browser OAuth loopback + Firebase Auth REST.
+- JS and iOS still return `NOT_SUPPORTED` for Google Sign-In.
 - Non-Android real targets keep `idToken` + `refreshToken` in memory and refresh expired tokens.
 - Wasm still uses fake auth.
 
@@ -151,6 +152,8 @@
 - The debug package id must also be registered in Firebase: `com.chemecador.secretaria.debug`.
 - Do not use `platform(libs.firebase.bom)` in KMP source set dependencies. Pin Firebase versions directly.
 - JVM/Desktop resolves Firebase config from system properties, env vars, and nearby `local.properties`; project id can also fall back to `androidApp/google-services.json`.
+- JVM/Desktop Google Sign-In needs a Desktop OAuth client id exposed as `secretaria.googleDesktopClientId` or `SECRETARIA_GOOGLE_DESKTOP_CLIENT_ID`; packaged desktop builds can embed it through generated `DesktopBuildConfig`.
+- Some JVM/Desktop Google OAuth clients also require `secretaria.googleDesktopClientSecret` or `SECRETARIA_GOOGLE_DESKTOP_CLIENT_SECRET` during the code exchange; packaged desktop builds can embed it through generated `DesktopBuildConfig`.
 - JS receives Firebase API key and Firestore project id through generated `firebase-config.js`.
 - iOS reads Firebase config from bundled `iosApp/iosApp/GoogleService-Info.plist`.
 - Web clients intentionally ship Firebase API key/project id in browser resources; security must come from Firebase rules, not secrecy.
@@ -227,7 +230,7 @@
 
 - session persistence / auto-login on non-Android targets
 - sharing parity for JVM/JS/iOS Firestore by storing owner UID and removing direct user-scoped assumptions
-- Google Sign-In parity for JVM/JS/iOS if it becomes a product priority
+- Google Sign-In parity for JS/iOS if it becomes a product priority
 - settings/account/notifications expansion
 
 ## Desktop Distributable (Windows .exe)

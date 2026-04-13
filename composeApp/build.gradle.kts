@@ -32,16 +32,28 @@ val resolvedFirebaseProjectId =
         ?: providers.environmentVariable("SECRETARIA_FIREBASE_PROJECT_ID").orNull
         ?: localProperties.getProperty("secretaria.firebaseProjectId")
         ?: googleServicesProjectId
+val resolvedGoogleDesktopClientId =
+    providers.gradleProperty("secretaria.googleDesktopClientId").orNull
+        ?: providers.environmentVariable("SECRETARIA_GOOGLE_DESKTOP_CLIENT_ID").orNull
+        ?: localProperties.getProperty("secretaria.googleDesktopClientId")
+val resolvedGoogleDesktopClientSecret =
+    providers.gradleProperty("secretaria.googleDesktopClientSecret").orNull
+        ?: providers.environmentVariable("SECRETARIA_GOOGLE_DESKTOP_CLIENT_SECRET").orNull
+        ?: localProperties.getProperty("secretaria.googleDesktopClientSecret")
 val desktopFirebaseApiKey = resolvedFirebaseApiKey
 val generatedWebResourcesDir = layout.buildDirectory.dir("generated/webMain/resources")
 val generatedDesktopConfigDir = layout.buildDirectory.dir("generated/jvmMain/kotlin")
 val generateDesktopBuildConfig by tasks.registering {
     val apiKey = resolvedFirebaseApiKey.orEmpty()
     val projectId = resolvedFirebaseProjectId.orEmpty()
+    val googleDesktopClientId = resolvedGoogleDesktopClientId.orEmpty()
+    val googleDesktopClientSecret = resolvedGoogleDesktopClientSecret.orEmpty()
     val outputDir = generatedDesktopConfigDir
 
     inputs.property("apiKeyHash", apiKey.hashCode())
     inputs.property("projectIdHash", projectId.hashCode())
+    inputs.property("googleDesktopClientIdHash", googleDesktopClientId.hashCode())
+    inputs.property("googleDesktopClientSecretHash", googleDesktopClientSecret.hashCode())
     outputs.dir(outputDir)
 
     doLast {
@@ -67,9 +79,13 @@ val generateDesktopBuildConfig by tasks.registering {
                 appendLine("    private val k = byteArrayOf(${xorKey.joinToString(",")})")
                 appendLine("    private val a = byteArrayOf(${obfuscate(apiKey)})")
                 appendLine("    private val p = byteArrayOf(${obfuscate(projectId)})")
+                appendLine("    private val g = byteArrayOf(${obfuscate(googleDesktopClientId)})")
+                appendLine("    private val s = byteArrayOf(${obfuscate(googleDesktopClientSecret)})")
                 appendLine()
                 appendLine("    val firebaseApiKey: String get() = d(a)")
                 appendLine("    val firebaseProjectId: String get() = d(p)")
+                appendLine("    val googleDesktopClientId: String get() = d(g)")
+                appendLine("    val googleDesktopClientSecret: String get() = d(s)")
                 appendLine()
                 appendLine("    private fun d(b: ByteArray): String =")
                 appendLine("        ByteArray(b.size) { (b[it].toInt() xor k[it % k.size].toInt()).toByte() }")
@@ -234,7 +250,7 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "com.chemecador.secretaria"
             packageVersion = "1.0.0"
-            modules("java.net.http")
+            modules("java.desktop", "java.net.http", "jdk.httpserver")
         }
     }
 }

@@ -44,9 +44,11 @@ private sealed class Screen {
 
 @Composable
 @Preview
-fun App() {
+fun App(
+    googleServerClientId: String? = null,
+) {
     val authRepository = remember { createAuthRepository() }
-    val googleSignInController = rememberGoogleSignInController()
+    val googleSignInController = rememberGoogleSignInController(googleServerClientId)
     val loginViewModel = viewModel { LoginViewModel(authRepository) }
     val notesListsRepository = remember { createNotesListsRepository(authRepository) }
     val listsViewModel = viewModel { NotesListsViewModel(notesListsRepository) }

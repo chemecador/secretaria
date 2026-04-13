@@ -111,6 +111,43 @@ class FirebaseRestAuthRepositoryTest {
     }
 
     @Test
+    fun loginWithGoogle_successStoresCurrentUserId() = runTest {
+        val transport = RecordingFirebaseAuthTransport(
+            responses = listOf(
+                FirebaseAuthHttpResponse(
+                    statusCode = 200,
+                    body = successBody(
+                        userId = "google-user",
+                        idToken = "firebase-id-token",
+                        refreshToken = "firebase-refresh-token",
+                    ),
+                ),
+            ),
+        )
+        val repository = FirebaseRestAuthRepository(
+            apiKey = "test-key",
+            transport = transport,
+        )
+
+        val result = repository.loginWithGoogle("google-id-token")
+
+        assertTrue(result.isSuccess)
+        assertEquals("google-user", repository.currentUserId)
+        assertEquals(
+            "https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=test-key",
+            transport.requests.single().url,
+        )
+        assertEquals(
+            """{"requestUri":"http://localhost","postBody":"id_token=google-id-token&providerId=google.com","returnSecureToken":true,"returnIdpCredential":true}""",
+            transport.requests.single().body,
+        )
+        assertEquals(
+            "application/json; charset=utf-8",
+            transport.requests.single().contentType,
+        )
+    }
+
+    @Test
     fun getFreshIdToken_refreshesExpiredSession() = runTest {
         var now = Instant.parse("2026-04-12T10:00:00Z")
         val transport = RecordingFirebaseAuthTransport(
@@ -306,7 +343,69 @@ class FirebaseRestAuthRepositoryTest {
     }
 
     @Test
-    fun loginWithGoogle_isNotSupported() = runTest {
+    fun resolveGoogleDesktopClientId_prefersSystemPropertyThenEnv() {
+        val clientId = resolveGoogleDesktopClientId(
+            propertyProvider = { name ->
+                if (name == "secretaria.googleDesktopClientId") "property-client-id" else null
+            },
+            environmentProvider = { "env-client-id" },
+            localPropertiesProvider = { "local-client-id" },
+        )
+
+        assertEquals("property-client-id", clientId)
+    }
+
+    @Test
+    fun resolveGoogleDesktopClientId_fallsBackToBuildConfig() {
+        val clientId = resolveGoogleDesktopClientId(
+            propertyProvider = { null },
+            environmentProvider = { null },
+            localPropertiesProvider = { null },
+            buildConfigProvider = { "build-config-client-id" },
+        )
+
+        assertEquals("build-config-client-id", clientId)
+    }
+
+    @Test
+    fun resolveGoogleDesktopClientId_returnsNullWhenMissing() {
+        val clientId = resolveGoogleDesktopClientId(
+            propertyProvider = { null },
+            environmentProvider = { null },
+            localPropertiesProvider = { null },
+            buildConfigProvider = { null },
+        )
+
+        assertNull(clientId)
+    }
+
+    @Test
+    fun resolveGoogleDesktopClientSecret_prefersSystemPropertyThenEnv() {
+        val clientSecret = resolveGoogleDesktopClientSecret(
+            propertyProvider = { name ->
+                if (name == "secretaria.googleDesktopClientSecret") "property-client-secret" else null
+            },
+            environmentProvider = { "env-client-secret" },
+            localPropertiesProvider = { "local-client-secret" },
+        )
+
+        assertEquals("property-client-secret", clientSecret)
+    }
+
+    @Test
+    fun resolveGoogleDesktopClientSecret_returnsNullWhenMissing() {
+        val clientSecret = resolveGoogleDesktopClientSecret(
+            propertyProvider = { null },
+            environmentProvider = { null },
+            localPropertiesProvider = { null },
+            buildConfigProvider = { null },
+        )
+
+        assertNull(clientSecret)
+    }
+
+    @Test
+    fun loginWithGoogle_withoutIdTokenIsNotSupported() = runTest {
         val repository = FirebaseRestAuthRepository(
             apiKey = "test-key",
             transport = RecordingFirebaseAuthTransport(
