@@ -56,6 +56,19 @@ class FirebaseFirestoreConfigTest {
     }
 
     @Test
+    fun resolveFirebaseProjectId_fallsBackToBuildConfig() {
+        val projectId = resolveFirebaseProjectId(
+            propertyProvider = { null },
+            environmentProvider = { null },
+            localPropertiesProvider = { null },
+            googleServicesReader = { null },
+            buildConfigProvider = { "build-config-project" },
+        )
+
+        assertEquals("build-config-project", projectId)
+    }
+
+    @Test
     fun resolveFirebaseProjectId_failsWithClearMessageWhenMissing() {
         val error = assertFailsWith<IllegalStateException> {
             resolveFirebaseProjectId(
@@ -63,6 +76,7 @@ class FirebaseFirestoreConfigTest {
                 environmentProvider = { null },
                 localPropertiesProvider = { null },
                 googleServicesReader = { null },
+                buildConfigProvider = { null },
             )
         }
 

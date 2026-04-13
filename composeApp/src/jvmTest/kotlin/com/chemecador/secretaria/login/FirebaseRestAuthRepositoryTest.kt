@@ -278,12 +278,25 @@ class FirebaseRestAuthRepositoryTest {
     }
 
     @Test
+    fun resolveFirebaseApiKey_fallsBackToBuildConfig() {
+        val key = resolveFirebaseApiKey(
+            propertyProvider = { null },
+            environmentProvider = { null },
+            localPropertiesProvider = { null },
+            buildConfigProvider = { "build-config-key" },
+        )
+
+        assertEquals("build-config-key", key)
+    }
+
+    @Test
     fun resolveFirebaseApiKey_failsWithClearMessageWhenMissing() {
         val error = assertFailsWith<IllegalStateException> {
             resolveFirebaseApiKey(
                 propertyProvider = { null },
                 environmentProvider = { null },
                 localPropertiesProvider = { null },
+                buildConfigProvider = { null },
             )
         }
 

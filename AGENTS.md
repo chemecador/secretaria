@@ -646,6 +646,22 @@
     - Validation used for this slice:
         - `./gradlew :composeApp:compileKotlinIosSimulatorArm64 :composeApp:iosSimulatorArm64Test`
 
+## Desktop Distributable (Windows .exe)
+
+To generate a standalone `.exe` with embedded JRE (no Java needed on the target machine):
+
+```bash
+./gradlew :composeApp:createDistributable
+```
+
+Output: `composeApp/build/compose/binaries/main/app/com.chemecador.secretaria/`
+
+Copy the entire `com.chemecador.secretaria` folder to the target PC and run `com.chemecador.secretaria.exe`.
+
+- Firebase API key and project ID are **XOR-obfuscated** at build time via a generated `DesktopBuildConfig` (in `build/generated/jvmMain/kotlin/`). They are never stored in plain text in the distributable.
+- The `java.net.http` module is explicitly included in `nativeDistributions.modules(...)` because `jlink` does not auto-detect it.
+- The resolution fallback chain is: system property → env var → local.properties → DesktopBuildConfig → error.
+
 ## Notes for Future Agents
 
 - After completing any change or feature, update this `AGENTS.md` to reflect the new state (new files, conventions, migration progress, pitfalls discovered, etc.). This file is the primary context for future sessions.

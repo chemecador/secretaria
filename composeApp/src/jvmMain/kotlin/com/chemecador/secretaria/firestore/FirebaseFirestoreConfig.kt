@@ -1,5 +1,6 @@
 package com.chemecador.secretaria.firestore
 
+import com.chemecador.secretaria.config.DesktopBuildConfig
 import com.chemecador.secretaria.config.readLocalProperty
 import com.chemecador.secretaria.config.readNearbyFileText
 import kotlinx.serialization.json.Json
@@ -16,6 +17,7 @@ internal fun resolveFirebaseProjectId(
     environmentProvider: (String) -> String? = System::getenv,
     localPropertiesProvider: (String) -> String? = ::readLocalProperty,
     googleServicesReader: () -> String? = ::readGoogleServicesJson,
+    buildConfigProvider: () -> String? = { DesktopBuildConfig.firebaseProjectId },
 ): String =
     propertyProvider(FIREBASE_PROJECT_ID_PROPERTY)
         .takeUnless { it.isNullOrBlank() }
@@ -25,6 +27,8 @@ internal fun resolveFirebaseProjectId(
             .takeUnless { it.isNullOrBlank() }
         ?: googleServicesReader()
             ?.let(::parseProjectIdFromGoogleServicesJson)
+        ?: buildConfigProvider()
+            .takeUnless { it.isNullOrBlank() }
         ?: error(
             "Missing Firebase project id for JVM/Desktop Firestore. " +
                 "Set -Dsecretaria.firebaseProjectId=..., SECRETARIA_FIREBASE_PROJECT_ID, " +

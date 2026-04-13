@@ -1,6 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.security.SecureRandom
 import java.util.Properties
 
 fun parseProjectIdFromGoogleServices(json: String): String? =
@@ -33,6 +34,51 @@ val resolvedFirebaseProjectId =
         ?: googleServicesProjectId
 val desktopFirebaseApiKey = resolvedFirebaseApiKey
 val generatedWebResourcesDir = layout.buildDirectory.dir("generated/webMain/resources")
+val generatedDesktopConfigDir = layout.buildDirectory.dir("generated/jvmMain/kotlin")
+val generateDesktopBuildConfig by tasks.registering {
+    val apiKey = resolvedFirebaseApiKey.orEmpty()
+    val projectId = resolvedFirebaseProjectId.orEmpty()
+    val outputDir = generatedDesktopConfigDir
+
+    inputs.property("apiKeyHash", apiKey.hashCode())
+    inputs.property("projectIdHash", projectId.hashCode())
+    outputs.dir(outputDir)
+
+    doLast {
+        val dir = outputDir.get().asFile
+            .resolve("com/chemecador/secretaria/config")
+        dir.mkdirs()
+
+        val rng = SecureRandom()
+        val xorKey = ByteArray(32).also { rng.nextBytes(it) }
+
+        fun obfuscate(value: String): String {
+            val bytes = value.toByteArray(Charsets.UTF_8)
+            return ByteArray(bytes.size) { i ->
+                (bytes[i].toInt() xor xorKey[i % xorKey.size].toInt()).toByte()
+            }.joinToString(",")
+        }
+
+        dir.resolve("DesktopBuildConfig.kt").writeText(
+            buildString {
+                appendLine("package com.chemecador.secretaria.config")
+                appendLine()
+                appendLine("internal object DesktopBuildConfig {")
+                appendLine("    private val k = byteArrayOf(${xorKey.joinToString(",")})")
+                appendLine("    private val a = byteArrayOf(${obfuscate(apiKey)})")
+                appendLine("    private val p = byteArrayOf(${obfuscate(projectId)})")
+                appendLine()
+                appendLine("    val firebaseApiKey: String get() = d(a)")
+                appendLine("    val firebaseProjectId: String get() = d(p)")
+                appendLine()
+                appendLine("    private fun d(b: ByteArray): String =")
+                appendLine("        ByteArray(b.size) { (b[it].toInt() xor k[it % k.size].toInt()).toByte() }")
+                appendLine("            .toString(Charsets.UTF_8)")
+                appendLine("}")
+            },
+        )
+    }
+}
 val generateWebFirebaseConfig by tasks.registering(GenerateWebFirebaseConfigTask::class) {
     firebaseApiKey.set(resolvedFirebaseApiKey.orEmpty())
     firebaseProjectId.set(resolvedFirebaseProjectId.orEmpty())
@@ -148,6 +194,9 @@ kotlin {
         iosMain.dependencies {
             implementation(libs.kotlinx.serialization.json)
         }
+        getByName("jvmMain") {
+            kotlin.srcDir(generatedDesktopConfigDir)
+        }
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutinesSwing)
@@ -166,6 +215,10 @@ tasks.matching { it.name == "jsProcessResources" || it.name == "wasmJsProcessRes
     }
 }
 
+tasks.named("compileKotlinJvm") {
+    dependsOn(generateDesktopBuildConfig)
+}
+
 dependencies {
     "androidRuntimeClasspath"(libs.compose.uiTooling)
 }
@@ -178,6 +231,7 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "com.chemecador.secretaria"
             packageVersion = "1.0.0"
+            modules("java.net.http")
         }
     }
 }
