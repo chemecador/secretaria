@@ -68,7 +68,7 @@ internal class FirebaseIosAuthRepository(
             ),
         )
 
-    override suspend fun loginWithGoogle(): Result<Unit> =
+    override suspend fun loginWithGoogle(idToken: String?): Result<Unit> =
         Result.failure(AuthException(AuthError.NOT_SUPPORTED))
 
     override suspend fun loginAsGuest(): Result<Unit> =

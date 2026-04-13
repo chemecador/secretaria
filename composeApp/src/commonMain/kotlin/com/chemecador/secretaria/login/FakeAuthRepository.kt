@@ -19,7 +19,7 @@ class FakeAuthRepository : AuthRepository {
         return Result.success(Unit)
     }
 
-    override suspend fun loginWithGoogle(): Result<Unit> {
+    override suspend fun loginWithGoogle(idToken: String?): Result<Unit> {
         delay(500)
         _userId = "fake-user"
         return Result.success(Unit)

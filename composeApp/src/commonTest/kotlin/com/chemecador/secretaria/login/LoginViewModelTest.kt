@@ -118,6 +118,40 @@ class LoginViewModelTest {
     }
 
     @Test
+    fun loginWithGoogle_usesProvidedToken() = runTest(dispatcher) {
+        val repository = ScriptedAuthRepository().apply {
+            googleResult = Result.success(Unit)
+        }
+        val viewModel = LoginViewModel(repository)
+
+        viewModel.loginWithGoogle {
+            Result.success("google-id-token")
+        }
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isLoading)
+        assertTrue(viewModel.state.value.isLoggedIn)
+        assertNull(viewModel.state.value.error)
+        assertEquals(listOf<String?>("google-id-token"), repository.googleTokens)
+    }
+
+    @Test
+    fun loginWithGoogle_cancelledProviderSurfacesCancelledError() = runTest(dispatcher) {
+        val repository = ScriptedAuthRepository()
+        val viewModel = LoginViewModel(repository)
+
+        viewModel.loginWithGoogle {
+            Result.failure(AuthException(AuthError.CANCELLED))
+        }
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isLoading)
+        assertFalse(viewModel.state.value.isLoggedIn)
+        assertEquals(AuthError.CANCELLED, viewModel.state.value.error)
+        assertEquals(0, repository.googleLoginCalls)
+    }
+
+    @Test
     fun loginAsGuest_marksUserAsLoggedIn() = runTest(dispatcher) {
         val repository = ScriptedAuthRepository().apply {
             guestResult = Result.success(Unit)
@@ -161,6 +195,7 @@ class LoginViewModelTest {
 
         val loginCalls = mutableListOf<Pair<String, String>>()
         val signupCalls = mutableListOf<Pair<String, String>>()
+        val googleTokens = mutableListOf<String?>()
         var googleLoginCalls = 0
         var guestLoginCalls = 0
 
@@ -179,8 +214,9 @@ class LoginViewModelTest {
             return signupResult.alsoUpdateUser("email-user")
         }
 
-        override suspend fun loginWithGoogle(): Result<Unit> {
+        override suspend fun loginWithGoogle(idToken: String?): Result<Unit> {
             googleLoginCalls += 1
+            googleTokens += idToken
             awaitIfNeeded(Operation.GOOGLE)
             return googleResult.alsoUpdateUser("google-user")
         }

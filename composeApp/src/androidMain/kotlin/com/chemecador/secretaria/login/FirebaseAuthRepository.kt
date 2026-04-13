@@ -5,6 +5,7 @@ import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
+import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.tasks.await
 
 class FirebaseAuthRepository : AuthRepository {
@@ -42,8 +43,18 @@ class FirebaseAuthRepository : AuthRepository {
         }
     }
 
-    override suspend fun loginWithGoogle(): Result<Unit> {
-        return Result.failure(AuthException(AuthError.NOT_SUPPORTED))
+    override suspend fun loginWithGoogle(idToken: String?): Result<Unit> {
+        if (idToken.isNullOrBlank()) {
+            return Result.failure(AuthException(AuthError.NOT_SUPPORTED))
+        }
+
+        return try {
+            val credential = GoogleAuthProvider.getCredential(idToken, null)
+            auth.signInWithCredential(credential).await()
+            Result.success(Unit)
+        } catch (_: Exception) {
+            Result.failure(AuthException(AuthError.UNKNOWN))
+        }
     }
 
     override suspend fun loginAsGuest(): Result<Unit> {

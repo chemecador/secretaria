@@ -45,16 +45,28 @@ class LoginViewModel(
         }
     }
 
-    fun loginWithGoogle() {
+    fun loginWithGoogle(
+        tokenProvider: (suspend () -> Result<String>)? = null,
+    ) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
-            repository.loginWithGoogle()
+            val result = tokenProvider
+                ?.invoke()
+                ?.fold(
+                    onSuccess = { idToken -> repository.loginWithGoogle(idToken) },
+                    onFailure = { throwable -> Result.failure(throwable) },
+                )
+                ?: repository.loginWithGoogle()
+            result
                 .onSuccess {
                     _state.update { it.copy(isLoading = false, isLoggedIn = true) }
                 }
                 .onFailure { throwable ->
                     _state.update {
-                        it.copy(isLoading = false, error = throwable.toAuthError())
+                        it.copy(
+                            isLoading = false,
+                            error = throwable.toAuthError(),
+                        )
                     }
                 }
         }

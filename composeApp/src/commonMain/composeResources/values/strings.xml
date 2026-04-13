@@ -63,6 +63,7 @@
     <string name="error_user_already_exists">El usuario ya existe</string>
     <string name="error_weak_password">La contraseña debe tener al menos 6 caracteres</string>
     <string name="error_invalid_email">El email no es válido</string>
+    <string name="error_login_cancelled">Inicio de sesión cancelado</string>
     <string name="error_not_supported">Esta función no está disponible todavía</string>
     <string name="error_unknown">Ha ocurrido un error inesperado</string>
 </resources>

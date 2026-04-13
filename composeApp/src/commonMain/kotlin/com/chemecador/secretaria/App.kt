@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import com.chemecador.secretaria.login.LoginScreen
 import com.chemecador.secretaria.login.LoginViewModel
 import com.chemecador.secretaria.login.createAuthRepository
+import com.chemecador.secretaria.login.rememberGoogleSignInController
 import com.chemecador.secretaria.notes.Note
 import com.chemecador.secretaria.notes.NoteDetailScreen
 import com.chemecador.secretaria.notes.NotesRepository
@@ -45,6 +46,7 @@ private sealed class Screen {
 @Preview
 fun App() {
     val authRepository = remember { createAuthRepository() }
+    val googleSignInController = rememberGoogleSignInController()
     val loginViewModel = viewModel { LoginViewModel(authRepository) }
     val notesListsRepository = remember { createNotesListsRepository(authRepository) }
     val listsViewModel = viewModel { NotesListsViewModel(notesListsRepository) }
@@ -69,6 +71,13 @@ fun App() {
                         LoginScreen(
                             viewModel = loginViewModel,
                             onLoginSuccess = { screen = Screen.Lists },
+                            onGoogleLogin = {
+                                loginViewModel.loginWithGoogle(
+                                    tokenProvider = googleSignInController?.let { controller ->
+                                        suspend { controller.getIdToken() }
+                                    },
+                                )
+                            },
                         )
                     }
 
@@ -81,6 +90,7 @@ fun App() {
                             onLogout = {
                                 coroutineScope.launch {
                                     authRepository.logout()
+                                    googleSignInController?.clearCredentialState()
                                     loginViewModel.resetState()
                                     screen = Screen.Login
                                 }

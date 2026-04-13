@@ -1,5 +1,6 @@
 [versions]
-agp = "9.1.0"
+agp = "9.1.1"
+androidx-credentials = "1.6.0"
 androidx-activity = "1.13.0"
 androidx-core = "1.18.0"
 androidx-lifecycle = "2.10.0"
@@ -7,6 +8,7 @@ composeHotReload = "1.0.0"
 composeMultiplatform = "1.10.3"
 kotlin = "2.3.20"
 google-services = "4.4.4"
+googleid = "1.1.1"
 kotlinx-coroutines = "1.10.2"
 kotlinx-datetime = "0.7.1"
 kotlinx-serialization = "1.11.0"
@@ -14,6 +16,8 @@ material3 = "1.10.0-alpha05"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "androidx-credentials" }
+androidx-credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "androidx-credentials" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 compose-uiTooling = { module = "org.jetbrains.compose.ui:ui-tooling", version.ref = "composeMultiplatform" }
@@ -34,6 +38,7 @@ kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 firebase-auth = { module = "com.google.firebase:firebase-auth", version = "24.0.1" }
 firebase-firestore = { module = "com.google.firebase:firebase-firestore", version = "26.2.0" }
+googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

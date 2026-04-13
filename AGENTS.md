@@ -63,7 +63,7 @@
 - About dialog:
   - app name, version, author
 - Pending or partial areas:
-  - Google Sign-In
+  - Google Sign-In fuera de Android
   - session persistence on non-Android targets
   - sharing/friends
   - FCM
@@ -129,7 +129,8 @@
 - Android uses Firebase Auth SDK.
 - JVM/Desktop, JS, and iOS use Firebase Auth REST.
 - Supported today on real targets: email/password login, signup, anonymous login.
-- Google Sign-In currently returns `NOT_SUPPORTED` on every target.
+- Android also supports Google Sign-In via Credential Manager + Firebase Auth.
+- JVM/Desktop, JS, and iOS still return `NOT_SUPPORTED` for Google Sign-In.
 - Non-Android real targets keep `idToken` + `refreshToken` in memory and refresh expired tokens.
 - Wasm still uses fake auth.
 
@@ -224,9 +225,9 @@
 
 ## Likely Next Steps
 
-- Android Google Sign-In with Credential Manager + Activity context abstraction
 - session persistence / auto-login on non-Android targets
 - sharing parity for JVM/JS/iOS Firestore by storing owner UID and removing direct user-scoped assumptions
+- Google Sign-In parity for JVM/JS/iOS if it becomes a product priority
 - settings/account/notifications expansion
 
 ## Desktop Distributable (Windows .exe)

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -54,6 +53,7 @@ import secretaria.composeapp.generated.resources.label_password
 import secretaria.composeapp.generated.resources.label_sign_up
 import secretaria.composeapp.generated.resources.error_invalid_email
 import secretaria.composeapp.generated.resources.error_invalid_user
+import secretaria.composeapp.generated.resources.error_login_cancelled
 import secretaria.composeapp.generated.resources.error_not_supported
 import secretaria.composeapp.generated.resources.error_unknown
 import secretaria.composeapp.generated.resources.error_user_already_exists
@@ -66,6 +66,7 @@ fun LoginScreen(
     viewModel: LoginViewModel,
     onLoginSuccess: () -> Unit,
     modifier: Modifier = Modifier,
+    onGoogleLogin: () -> Unit = { viewModel.loginWithGoogle() },
 ) {
     val state by viewModel.state.collectAsState()
     var email by remember { mutableStateOf("") }
@@ -179,14 +180,9 @@ fun LoginScreen(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedButton(
-                    onClick = { viewModel.loginWithGoogle() },
+                    onClick = onGoogleLogin,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(
-                        text = "G",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
                     Text(stringResource(Res.string.label_login_google))
                 }
                 Spacer(modifier = Modifier.height(32.dp))
@@ -212,6 +208,7 @@ private fun AuthError.toStringRes() = when (this) {
     AuthError.USER_ALREADY_EXISTS -> Res.string.error_user_already_exists
     AuthError.WEAK_PASSWORD -> Res.string.error_weak_password
     AuthError.INVALID_EMAIL -> Res.string.error_invalid_email
+    AuthError.CANCELLED -> Res.string.error_login_cancelled
     AuthError.NOT_SUPPORTED -> Res.string.error_not_supported
     AuthError.UNKNOWN -> Res.string.error_unknown
 }

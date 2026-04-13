@@ -6,6 +6,7 @@ enum class AuthError {
     USER_ALREADY_EXISTS,
     WEAK_PASSWORD,
     INVALID_EMAIL,
+    CANCELLED,
     NOT_SUPPORTED,
     UNKNOWN,
 }
