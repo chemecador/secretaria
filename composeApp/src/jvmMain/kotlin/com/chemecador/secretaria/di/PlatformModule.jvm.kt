@@ -2,6 +2,8 @@ package com.chemecador.secretaria.di
 
 import com.chemecador.secretaria.firestore.FirebaseFirestoreRestApi
 import com.chemecador.secretaria.firestore.resolveFirebaseProjectId
+import com.chemecador.secretaria.friends.FirestoreRestFriendsRepository
+import com.chemecador.secretaria.friends.FriendsRepository
 import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.login.FirebaseIdTokenProvider
 import com.chemecador.secretaria.login.FirebaseRestAuthRepository
@@ -30,6 +32,16 @@ internal actual fun platformModule(): Module = module {
     single<NotesRepository> {
         val authRepository: AuthRepository = get()
         FirestoreRestNotesRepository(
+            authRepository = authRepository,
+            firestore = FirebaseFirestoreRestApi(
+                projectId = resolveFirebaseProjectId(),
+                tokenProvider = authRepository.requireFirebaseIdTokenProvider(),
+            ),
+        )
+    }
+    single<FriendsRepository> {
+        val authRepository: AuthRepository = get()
+        FirestoreRestFriendsRepository(
             authRepository = authRepository,
             firestore = FirebaseFirestoreRestApi(
                 projectId = resolveFirebaseProjectId(),

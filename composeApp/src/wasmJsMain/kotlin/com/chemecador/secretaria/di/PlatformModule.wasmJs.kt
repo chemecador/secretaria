@@ -1,5 +1,7 @@
 package com.chemecador.secretaria.di
 
+import com.chemecador.secretaria.friends.FakeFriendsRepository
+import com.chemecador.secretaria.friends.FriendsRepository
 import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.login.FakeAuthRepository
 import com.chemecador.secretaria.notes.FakeNotesRepository
@@ -13,4 +15,5 @@ internal actual fun platformModule(): Module = module {
     single<AuthRepository> { FakeAuthRepository() }
     single<NotesListsRepository> { FakeNotesListsRepository() }
     single<NotesRepository> { FakeNotesRepository() }
+    single<FriendsRepository> { FakeFriendsRepository() }
 }

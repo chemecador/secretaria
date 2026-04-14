@@ -1,5 +1,7 @@
 package com.chemecador.secretaria.di
 
+import com.chemecador.secretaria.friends.FirestoreFriendsRepository
+import com.chemecador.secretaria.friends.FriendsRepository
 import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.login.FirebaseAuthRepository
 import com.chemecador.secretaria.notes.FirestoreNotesRepository
@@ -13,4 +15,5 @@ internal actual fun platformModule(): Module = module {
     single<AuthRepository> { FirebaseAuthRepository() }
     single<NotesListsRepository> { FirestoreNotesListsRepository(get()) }
     single<NotesRepository> { FirestoreNotesRepository(get()) }
+    single<FriendsRepository> { FirestoreFriendsRepository(get()) }
 }

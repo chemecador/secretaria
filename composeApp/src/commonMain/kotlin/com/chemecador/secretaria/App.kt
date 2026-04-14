@@ -10,13 +10,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.chemecador.secretaria.di.appModules
 import com.chemecador.secretaria.di.previewAppModules
+import com.chemecador.secretaria.friends.FriendsScreen
+import com.chemecador.secretaria.friends.FriendsViewModel
 import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.login.LoginScreen
 import com.chemecador.secretaria.login.LoginViewModel
@@ -37,6 +39,7 @@ import org.koin.dsl.koinConfiguration
 private sealed class Screen {
     data object Login : Screen()
     data object Lists : Screen()
+    data object Friends : Screen()
     data class Notes(val listId: String, val listName: String, val isOrdered: Boolean) : Screen()
     data class NoteDetail(
         val listId: String,
@@ -66,6 +69,7 @@ fun App(
         val googleSignInController = rememberGoogleSignInController(googleServerClientId)
         val loginViewModel = koinViewModel<LoginViewModel>()
         val listsViewModel = koinViewModel<NotesListsViewModel>()
+        val friendsViewModel = koinViewModel<FriendsViewModel>()
 
         var screen by remember { mutableStateOf<Screen>(Screen.Login) }
         val coroutineScope = rememberCoroutineScope()
@@ -102,6 +106,7 @@ fun App(
                                 onListSelected = { id, name, isOrdered ->
                                     screen = Screen.Notes(id, name, isOrdered)
                                 },
+                                onOpenFriends = { screen = Screen.Friends },
                                 onLogout = {
                                     coroutineScope.launch {
                                         authRepository.logout()
@@ -110,6 +115,13 @@ fun App(
                                         screen = Screen.Login
                                     }
                                 },
+                            )
+                        }
+
+                        is Screen.Friends -> {
+                            FriendsScreen(
+                                viewModel = friendsViewModel,
+                                onBack = { screen = Screen.Lists },
                             )
                         }
 

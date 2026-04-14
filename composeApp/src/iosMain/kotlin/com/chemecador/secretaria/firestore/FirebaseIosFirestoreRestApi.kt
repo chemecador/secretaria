@@ -87,24 +87,80 @@ internal class FirebaseIosFirestoreRestApi(
         return parseJsonObject(response.body).asFirestoreDocument()
     }
 
+    suspend fun getDocumentOrNull(documentPath: String): FirestoreIosDocument? {
+        val response = authenticatedRequest(
+            FirebaseIosFirestoreRequest(
+                method = "GET",
+                url = documentsUrl(documentPath),
+            ),
+        )
+
+        return when (response.statusCode) {
+            404 -> null
+            in 200..299 -> parseJsonObject(response.body).asFirestoreDocument()
+            else -> error(
+                "Firestore request failed (${response.statusCode}): ${
+                    extractFirestoreErrorMessage(response.body)
+                }",
+            )
+        }
+    }
+
     suspend fun patchDocument(
         documentPath: String,
         fields: JsonObject,
         updateMask: List<String>,
+        currentDocument: FirestorePrecondition? = null,
     ): FirestoreIosDocument {
-        val query = updateMask.joinToString("&") { field ->
-            "updateMask.fieldPaths=${percentEncode(field)}"
+        val queryParams = buildList {
+            updateMask.forEach { field ->
+                add("updateMask.fieldPaths=${percentEncode(field)}")
+            }
+            currentDocument?.exists?.let { exists ->
+                add("currentDocument.exists=$exists")
+            }
+            currentDocument?.updateTime?.let { updateTime ->
+                add("currentDocument.updateTime=${percentEncode(updateTime)}")
+            }
         }
+        val query = queryParams.joinToString("&")
         val response = request(
             FirebaseIosFirestoreRequest(
                 method = "PATCH",
-                url = "${documentsUrl(documentPath)}?$query",
+                url = buildString {
+                    append(documentsUrl(documentPath))
+                    if (query.isNotBlank()) {
+                        append('?')
+                        append(query)
+                    }
+                },
                 body = buildJsonObject {
                     put("fields", fields)
                 }.toString(),
             ),
         )
         return parseJsonObject(response.body).asFirestoreDocument()
+    }
+
+    suspend fun runQuery(
+        structuredQuery: JsonObject,
+        parentPath: String = "",
+    ): List<FirestoreIosDocument> {
+        val response = request(
+            FirebaseIosFirestoreRequest(
+                method = "POST",
+                url = runQueryUrl(parentPath),
+                body = buildJsonObject {
+                    put("structuredQuery", structuredQuery)
+                }.toString(),
+            ),
+        )
+
+        return parseJsonArray(response.body).mapNotNull { item ->
+            item.jsonObject["document"]?.let { document ->
+                runCatching { document.asFirestoreDocument() }.getOrNull()
+            }
+        }
     }
 
     suspend fun deleteDocument(documentPath: String) {
@@ -143,13 +199,19 @@ internal class FirebaseIosFirestoreRestApi(
         )
     }
 
-    private suspend fun request(request: FirebaseIosFirestoreRequest): FirebaseIosFirestoreHttpResponse {
+    private suspend fun authenticatedRequest(
+        request: FirebaseIosFirestoreRequest,
+    ): FirebaseIosFirestoreHttpResponse {
         val idToken = tokenProvider.getFreshIdToken()
-        val response = transport.execute(
+        return transport.execute(
             request.copy(
                 headers = request.headers + ("Authorization" to "Bearer $idToken"),
             ),
         )
+    }
+
+    private suspend fun request(request: FirebaseIosFirestoreRequest): FirebaseIosFirestoreHttpResponse {
+        val response = authenticatedRequest(request)
 
         if (response.statusCode in 200..299) {
             return response
@@ -174,6 +236,13 @@ internal class FirebaseIosFirestoreRestApi(
     private fun fullDocumentName(path: String): String =
         "projects/$projectId/databases/(default)/documents/$path"
 
+    private fun runQueryUrl(parentPath: String): String =
+        if (parentPath.isBlank()) {
+            "$databaseUrl/documents:runQuery"
+        } else {
+            "$databaseUrl/documents/$parentPath:runQuery"
+        }
+
     private val databaseUrl: String
         get() = "$BASE_URL/projects/$projectId/databases/(default)"
 
@@ -185,6 +254,7 @@ internal class FirebaseIosFirestoreRestApi(
 internal data class FirestoreIosDocument(
     val name: String,
     val fields: JsonObject,
+    val updateTime: String? = null,
 ) {
     val id: String
         get() = name.substringAfterLast('/')
@@ -257,6 +327,9 @@ internal fun firestoreLong(value: Long): JsonObject =
 
 internal fun firestoreTimestamp(value: Instant): JsonObject =
     buildJsonObject { put("timestampValue", JsonPrimitive(value.toString())) }
+
+internal fun firestoreNull(): JsonObject =
+    buildJsonObject { put("nullValue", JsonPrimitive("NULL_VALUE")) }
 
 internal fun firestoreArray(vararg values: JsonObject): JsonObject =
     buildJsonObject {
@@ -354,11 +427,15 @@ private fun kotlinx.serialization.json.JsonElement.asFirestoreDocument(): Firest
         name = objectValue["name"]?.jsonPrimitive?.content
             ?: error("Missing Firestore document name"),
         fields = objectValue["fields"]?.jsonObject ?: JsonObject(emptyMap()),
+        updateTime = objectValue["updateTime"]?.jsonPrimitive?.contentOrNull,
     )
 }
 
 private fun parseJsonObject(body: String): JsonObject =
     Json.parseToJsonElement(body).jsonObject
+
+private fun parseJsonArray(body: String): JsonArray =
+    Json.parseToJsonElement(body).jsonArray
 
 private fun extractFirestoreErrorMessage(body: String): String =
     runCatching {

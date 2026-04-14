@@ -47,10 +47,11 @@
 ## Product State
 
 - Shared flow implemented: login -> lists -> notes -> note detail
+- Shared friends flow implemented
 - Notes lists:
   - read, create, delete
   - sort by name/date
-  - overflow menu with logout/about
+  - overflow menu with logout/about/amigos
 - Notes:
   - read, create, delete
   - ordered/unordered display
@@ -63,9 +64,9 @@
 - About dialog:
   - app name, version, author
 - Pending or partial areas:
-    - Google Sign-In en Wasm
+  - Google Sign-In en Wasm
   - session persistence on non-Android targets
-  - sharing/friends
+  - share list using `contributors` in JVM/JS/iOS
   - FCM
   - DataStore
   - richer settings/account screens
@@ -85,6 +86,7 @@
 
 - Package by feature, not by technical layer.
 - Current feature packages: `login`, `noteslists`, `notes`.
+- Current feature packages: `login`, `noteslists`, `notes`, `friends`.
 - Typical feature shape:
   - model
   - repository interface
@@ -121,10 +123,11 @@
 ## Feature Status by Platform
 
 | Feature     | Common                                        | Android                         | JVM/Desktop                         | JS browser                        | iOS                                | Wasm                       |
-| ----------- | --------------------------------------------- | ------------------------------- | ----------------------------------- | --------------------------------- | ---------------------------------- | -------------------------- |
+|-------------|-----------------------------------------------|---------------------------------|-------------------------------------|-----------------------------------|------------------------------------|----------------------------|
 | Auth        | `AuthRepository`, `LoginViewModel`            | `FirebaseAuthRepository`        | `FirebaseRestAuthRepository`        | `FirebaseJsAuthRepository`        | `FirebaseIosAuthRepository`        | `FakeAuthRepository`       |
 | Notes lists | `NotesListsRepository`, `NotesListsViewModel` | `FirestoreNotesListsRepository` | `FirestoreRestNotesListsRepository` | `FirestoreJsNotesListsRepository` | `FirestoreIosNotesListsRepository` | `FakeNotesListsRepository` |
 | Notes       | `NotesRepository`, `NotesViewModel`           | `FirestoreNotesRepository`      | `FirestoreRestNotesRepository`      | `FirestoreJsNotesRepository`      | `FirestoreIosNotesRepository`      | `FakeNotesRepository`      |
+| Friends     | `FriendsRepository`, `FriendsViewModel`       | `FirestoreFriendsRepository`    | `FirestoreRestFriendsRepository`    | `FirestoreJsFriendsRepository`    | `FirestoreIosFriendsRepository`    | `FakeFriendsRepository`    |
 
 ### Auth Notes
 
@@ -148,6 +151,21 @@
 - Android lists already use `contributors` for future sharing and query shared lists with `collectionGroup(...).whereArrayContains("contributors", userId)`.
 - JVM/Desktop, JS, and iOS still use direct user-scoped paths, so sharing parity is pending.
 - REST Firestore targets currently send client-clock timestamps, not server timestamps.
+
+### Friends / Requests
+
+- Friendships live in root collection `friendships`.
+- Document shape mirrors the Android app reference:
+  - `senderId`, `senderName`
+  - `receiverId`, `receiverCode`, `receiverName`
+  - `requestDate`, `acceptanceDate`
+- Accepted friendships are the records with non-null `acceptanceDate`.
+- Pending incoming/outgoing requests are filtered by `receiverId` / `senderId` with null
+  `acceptanceDate`.
+- KMP now ensures `users/{uid}.usercode` exists on first friends load.
+- On REST targets, KMP uses the same `dateKey + counter` format as Android and reserves the daily
+  counter with Firestore preconditions because read-write transactions are not available with
+  Firebase ID token REST auth.
 
 ## Firebase / Platform Notes
 
@@ -198,7 +216,7 @@
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/noteslists/`
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/notes/`
 - iOS native repository tests:
-    - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/login/`
+  - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/login/`
   - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/noteslists/`
   - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/notes/`
 - Current test focus:

@@ -43,6 +43,7 @@
     <string name="login_or_divider">O</string>
 
     <!-- Menu -->
+    <string name="menu_friends">Amigos</string>
     <string name="menu_logout">Cerrar sesión</string>
     <string name="menu_about">Acerca de</string>
 
@@ -66,4 +67,37 @@
     <string name="error_login_cancelled">Inicio de sesión cancelado</string>
     <string name="error_not_supported">Esta función no está disponible todavía</string>
     <string name="error_unknown">Ha ocurrido un error inesperado</string>
+
+    <!-- Friends -->
+    <string name="friends_title">Amigos</string>
+    <string name="friends_friends_tab">Mis amigos</string>
+    <string name="friends_requests_tab">Solicitudes</string>
+    <string name="friends_add_tab">Agregar</string>
+    <string name="friends_empty">Todavía no tienes amigos.</string>
+    <string name="friends_friend_requests_empty">No tienes solicitudes pendientes.</string>
+    <string name="friends_my_code">Tu código</string>
+    <string name="friends_code_hint">Código de amigo</string>
+    <string name="friends_send_button">Enviar solicitud</string>
+    <string name="friends_sent_requests_title">Solicitudes enviadas</string>
+    <string name="friends_sent_requests_empty">Todavía no has enviado solicitudes.</string>
+    <string name="friends_delete_title">Eliminar amigo</string>
+    <string name="friends_delete_message">¿Eliminar a %1$s de tus amigos?</string>
+    <string name="friends_cancel_request_title">Cancelar solicitud</string>
+    <string name="friends_cancel_request_message">¿Quieres cancelar esta solicitud enviada?</string>
+    <string name="friends_retry">Reintentar</string>
+    <string name="friends_error_load">No se ha podido cargar la información de amigos.</string>
+    <string name="friends_error_action">No se ha podido completar la acción.</string>
+    <string name="friends_error_invalid_code">Introduce un código de amigo válido.</string>
+    <string name="friends_error_own_code">No puedes enviarte una solicitud a ti mismo.</string>
+    <string name="friends_error_user_not_found">No hemos encontrado ningún usuario con ese código.</string>
+    <string name="friends_error_already_friends">Ese usuario ya forma parte de tus amigos.</string>
+    <string name="friends_error_request_exists">Ya existe una solicitud o amistad con ese usuario.</string>
+    <string name="friends_request_sent">Solicitud enviada.</string>
+    <string name="friends_request_accepted">Solicitud aceptada.</string>
+    <string name="friends_request_rejected">Solicitud rechazada.</string>
+    <string name="friends_request_cancelled">Solicitud cancelada.</string>
+    <string name="friends_remove_success">Amigo eliminado.</string>
+    <string name="action_accept">Aceptar</string>
+    <string name="action_reject">Rechazar</string>
+    <string name="action_cancel_request">Cancelar solicitud</string>
 </resources>

@@ -1,5 +1,8 @@
 package com.chemecador.secretaria.di
 
+import com.chemecador.secretaria.friends.FakeFriendsRepository
+import com.chemecador.secretaria.friends.FriendsRepository
+import com.chemecador.secretaria.friends.FriendsViewModel
 import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.login.FakeAuthRepository
 import com.chemecador.secretaria.login.LoginViewModel
@@ -16,6 +19,7 @@ import org.koin.dsl.module
 private val sharedAppModule = module {
     viewModel { LoginViewModel(get()) }
     viewModel { NotesListsViewModel(get()) }
+    viewModel { FriendsViewModel(get()) }
     viewModel { params ->
         NotesViewModel(
             repository = get(),
@@ -34,4 +38,5 @@ private fun previewPlatformModule(): Module = module {
     single<AuthRepository> { FakeAuthRepository() }
     single<NotesListsRepository> { FakeNotesListsRepository() }
     single<NotesRepository> { FakeNotesRepository() }
+    single<FriendsRepository> { FakeFriendsRepository() }
 }
