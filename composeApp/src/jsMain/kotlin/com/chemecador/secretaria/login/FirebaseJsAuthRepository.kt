@@ -18,6 +18,9 @@ internal class FirebaseJsAuthRepository(
     override val currentUserId: String?
         get() = cachedSession?.userId
 
+    override val currentUserEmail: String?
+        get() = cachedSession?.email
+
     override suspend fun login(email: String, password: String): Result<Unit> =
         authenticate(
             endpoint = SIGN_IN_WITH_PASSWORD_ENDPOINT,
@@ -129,6 +132,7 @@ internal class FirebaseJsAuthRepository(
 
         return FirebaseJsAuthSession(
             userId = userId,
+            email = session.email,
             idToken = idToken,
             refreshToken = refreshToken,
             expiresAtMillis = nowProvider() + expiresInSeconds * 1000.0,
@@ -169,6 +173,7 @@ internal interface FirebaseJsIdTokenProvider {
 
 private data class FirebaseJsAuthSession(
     val userId: String,
+    val email: String?,
     val idToken: String,
     val refreshToken: String,
     val expiresAtMillis: Double,
@@ -184,9 +189,11 @@ private fun String.toFirebaseJsAuthSession(nowMillis: Double): FirebaseJsAuthSes
     val expiresInSeconds = extractJsonLong(this, "expiresIn")
         ?: extractJsonLong(this, "expires_in")
         ?: return null
+    val email = extractJsonString(this, "email")?.takeUnless { it.isBlank() }
 
     return FirebaseJsAuthSession(
         userId = userId,
+        email = email,
         idToken = idToken,
         refreshToken = refreshToken,
         expiresAtMillis = nowMillis + expiresInSeconds * 1000.0,

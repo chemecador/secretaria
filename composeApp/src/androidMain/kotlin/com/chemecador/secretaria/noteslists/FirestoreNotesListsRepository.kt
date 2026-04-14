@@ -34,12 +34,13 @@ class FirestoreNotesListsRepository(
     override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> {
         return try {
             val userId = requireUserId()
+            val creator = authRepository.currentUserEmail ?: userId
             val colRef = firestore.collection(USERS).document(userId).collection(NOTES_LIST)
             val docRef = colRef.document()
             val data = hashMapOf(
                 "name" to name,
                 CONTRIBUTORS to listOf(userId),
-                "creator" to userId,
+                "creator" to creator,
                 "date" to FieldValue.serverTimestamp(),
                 "ordered" to ordered,
             )

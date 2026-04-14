@@ -46,6 +46,7 @@ internal class FirestoreIosNotesRepository(
     ): Result<Note> =
         runCatching {
             val userId = requireUserId()
+            val creator = authRepository.currentUserEmail ?: userId
             val nextOrder =
                 firestore.listDocuments(collectionPath = notesCollectionPath(listId)).size
             val created = firestore.createDocument(
@@ -57,7 +58,7 @@ internal class FirestoreIosNotesRepository(
                     put("date", firestoreTimestamp(nowProvider()))
                     put("completed", firestoreBoolean(false))
                     put("order", firestoreInteger(nextOrder))
-                    put("creator", firestoreString(userId))
+                    put("creator", firestoreString(creator))
                     put("color", firestoreLong(COLOR_DEFAULT))
                 },
             )

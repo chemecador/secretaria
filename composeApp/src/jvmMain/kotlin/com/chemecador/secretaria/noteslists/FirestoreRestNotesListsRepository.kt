@@ -35,13 +35,14 @@ internal class FirestoreRestNotesListsRepository(
     override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> =
         runCatching {
             val userId = requireUserId()
+            val creator = authRepository.currentUserEmail ?: userId
             val created = firestore.createDocument(
                 parentPath = userDocumentPath(),
                 collectionId = NOTES_LIST,
                 fields = buildJsonObject {
                     put("name", firestoreString(name))
                     put("contributors", firestoreArray(firestoreString(userId)))
-                    put("creator", firestoreString(userId))
+                    put("creator", firestoreString(creator))
                     put("date", firestoreTimestamp(nowProvider()))
                     put("ordered", firestoreBoolean(ordered))
                 },

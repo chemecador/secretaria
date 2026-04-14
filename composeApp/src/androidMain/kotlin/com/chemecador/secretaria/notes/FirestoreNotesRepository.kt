@@ -41,6 +41,7 @@ class FirestoreNotesRepository(
     ): Result<Note> {
         return try {
             val userId = requireUserId()
+            val creator = authRepository.currentUserEmail ?: userId
             val colRef = notesCollection(listId)
             val countSnapshot = colRef.get().await()
             val nextOrder = countSnapshot.size()
@@ -51,7 +52,7 @@ class FirestoreNotesRepository(
                 "date" to FieldValue.serverTimestamp(),
                 "completed" to false,
                 "order" to nextOrder,
-                "creator" to userId,
+                "creator" to creator,
                 "color" to COLOR_DEFAULT,
             )
             docRef.set(data).await()

@@ -84,6 +84,7 @@ class FirestoreRestNotesListsRepositoryTest {
 
     private class LoggedInAuthRepository(
         override val currentUserId: String?,
+        override val currentUserEmail: String? = null,
     ) : AuthRepository {
         override suspend fun login(email: String, password: String): Result<Unit> = Result.success(Unit)
         override suspend fun signup(email: String, password: String): Result<Unit> = Result.success(Unit)

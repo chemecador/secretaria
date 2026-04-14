@@ -187,6 +187,7 @@ class LoginViewModelTest {
 
     private class ScriptedAuthRepository : AuthRepository {
         override var currentUserId: String? = null
+        override var currentUserEmail: String? = null
 
         var loginResult: Result<Unit> = Result.success(Unit)
         var signupResult: Result<Unit> = Result.success(Unit)

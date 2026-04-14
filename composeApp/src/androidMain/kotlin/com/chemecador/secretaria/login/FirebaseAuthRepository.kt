@@ -15,6 +15,9 @@ class FirebaseAuthRepository : AuthRepository {
     override val currentUserId: String?
         get() = auth.currentUser?.uid
 
+    override val currentUserEmail: String?
+        get() = auth.currentUser?.email?.takeUnless { it.isBlank() }
+
     override suspend fun login(email: String, password: String): Result<Unit> {
         return try {
             auth.signInWithEmailAndPassword(email, password).await()
