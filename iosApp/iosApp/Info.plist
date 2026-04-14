@@ -4,5 +4,15 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>com.googleusercontent.apps.503693098428-vbnbe3c8mcdh20pgbaecbm1vtqthj3b8
+                </string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>

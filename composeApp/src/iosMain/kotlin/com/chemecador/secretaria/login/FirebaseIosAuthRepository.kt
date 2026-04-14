@@ -2,6 +2,7 @@
 
 package com.chemecador.secretaria.login
 
+import com.chemecador.secretaria.requireIosGoogleServiceInfoString
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
@@ -11,14 +12,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import platform.Foundation.HTTPBody
 import platform.Foundation.HTTPMethod
-import platform.Foundation.NSBundle
 import platform.Foundation.NSData
 import platform.Foundation.NSError
-import platform.Foundation.NSFileManager
 import platform.Foundation.NSHTTPURLResponse
 import platform.Foundation.NSMutableData
 import platform.Foundation.NSMutableURLRequest
-import platform.Foundation.NSPropertyListSerialization
 import platform.Foundation.NSString
 import platform.Foundation.NSURL
 import platform.Foundation.NSURLSession
@@ -71,8 +69,25 @@ internal class FirebaseIosAuthRepository(
             ),
         )
 
-    override suspend fun loginWithGoogle(idToken: String?): Result<Unit> =
-        Result.failure(AuthException(AuthError.NOT_SUPPORTED))
+    override suspend fun loginWithGoogle(idToken: String?): Result<Unit> {
+        val googleToken = idToken
+            ?.takeUnless { it.isBlank() }
+            ?: return Result.failure(AuthException(AuthError.NOT_SUPPORTED))
+        val (tokenField, tokenValue) = googleToken.toIosGooglePostBodyField()
+
+        return authenticate(
+            endpoint = SIGN_IN_WITH_IDP_ENDPOINT,
+            requestBody = buildIosJsonObject(
+                "requestUri" to GOOGLE_SIGN_IN_REQUEST_URI,
+                "postBody" to buildIosFormBody(
+                    tokenField to tokenValue,
+                    "providerId" to GOOGLE_PROVIDER_ID,
+                ),
+                "returnSecureToken" to true,
+                "returnIdpCredential" to true,
+            ),
+        )
+    }
 
     override suspend fun loginAsGuest(): Result<Unit> =
         authenticate(
@@ -170,8 +185,11 @@ internal class FirebaseIosAuthRepository(
     private companion object {
         const val IDENTITY_TOOLKIT_BASE_URL = "https://identitytoolkit.googleapis.com/v1"
         const val SECURE_TOKEN_BASE_URL = "https://securetoken.googleapis.com/v1"
+        const val SIGN_IN_WITH_IDP_ENDPOINT = "accounts:signInWithIdp"
         const val SIGN_IN_WITH_PASSWORD_ENDPOINT = "accounts:signInWithPassword"
         const val SIGN_UP_ENDPOINT = "accounts:signUp"
+        const val GOOGLE_PROVIDER_ID = "google.com"
+        const val GOOGLE_SIGN_IN_REQUEST_URI = "http://localhost"
         const val FORM_CONTENT_TYPE = "application/x-www-form-urlencoded; charset=utf-8"
         const val JSON_CONTENT_TYPE = "application/json; charset=utf-8"
     }
@@ -295,25 +313,14 @@ private class PostTaskDelegate(
 
 // --- Plist config reader ---
 
-internal fun resolveIosFirebaseApiKey(): String {
-    val path = NSBundle.mainBundle.pathForResource("GoogleService-Info", ofType = "plist")
-        ?: error(
-            "GoogleService-Info.plist not found in app bundle. " +
-                    "Add it to the iosApp target in Xcode.",
-        )
-    val data = NSFileManager.defaultManager.contentsAtPath(path)
-        ?: error("Unable to read GoogleService-Info.plist")
-    val plist = NSPropertyListSerialization.propertyListWithData(
-        data = data,
-        options = 0u,
-        format = null,
-        error = null,
-    )
-    val dict = plist as? Map<*, *>
-        ?: error("GoogleService-Info.plist is not a valid dictionary")
-    return dict["API_KEY"] as? String
-        ?: error("API_KEY not found in GoogleService-Info.plist")
-}
+internal fun resolveIosFirebaseApiKey(): String =
+    requireIosGoogleServiceInfoString("API_KEY")
+
+internal fun resolveIosGoogleClientId(): String =
+    requireIosGoogleServiceInfoString("CLIENT_ID")
+
+internal fun resolveIosGoogleReversedClientId(): String =
+    requireIosGoogleServiceInfoString("REVERSED_CLIENT_ID")
 
 // --- NSData helpers ---
 
@@ -391,12 +398,12 @@ internal fun buildIosJsonObject(vararg fields: Pair<String, Any>): String =
         "\"${escapeIosJsonString(name)}\":${value.toIosJsonLiteral()}"
     }
 
-private fun buildIosFormBody(vararg fields: Pair<String, String>): String =
+internal fun buildIosFormBody(vararg fields: Pair<String, String>): String =
     fields.joinToString("&") { (name, value) ->
         "${percentEncode(name)}=${percentEncode(value)}"
     }
 
-private fun percentEncode(value: String): String = buildString {
+internal fun percentEncode(value: String): String = buildString {
     for (byte in value.encodeToByteArray()) {
         val char = byte.toInt().toChar()
         if (char.isLetterOrDigit() || char == '-' || char == '_' || char == '.' || char == '~') {
@@ -407,6 +414,18 @@ private fun percentEncode(value: String): String = buildString {
         }
     }
 }
+
+internal const val IOS_GOOGLE_ACCESS_TOKEN_PREFIX = "google_access_token:"
+
+internal fun encodeIosGoogleAccessToken(accessToken: String): String =
+    "$IOS_GOOGLE_ACCESS_TOKEN_PREFIX$accessToken"
+
+private fun String.toIosGooglePostBodyField(): Pair<String, String> =
+    if (startsWith(IOS_GOOGLE_ACCESS_TOKEN_PREFIX)) {
+        "access_token" to removePrefix(IOS_GOOGLE_ACCESS_TOKEN_PREFIX)
+    } else {
+        "id_token" to this
+    }
 
 private fun escapeIosJsonString(value: String): String = buildString {
     value.forEach { character ->

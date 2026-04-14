@@ -63,7 +63,7 @@
 - About dialog:
   - app name, version, author
 - Pending or partial areas:
-  - Google Sign-In en iOS/Wasm
+    - Google Sign-In en Wasm
   - session persistence on non-Android targets
   - sharing/friends
   - FCM
@@ -134,7 +134,8 @@
 - Android also supports Google Sign-In via Credential Manager + Firebase Auth.
 - JVM/Desktop also supports Google Sign-In via browser OAuth loopback + Firebase Auth REST.
 - JS browser also supports Google Sign-In via Google Identity Services token popup + Firebase Auth REST.
-- iOS still returns `NOT_SUPPORTED` for Google Sign-In.
+- iOS also supports Google Sign-In via `ASWebAuthenticationSession` + Google OAuth + Firebase Auth
+  REST.
 - Non-Android real targets keep `idToken` + `refreshToken` in memory and refresh expired tokens.
 - Wasm still uses fake auth.
 
@@ -161,6 +162,8 @@
 - JS Google Sign-In can resolve the Web OAuth client id from `secretaria.googleWebClientId`, `SECRETARIA_GOOGLE_WEB_CLIENT_ID`, or the type `3` client in `androidApp/google-services.json`.
 - JS Google Sign-In uses the GIS popup token flow; register the web origin as an authorized JavaScript origin for the Google OAuth client.
 - iOS reads Firebase config from bundled `iosApp/iosApp/GoogleService-Info.plist`.
+- iOS Google Sign-In also needs the reversed iOS client id registered in `iosApp/iosApp/Info.plist`
+  under `CFBundleURLTypes`.
 - Web clients intentionally ship Firebase API key/project id in browser resources; security must come from Firebase rules, not secrecy.
 - Firebase projects with email enumeration protection may return `INVALID_LOGIN_CREDENTIALS`; non-Android auth maps that to `WRONG_PASSWORD` to keep shared UI behavior stable.
 - `collectionGroup("noteslist").whereArrayContains("contributors", userId)` requires a Firestore composite index.
@@ -195,6 +198,7 @@
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/noteslists/`
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/notes/`
 - iOS native repository tests:
+    - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/login/`
   - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/noteslists/`
   - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/notes/`
 - Current test focus:
@@ -235,7 +239,6 @@
 
 - session persistence / auto-login on non-Android targets
 - sharing parity for JVM/JS/iOS Firestore by storing owner UID and removing direct user-scoped assumptions
-- Google Sign-In parity for iOS if it becomes a product priority
 - settings/account/notifications expansion
 
 ## Desktop Distributable (Windows .exe)
