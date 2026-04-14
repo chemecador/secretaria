@@ -10,9 +10,6 @@ private const val GOOGLE_DESKTOP_CLIENT_ID_ENV = "SECRETARIA_GOOGLE_DESKTOP_CLIE
 private const val GOOGLE_DESKTOP_CLIENT_SECRET_PROPERTY = "secretaria.googleDesktopClientSecret"
 private const val GOOGLE_DESKTOP_CLIENT_SECRET_ENV = "SECRETARIA_GOOGLE_DESKTOP_CLIENT_SECRET"
 
-actual fun createAuthRepository(): AuthRepository =
-    FirebaseRestAuthRepository(apiKey = resolveFirebaseApiKey())
-
 internal fun resolveFirebaseApiKey(
     propertyProvider: (String) -> String? = System::getProperty,
     environmentProvider: (String) -> String? = System::getenv,

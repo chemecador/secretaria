@@ -99,8 +99,10 @@
   - expose state via `StateFlow`
   - `load()` / `refresh()` are non-suspend and launch on `viewModelScope`
   - screens call `viewModel.load()` from `LaunchedEffect(viewModel)`
-  - instantiate VMs with `viewModel { ... }`; use `key = ...` when parameters matter
-- Do not introduce Hilt/Koin yet. Inject dependencies directly through the `viewModel { }` factory.
+  - shared Compose resolves VMs with `koinViewModel()`; use `key = ...` when parameters matter
+- Use Koin in `composeApp` for the shared app graph.
+- Keep constructor injection in repositories and ViewModels; use Koin to wire the graph, not to hide dependencies.
+- Keep composable-only controllers such as `remember...()` helpers outside DI until they need a stable abstraction.
 
 ## Model / UI Conventions
 

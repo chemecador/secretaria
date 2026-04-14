@@ -9,6 +9,7 @@ composeMultiplatform = "1.10.3"
 kotlin = "2.3.20"
 google-services = "4.4.4"
 googleid = "1.2.0"
+koin = "4.2.1"
 kotlinx-coroutines = "1.10.2"
 kotlinx-datetime = "0.7.1"
 kotlinx-serialization = "1.11.0"
@@ -39,6 +40,11 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 firebase-auth = { module = "com.google.firebase:firebase-auth", version = "24.0.1" }
 firebase-firestore = { module = "com.google.firebase:firebase-firestore", version = "26.2.0" }
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
+koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
+koin-compose-viewmodel = { module = "io.insert-koin:koin-compose-viewmodel", version.ref = "koin" }
+koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
+koin-core-viewmodel = { module = "io.insert-koin:koin-core-viewmodel", version.ref = "koin" }
+koin-test = { module = "io.insert-koin:koin-test", version.ref = "koin" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

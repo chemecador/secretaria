@@ -10,25 +10,29 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.launch
+import com.chemecador.secretaria.di.appModules
+import com.chemecador.secretaria.di.previewAppModules
+import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.login.LoginScreen
 import com.chemecador.secretaria.login.LoginViewModel
-import com.chemecador.secretaria.login.createAuthRepository
 import com.chemecador.secretaria.login.rememberGoogleSignInController
 import com.chemecador.secretaria.notes.Note
 import com.chemecador.secretaria.notes.NoteDetailScreen
-import com.chemecador.secretaria.notes.NotesRepository
 import com.chemecador.secretaria.notes.NotesScreen
 import com.chemecador.secretaria.notes.NotesViewModel
-import com.chemecador.secretaria.notes.createNotesRepository
 import com.chemecador.secretaria.noteslists.NotesListsScreen
 import com.chemecador.secretaria.noteslists.NotesListsViewModel
-import com.chemecador.secretaria.noteslists.createNotesListsRepository
+import kotlinx.coroutines.launch
+import org.koin.compose.KoinApplication
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
+import org.koin.dsl.koinConfiguration
 
 private sealed class Screen {
     data object Login : Screen()
@@ -47,100 +51,110 @@ private sealed class Screen {
 fun App(
     googleServerClientId: String? = null,
 ) {
-    val authRepository = remember { createAuthRepository() }
-    val googleSignInController = rememberGoogleSignInController(googleServerClientId)
-    val loginViewModel = viewModel { LoginViewModel(authRepository) }
-    val notesListsRepository = remember { createNotesListsRepository(authRepository) }
-    val listsViewModel = viewModel { NotesListsViewModel(notesListsRepository) }
-    val notesRepository: NotesRepository = remember { createNotesRepository(authRepository) }
+    val inspectionMode = LocalInspectionMode.current
+    val modules = remember(inspectionMode) {
+        if (inspectionMode) previewAppModules() else appModules()
+    }
+    val koinConfig = remember(modules) {
+        koinConfiguration {
+            modules(modules)
+        }
+    }
 
-    var screen by remember { mutableStateOf<Screen>(Screen.Login) }
-    val coroutineScope = rememberCoroutineScope()
+    KoinApplication(koinConfig) {
+        val authRepository = koinInject<AuthRepository>()
+        val googleSignInController = rememberGoogleSignInController(googleServerClientId)
+        val loginViewModel = koinViewModel<LoginViewModel>()
+        val listsViewModel = koinViewModel<NotesListsViewModel>()
 
-    SecretariaTheme {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.TopCenter,
-        ) {
+        var screen by remember { mutableStateOf<Screen>(Screen.Login) }
+        val coroutineScope = rememberCoroutineScope()
+
+        SecretariaTheme {
             Box(
-                modifier = Modifier
-                    .widthIn(max = 600.dp)
-                    .fillMaxWidth()
-                    .fillMaxSize(),
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter,
             ) {
-                when (val current = screen) {
-                    is Screen.Login -> {
-                        LoginScreen(
-                            viewModel = loginViewModel,
-                            onLoginSuccess = { screen = Screen.Lists },
-                            onGoogleLogin = {
-                                loginViewModel.loginWithGoogle(
-                                    tokenProvider = googleSignInController?.let { controller ->
-                                        suspend { controller.getIdToken() }
-                                    },
-                                )
-                            },
-                        )
-                    }
-
-                    is Screen.Lists -> {
-                        NotesListsScreen(
-                            viewModel = listsViewModel,
-                            onListSelected = { id, name, isOrdered ->
-                                screen = Screen.Notes(id, name, isOrdered)
-                            },
-                            onLogout = {
-                                coroutineScope.launch {
-                                    authRepository.logout()
-                                    googleSignInController?.clearCredentialState()
-                                    loginViewModel.resetState()
-                                    screen = Screen.Login
-                                }
-                            },
-                        )
-                    }
-
-                    is Screen.Notes -> {
-                        val notesViewModel = viewModel(key = current.listId) {
-                            NotesViewModel(notesRepository, current.listId)
+                Box(
+                    modifier = Modifier
+                        .widthIn(max = 600.dp)
+                        .fillMaxWidth()
+                        .fillMaxSize(),
+                ) {
+                    when (val current = screen) {
+                        is Screen.Login -> {
+                            LoginScreen(
+                                viewModel = loginViewModel,
+                                onLoginSuccess = { screen = Screen.Lists },
+                                onGoogleLogin = {
+                                    loginViewModel.loginWithGoogle(
+                                        tokenProvider = googleSignInController?.let { controller ->
+                                            suspend { controller.getIdToken() }
+                                        },
+                                    )
+                                },
+                            )
                         }
-                        NotesScreen(
-                            viewModel = notesViewModel,
-                            listName = current.listName,
-                            isOrdered = current.isOrdered,
-                            onNoteClick = { note ->
-                                screen = Screen.NoteDetail(
-                                    current.listId,
-                                    current.listName,
-                                    current.isOrdered,
-                                    note,
-                                )
-                            },
-                            onBack = { screen = Screen.Lists },
-                        )
-                    }
 
-                    is Screen.NoteDetail -> {
-                        val notesViewModel = viewModel(key = current.listId) {
-                            NotesViewModel(notesRepository, current.listId)
+                        is Screen.Lists -> {
+                            NotesListsScreen(
+                                viewModel = listsViewModel,
+                                onListSelected = { id, name, isOrdered ->
+                                    screen = Screen.Notes(id, name, isOrdered)
+                                },
+                                onLogout = {
+                                    coroutineScope.launch {
+                                        authRepository.logout()
+                                        googleSignInController?.clearCredentialState()
+                                        loginViewModel.resetState()
+                                        screen = Screen.Login
+                                    }
+                                },
+                            )
                         }
-                        val backToNotes = Screen.Notes(
-                            current.listId,
-                            current.listName,
-                            current.isOrdered,
-                        )
-                        NoteDetailScreen(
-                            note = current.note,
-                            onSave = { title, content ->
-                                notesViewModel.updateNote(current.note.id, title, content)
-                                screen = backToNotes
-                            },
-                            onDelete = {
-                                notesViewModel.deleteNote(current.note.id)
-                                screen = backToNotes
-                            },
-                            onBack = { screen = backToNotes },
-                        )
+
+                        is Screen.Notes -> {
+                            val notesViewModel = koinViewModel<NotesViewModel>(key = current.listId) {
+                                parametersOf(current.listId)
+                            }
+                            NotesScreen(
+                                viewModel = notesViewModel,
+                                listName = current.listName,
+                                isOrdered = current.isOrdered,
+                                onNoteClick = { note ->
+                                    screen = Screen.NoteDetail(
+                                        current.listId,
+                                        current.listName,
+                                        current.isOrdered,
+                                        note,
+                                    )
+                                },
+                                onBack = { screen = Screen.Lists },
+                            )
+                        }
+
+                        is Screen.NoteDetail -> {
+                            val notesViewModel = koinViewModel<NotesViewModel>(key = current.listId) {
+                                parametersOf(current.listId)
+                            }
+                            val backToNotes = Screen.Notes(
+                                current.listId,
+                                current.listName,
+                                current.isOrdered,
+                            )
+                            NoteDetailScreen(
+                                note = current.note,
+                                onSave = { title, content ->
+                                    notesViewModel.updateNote(current.note.id, title, content)
+                                    screen = backToNotes
+                                },
+                                onDelete = {
+                                    notesViewModel.deleteNote(current.note.id)
+                                    screen = backToNotes
+                                },
+                                onBack = { screen = backToNotes },
+                            )
+                        }
                     }
                 }
             }
