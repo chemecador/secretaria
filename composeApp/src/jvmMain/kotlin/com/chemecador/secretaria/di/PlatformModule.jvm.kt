@@ -5,8 +5,10 @@ import com.chemecador.secretaria.firestore.resolveFirebaseProjectId
 import com.chemecador.secretaria.friends.FirestoreRestFriendsRepository
 import com.chemecador.secretaria.friends.FriendsRepository
 import com.chemecador.secretaria.login.AuthRepository
+import com.chemecador.secretaria.login.FileSessionStore
 import com.chemecador.secretaria.login.FirebaseIdTokenProvider
 import com.chemecador.secretaria.login.FirebaseRestAuthRepository
+import com.chemecador.secretaria.login.SessionStore
 import com.chemecador.secretaria.login.resolveFirebaseApiKey
 import com.chemecador.secretaria.notes.FirestoreRestNotesRepository
 import com.chemecador.secretaria.notes.NotesRepository
@@ -16,8 +18,12 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 internal actual fun platformModule(): Module = module {
+    single<SessionStore> { FileSessionStore() }
     single<AuthRepository> {
-        FirebaseRestAuthRepository(apiKey = resolveFirebaseApiKey())
+        FirebaseRestAuthRepository(
+            apiKey = resolveFirebaseApiKey(),
+            sessionStore = get(),
+        )
     }
     single<NotesListsRepository> {
         val authRepository: AuthRepository = get()

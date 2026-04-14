@@ -103,5 +103,7 @@ class FirestoreRestNotesRepositoryTest {
         override suspend fun loginWithGoogle(idToken: String?): Result<Unit> = Result.success(Unit)
         override suspend fun loginAsGuest(): Result<Unit> = Result.success(Unit)
         override suspend fun logout(): Result<Unit> = Result.success(Unit)
+        override suspend fun restoreSession(): Result<Boolean> =
+            Result.success(currentUserId != null)
     }
 }

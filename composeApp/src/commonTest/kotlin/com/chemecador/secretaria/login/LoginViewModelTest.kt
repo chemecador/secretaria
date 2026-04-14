@@ -233,6 +233,9 @@ class LoginViewModelTest {
             return Result.success(Unit)
         }
 
+        override suspend fun restoreSession(): Result<Boolean> =
+            Result.success(currentUserId != null)
+
         fun gate(operation: Operation) {
             gatedOperation = operation
             gate = CompletableDeferred()

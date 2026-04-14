@@ -77,4 +77,12 @@ class FirebaseAuthRepository : AuthRepository {
             Result.failure(AuthException(AuthError.UNKNOWN))
         }
     }
+
+    /**
+     * Firebase Auth for Android already persists the current session locally, so restoring
+     * amounts to checking whether [FirebaseAuth.currentUser] is non-null after the SDK
+     * has initialized.
+     */
+    override suspend fun restoreSession(): Result<Boolean> =
+        Result.success(auth.currentUser != null)
 }

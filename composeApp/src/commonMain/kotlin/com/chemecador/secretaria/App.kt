@@ -4,7 +4,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +39,7 @@ import org.koin.core.parameter.parametersOf
 import org.koin.dsl.koinConfiguration
 
 private sealed class Screen {
+    data object Restoring : Screen()
     data object Login : Screen()
     data object Lists : Screen()
     data object Friends : Screen()
@@ -71,8 +74,13 @@ fun App(
         val listsViewModel = koinViewModel<NotesListsViewModel>()
         val friendsViewModel = koinViewModel<FriendsViewModel>()
 
-        var screen by remember { mutableStateOf<Screen>(Screen.Login) }
+        var screen by remember { mutableStateOf<Screen>(Screen.Restoring) }
         val coroutineScope = rememberCoroutineScope()
+
+        LaunchedEffect(authRepository) {
+            val restored = authRepository.restoreSession().getOrDefault(false)
+            screen = if (restored) Screen.Lists else Screen.Login
+        }
 
         SecretariaTheme {
             Box(
@@ -86,6 +94,15 @@ fun App(
                         .fillMaxSize(),
                 ) {
                     when (val current = screen) {
+                        is Screen.Restoring -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
+
                         is Screen.Login -> {
                             LoginScreen(
                                 viewModel = loginViewModel,

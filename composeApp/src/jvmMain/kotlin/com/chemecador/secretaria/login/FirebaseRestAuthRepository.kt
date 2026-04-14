@@ -18,6 +18,7 @@ internal class FirebaseRestAuthRepository(
     private val apiKey: String,
     private val transport: FirebaseAuthTransport = HttpClientFirebaseAuthTransport(),
     private val nowProvider: () -> Instant = { Clock.System.now() },
+    private val sessionStore: SessionStore = NoOpSessionStore,
 ) : AuthRepository, FirebaseIdTokenProvider {
 
     private var cachedSession: FirebaseAuthSession? = null
@@ -77,7 +78,32 @@ internal class FirebaseRestAuthRepository(
 
     override suspend fun logout(): Result<Unit> {
         cachedSession = null
+        sessionStore.clear()
         return Result.success(Unit)
+    }
+
+    override suspend fun restoreSession(): Result<Boolean> {
+        val persisted = sessionStore.load() ?: return Result.success(false)
+        val loaded = persisted.toFirebaseAuthSession()
+        cachedSession = loaded
+
+        if (!loaded.isExpired(nowProvider())) {
+            return Result.success(true)
+        }
+
+        val refreshed = try {
+            refreshSession(loaded)
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (_: Exception) {
+            cachedSession = null
+            sessionStore.clear()
+            return Result.success(false)
+        }
+
+        cachedSession = refreshed
+        sessionStore.save(refreshed.toPersisted())
+        return Result.success(true)
     }
 
     override suspend fun getFreshIdToken(): String {
@@ -90,6 +116,7 @@ internal class FirebaseRestAuthRepository(
 
         val refreshedSession = refreshSession(currentSession)
         cachedSession = refreshedSession
+        sessionStore.save(refreshedSession.toPersisted())
         return refreshedSession.idToken
     }
 
@@ -122,6 +149,7 @@ internal class FirebaseRestAuthRepository(
             }
 
         cachedSession = session
+        sessionStore.save(session.toPersisted())
         return Result.success(Unit)
     }
 
@@ -198,6 +226,24 @@ private data class FirebaseAuthSession(
     fun isExpired(now: Instant): Boolean =
         now >= expiresAt - 30.seconds
 }
+
+private fun FirebaseAuthSession.toPersisted(): PersistedAuthSession =
+    PersistedAuthSession(
+        userId = userId,
+        email = email,
+        idToken = idToken,
+        refreshToken = refreshToken,
+        expiresAtEpochSeconds = expiresAt.epochSeconds,
+    )
+
+private fun PersistedAuthSession.toFirebaseAuthSession(): FirebaseAuthSession =
+    FirebaseAuthSession(
+        userId = userId,
+        email = email,
+        idToken = idToken,
+        refreshToken = refreshToken,
+        expiresAt = Instant.fromEpochSeconds(expiresAtEpochSeconds),
+    )
 
 private fun String.toFirebaseAuthSession(now: Instant): FirebaseAuthSession? {
     val userId = extractJsonString(this, "localId") ?: return null

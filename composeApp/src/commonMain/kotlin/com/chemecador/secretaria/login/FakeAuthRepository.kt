@@ -42,4 +42,7 @@ class FakeAuthRepository : AuthRepository {
         _userEmail = null
         return Result.success(Unit)
     }
+
+    override suspend fun restoreSession(): Result<Boolean> =
+        Result.success(_userId != null)
 }
