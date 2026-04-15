@@ -11,21 +11,21 @@ class FakeAuthRepository : AuthRepository {
 
     override suspend fun login(email: String, password: String): Result<Unit> {
         delay(500)
-        _userId = "fake-user"
+        _userId = "Alex"
         _userEmail = email
         return Result.success(Unit)
     }
 
     override suspend fun signup(email: String, password: String): Result<Unit> {
         delay(500)
-        _userId = "fake-user"
+        _userId = "Alex"
         _userEmail = email
         return Result.success(Unit)
     }
 
     override suspend fun loginWithGoogle(idToken: String?): Result<Unit> {
         delay(500)
-        _userId = "fake-user"
+        _userId = "Alex"
         _userEmail = "fake@example.com"
         return Result.success(Unit)
     }

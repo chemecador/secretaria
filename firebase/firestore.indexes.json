@@ -1,0 +1,15 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "noteslist",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "contributors",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

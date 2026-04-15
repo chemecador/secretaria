@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 
 class NotesViewModel(
     private val repository: NotesRepository,
+    private val ownerId: String,
     private val listId: String,
 ) : ViewModel() {
     private val _state = MutableStateFlow(NotesState())
@@ -29,7 +30,7 @@ class NotesViewModel(
 
     fun createNote(title: String, content: String) {
         viewModelScope.launch {
-            repository.createNote(listId, title, content)
+            repository.createNote(ownerId, listId, title, content)
                 .onSuccess { fetchNotes() }
                 .onFailure { throwable ->
                     _state.update { it.copy(errorMessage = throwable.message) }
@@ -39,7 +40,7 @@ class NotesViewModel(
 
     fun updateNote(noteId: String, title: String, content: String) {
         viewModelScope.launch {
-            repository.updateNote(listId, noteId, title, content)
+            repository.updateNote(ownerId, listId, noteId, title, content)
                 .onSuccess { fetchNotes() }
                 .onFailure { throwable ->
                     _state.update { it.copy(errorMessage = throwable.message) }
@@ -49,7 +50,7 @@ class NotesViewModel(
 
     fun deleteNote(noteId: String) {
         viewModelScope.launch {
-            repository.deleteNote(listId, noteId)
+            repository.deleteNote(ownerId, listId, noteId)
                 .onSuccess { fetchNotes() }
                 .onFailure { throwable ->
                     _state.update { it.copy(errorMessage = throwable.message) }
@@ -62,7 +63,7 @@ class NotesViewModel(
             currentState.copy(isLoading = true, errorMessage = null)
         }
 
-        repository.getNotesForList(listId)
+        repository.getNotesForList(ownerId, listId)
             .onSuccess { items ->
                 _state.value = _state.value.copy(
                     isLoading = false,

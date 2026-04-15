@@ -16,14 +16,14 @@ class FirestoreNotesRepository(
         authRepository.currentUserId
             ?: error("User not logged in")
 
-    private fun notesCollection(listId: String) =
-        firestore.collection(USERS).document(requireUserId())
+    private fun notesCollection(ownerId: String, listId: String) =
+        firestore.collection(USERS).document(ownerId)
             .collection(NOTES_LIST).document(listId)
             .collection(NOTES)
 
-    override suspend fun getNotesForList(listId: String): Result<List<Note>> {
+    override suspend fun getNotesForList(ownerId: String, listId: String): Result<List<Note>> {
         return try {
-            val snapshot = notesCollection(listId)
+            val snapshot = notesCollection(ownerId, listId)
                 .orderBy("order", Query.Direction.ASCENDING)
                 .get()
                 .await()
@@ -35,6 +35,7 @@ class FirestoreNotesRepository(
     }
 
     override suspend fun createNote(
+        ownerId: String,
         listId: String,
         title: String,
         content: String,
@@ -42,7 +43,7 @@ class FirestoreNotesRepository(
         return try {
             val userId = requireUserId()
             val creator = authRepository.currentUserEmail ?: userId
-            val colRef = notesCollection(listId)
+            val colRef = notesCollection(ownerId, listId)
             val countSnapshot = colRef.get().await()
             val nextOrder = countSnapshot.size()
             val docRef = colRef.document()
@@ -63,9 +64,9 @@ class FirestoreNotesRepository(
         }
     }
 
-    override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> {
+    override suspend fun deleteNote(ownerId: String, listId: String, noteId: String): Result<Unit> {
         return try {
-            notesCollection(listId).document(noteId).delete().await()
+            notesCollection(ownerId, listId).document(noteId).delete().await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -73,13 +74,14 @@ class FirestoreNotesRepository(
     }
 
     override suspend fun updateNote(
+        ownerId: String,
         listId: String,
         noteId: String,
         title: String,
         content: String,
     ): Result<Note> {
         return try {
-            val docRef = notesCollection(listId).document(noteId)
+            val docRef = notesCollection(ownerId, listId).document(noteId)
             docRef.update(
                 mapOf(
                     "title" to title,

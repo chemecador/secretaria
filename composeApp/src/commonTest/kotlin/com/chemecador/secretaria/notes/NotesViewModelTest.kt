@@ -50,7 +50,7 @@ class NotesViewModelTest {
                 ),
             ),
         )
-        val viewModel = NotesViewModel(repository, listId = "shopping")
+        val viewModel = buildViewModel(repository, listId = "shopping")
 
         viewModel.load()
         runCurrent()
@@ -67,7 +67,7 @@ class NotesViewModelTest {
     @Test
     fun load_transitionsFromLoadingToEmptyContent() = runTest(dispatcher) {
         val repository = ControlledRepository(Result.success(emptyList()))
-        val viewModel = NotesViewModel(repository, listId = "unknown")
+        val viewModel = buildViewModel(repository, listId = "unknown")
 
         viewModel.load()
         runCurrent()
@@ -86,7 +86,7 @@ class NotesViewModelTest {
         val repository = ControlledRepository(
             Result.failure(IllegalStateException("fallo de prueba")),
         )
-        val viewModel = NotesViewModel(repository, listId = "shopping")
+        val viewModel = buildViewModel(repository, listId = "shopping")
 
         viewModel.load()
         runCurrent()
@@ -114,7 +114,7 @@ class NotesViewModelTest {
         val repository = SwitchableRepository(
             Result.failure(IllegalStateException("fallo inicial")),
         )
-        val viewModel = NotesViewModel(repository, listId = "shopping")
+        val viewModel = buildViewModel(repository, listId = "shopping")
 
         viewModel.load()
         advanceUntilIdle()
@@ -131,20 +131,24 @@ class NotesViewModelTest {
     }
 
     @Test
-    fun viewModel_passesListIdToRepository() = runTest(dispatcher) {
+    fun viewModel_passesOwnerIdAndListIdToRepository() = runTest(dispatcher) {
         val repository = RecordingRepository()
-        val viewModel = NotesViewModel(repository, listId = "travel")
+        val viewModel = buildViewModel(
+            repository = repository,
+            ownerId = SHARED_OWNER_ID,
+            listId = "travel",
+        )
 
         viewModel.load()
         advanceUntilIdle()
 
-        assertEquals(listOf("travel"), repository.requestedIds)
+        assertEquals(listOf("$SHARED_OWNER_ID:travel"), repository.requestedKeys)
     }
 
     @Test
     fun createNote_addsNewNoteToState() = runTest(dispatcher) {
         val repository = MutableRepository()
-        val viewModel = NotesViewModel(repository, listId = "test-list")
+        val viewModel = buildViewModel(repository, listId = "test-list")
 
         viewModel.load()
         advanceUntilIdle()
@@ -162,7 +166,7 @@ class NotesViewModelTest {
     @Test
     fun createNote_errorSetsErrorMessage() = runTest(dispatcher) {
         val repository = FailingCreateRepository()
-        val viewModel = NotesViewModel(repository, listId = "test-list")
+        val viewModel = buildViewModel(repository, listId = "test-list")
 
         viewModel.load()
         advanceUntilIdle()
@@ -176,7 +180,7 @@ class NotesViewModelTest {
     @Test
     fun deleteNote_removesNoteFromState() = runTest(dispatcher) {
         val repository = MutableRepository()
-        val viewModel = NotesViewModel(repository, listId = "test-list")
+        val viewModel = buildViewModel(repository, listId = "test-list")
 
         viewModel.load()
         advanceUntilIdle()
@@ -195,7 +199,7 @@ class NotesViewModelTest {
     @Test
     fun deleteNote_errorSetsErrorMessage() = runTest(dispatcher) {
         val repository = FailingDeleteRepository()
-        val viewModel = NotesViewModel(repository, listId = "test-list")
+        val viewModel = buildViewModel(repository, listId = "test-list")
 
         viewModel.load()
         advanceUntilIdle()
@@ -209,7 +213,7 @@ class NotesViewModelTest {
     @Test
     fun updateNote_updatesNoteInState() = runTest(dispatcher) {
         val repository = MutableRepository()
-        val viewModel = NotesViewModel(repository, listId = "test-list")
+        val viewModel = buildViewModel(repository, listId = "test-list")
 
         viewModel.load()
         advanceUntilIdle()
@@ -231,7 +235,7 @@ class NotesViewModelTest {
     @Test
     fun updateNote_errorSetsErrorMessage() = runTest(dispatcher) {
         val repository = FailingUpdateRepository()
-        val viewModel = NotesViewModel(repository, listId = "test-list")
+        val viewModel = buildViewModel(repository, listId = "test-list")
 
         viewModel.load()
         advanceUntilIdle()
@@ -242,27 +246,46 @@ class NotesViewModelTest {
         assertEquals("fallo al actualizar", viewModel.state.value.errorMessage)
     }
 
+    private fun buildViewModel(
+        repository: NotesRepository,
+        ownerId: String = DEFAULT_OWNER_ID,
+        listId: String,
+    ): NotesViewModel = NotesViewModel(
+        repository = repository,
+        ownerId = ownerId,
+        listId = listId,
+    )
+
     private class ControlledRepository(
         private val result: Result<List<Note>>,
     ) : NotesRepository {
         private val gate = CompletableDeferred<Unit>()
 
-        override suspend fun getNotesForList(listId: String): Result<List<Note>> {
+        override suspend fun getNotesForList(ownerId: String, listId: String): Result<List<Note>> {
             gate.await()
             return result
         }
 
         override suspend fun createNote(
+            ownerId: String,
             listId: String,
             title: String,
             content: String,
         ): Result<Note> = throw UnsupportedOperationException()
 
-        override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> =
-            throw UnsupportedOperationException()
+        override suspend fun deleteNote(
+            ownerId: String,
+            listId: String,
+            noteId: String,
+        ): Result<Unit> = throw UnsupportedOperationException()
 
-        override suspend fun updateNote(listId: String, noteId: String, title: String, content: String): Result<Note> =
-            throw UnsupportedOperationException()
+        override suspend fun updateNote(
+            ownerId: String,
+            listId: String,
+            noteId: String,
+            title: String,
+            content: String,
+        ): Result<Note> = throw UnsupportedOperationException()
 
         fun release() {
             gate.complete(Unit)
@@ -272,54 +295,74 @@ class NotesViewModelTest {
     private class SwitchableRepository(
         var result: Result<List<Note>>,
     ) : NotesRepository {
-        override suspend fun getNotesForList(listId: String): Result<List<Note>> = result
+        override suspend fun getNotesForList(ownerId: String, listId: String): Result<List<Note>> =
+            result
 
         override suspend fun createNote(
+            ownerId: String,
             listId: String,
             title: String,
             content: String,
         ): Result<Note> = throw UnsupportedOperationException()
 
-        override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> =
-            throw UnsupportedOperationException()
+        override suspend fun deleteNote(
+            ownerId: String,
+            listId: String,
+            noteId: String,
+        ): Result<Unit> = throw UnsupportedOperationException()
 
-        override suspend fun updateNote(listId: String, noteId: String, title: String, content: String): Result<Note> =
-            throw UnsupportedOperationException()
+        override suspend fun updateNote(
+            ownerId: String,
+            listId: String,
+            noteId: String,
+            title: String,
+            content: String,
+        ): Result<Note> = throw UnsupportedOperationException()
     }
 
     private class RecordingRepository : NotesRepository {
-        val requestedIds = mutableListOf<String>()
+        val requestedKeys = mutableListOf<String>()
 
-        override suspend fun getNotesForList(listId: String): Result<List<Note>> {
-            requestedIds += listId
+        override suspend fun getNotesForList(ownerId: String, listId: String): Result<List<Note>> {
+            requestedKeys += notesKey(ownerId, listId)
             return Result.success(emptyList())
         }
 
         override suspend fun createNote(
+            ownerId: String,
             listId: String,
             title: String,
             content: String,
         ): Result<Note> = throw UnsupportedOperationException()
 
-        override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> =
-            throw UnsupportedOperationException()
+        override suspend fun deleteNote(
+            ownerId: String,
+            listId: String,
+            noteId: String,
+        ): Result<Unit> = throw UnsupportedOperationException()
 
-        override suspend fun updateNote(listId: String, noteId: String, title: String, content: String): Result<Note> =
-            throw UnsupportedOperationException()
+        override suspend fun updateNote(
+            ownerId: String,
+            listId: String,
+            noteId: String,
+            title: String,
+            content: String,
+        ): Result<Note> = throw UnsupportedOperationException()
     }
 
     private class MutableRepository : NotesRepository {
         private val notes = mutableMapOf<String, MutableList<Note>>()
 
-        override suspend fun getNotesForList(listId: String): Result<List<Note>> =
-            Result.success(notes[listId].orEmpty())
+        override suspend fun getNotesForList(ownerId: String, listId: String): Result<List<Note>> =
+            Result.success(notes[notesKey(ownerId, listId)].orEmpty())
 
         override suspend fun createNote(
+            ownerId: String,
             listId: String,
             title: String,
             content: String,
         ): Result<Note> {
-            val list = notes.getOrPut(listId) { mutableListOf() }
+            val list = notes.getOrPut(notesKey(ownerId, listId)) { mutableListOf() }
             val note = Note(
                 id = "note-${list.size + 1}",
                 title = title,
@@ -332,18 +375,19 @@ class NotesViewModelTest {
             return Result.success(note)
         }
 
-        override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> {
-            notes[listId]?.removeAll { it.id == noteId }
+        override suspend fun deleteNote(ownerId: String, listId: String, noteId: String): Result<Unit> {
+            notes[notesKey(ownerId, listId)]?.removeAll { it.id == noteId }
             return Result.success(Unit)
         }
 
         override suspend fun updateNote(
+            ownerId: String,
             listId: String,
             noteId: String,
             title: String,
             content: String,
         ): Result<Note> {
-            val list = notes[listId]
+            val list = notes[notesKey(ownerId, listId)]
                 ?: return Result.failure(IllegalStateException("List not found"))
             val index = list.indexOfFirst { it.id == noteId }
             if (index == -1) return Result.failure(IllegalStateException("Note not found"))
@@ -354,53 +398,87 @@ class NotesViewModelTest {
     }
 
     private class FailingCreateRepository : NotesRepository {
-        override suspend fun getNotesForList(listId: String): Result<List<Note>> =
+        override suspend fun getNotesForList(ownerId: String, listId: String): Result<List<Note>> =
             Result.success(emptyList())
 
         override suspend fun createNote(
+            ownerId: String,
             listId: String,
             title: String,
             content: String,
         ): Result<Note> = Result.failure(IllegalStateException("fallo al crear"))
 
-        override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> =
-            throw UnsupportedOperationException()
+        override suspend fun deleteNote(
+            ownerId: String,
+            listId: String,
+            noteId: String,
+        ): Result<Unit> = throw UnsupportedOperationException()
 
-        override suspend fun updateNote(listId: String, noteId: String, title: String, content: String): Result<Note> =
-            throw UnsupportedOperationException()
+        override suspend fun updateNote(
+            ownerId: String,
+            listId: String,
+            noteId: String,
+            title: String,
+            content: String,
+        ): Result<Note> = throw UnsupportedOperationException()
     }
 
     private class FailingDeleteRepository : NotesRepository {
-        override suspend fun getNotesForList(listId: String): Result<List<Note>> =
+        override suspend fun getNotesForList(ownerId: String, listId: String): Result<List<Note>> =
             Result.success(emptyList())
 
         override suspend fun createNote(
+            ownerId: String,
             listId: String,
             title: String,
             content: String,
         ): Result<Note> = throw UnsupportedOperationException()
 
-        override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> =
-            Result.failure(IllegalStateException("fallo al eliminar"))
+        override suspend fun deleteNote(
+            ownerId: String,
+            listId: String,
+            noteId: String,
+        ): Result<Unit> = Result.failure(IllegalStateException("fallo al eliminar"))
 
-        override suspend fun updateNote(listId: String, noteId: String, title: String, content: String): Result<Note> =
-            throw UnsupportedOperationException()
+        override suspend fun updateNote(
+            ownerId: String,
+            listId: String,
+            noteId: String,
+            title: String,
+            content: String,
+        ): Result<Note> = throw UnsupportedOperationException()
     }
 
     private class FailingUpdateRepository : NotesRepository {
-        override suspend fun getNotesForList(listId: String): Result<List<Note>> =
+        override suspend fun getNotesForList(ownerId: String, listId: String): Result<List<Note>> =
             Result.success(emptyList())
 
         override suspend fun createNote(
+            ownerId: String,
             listId: String,
             title: String,
             content: String,
         ): Result<Note> = throw UnsupportedOperationException()
 
-        override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> =
-            throw UnsupportedOperationException()
+        override suspend fun deleteNote(
+            ownerId: String,
+            listId: String,
+            noteId: String,
+        ): Result<Unit> = throw UnsupportedOperationException()
 
-        override suspend fun updateNote(listId: String, noteId: String, title: String, content: String): Result<Note> =
-            Result.failure(IllegalStateException("fallo al actualizar"))
+        override suspend fun updateNote(
+            ownerId: String,
+            listId: String,
+            noteId: String,
+            title: String,
+            content: String,
+        ): Result<Note> = Result.failure(IllegalStateException("fallo al actualizar"))
+    }
+
+    private companion object {
+        const val DEFAULT_OWNER_ID = "Alex"
+        const val SHARED_OWNER_ID = "Marta"
+
+        fun notesKey(ownerId: String, listId: String): String = "$ownerId:$listId"
     }
 }

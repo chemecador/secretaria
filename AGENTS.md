@@ -51,7 +51,11 @@
 - Notes lists:
   - read, create, delete
   - sort by name/date
+  - tabs for solo-owned lists vs shared lists
   - overflow menu with logout/about/amigos
+  - shared-list visibility parity on Android/JVM/JS/iOS via `contributors`
+  - owner can share a list with existing friends from the list options dialog
+  - only the owner can rename/delete a list; shared users can still open it
 - Notes:
   - read, create, delete
   - ordered/unordered display
@@ -66,7 +70,6 @@
 - Pending or partial areas:
   - Google Sign-In en Wasm
   - session persistence on non-Android targets
-  - share list using `contributors` in JVM/JS/iOS
   - FCM
   - DataStore
   - richer settings/account screens
@@ -78,8 +81,8 @@
 - Current screens:
   - `Screen.Login`
   - `Screen.Lists`
-  - `Screen.Notes(listId, listName, isOrdered)`
-  - `Screen.NoteDetail(listId, listName, isOrdered, note)`
+  - `Screen.Notes(ownerId, listId, listName, isOrdered)`
+  - `Screen.NoteDetail(ownerId, listId, listName, isOrdered, note)`
 - This is acceptable for the current app size. Revisit only if navigation complexity grows.
 
 ## Shared Architecture Conventions
@@ -149,8 +152,10 @@
 - Wasm still uses fake notes lists + fake notes.
 - Current structure: `users/{userId}/noteslist/{listId}/notes`
 - Android lists already use `contributors` for future sharing and query shared lists with `collectionGroup(...).whereArrayContains("contributors", userId)`.
-- JVM/Desktop, JS, and iOS still use direct user-scoped paths, so sharing parity is pending.
+- JVM/Desktop, JS, and iOS query shared lists via Firestore REST `runQuery` + `allDescendants` on `noteslist`, and note CRUD routes through the list `ownerId`.
+- Sharing a list appends the friend's uid to the list document `contributors` array on all real targets.
 - REST Firestore targets currently send client-clock timestamps, not server timestamps.
+- Firestore composite indexes live in `firebase/firestore.indexes.json`; deploy with `cd firebase && firebase deploy --only firestore:indexes --project <projectId>`.
 
 ### Friends / Requests
 
@@ -256,7 +261,6 @@
 ## Likely Next Steps
 
 - session persistence / auto-login on non-Android targets
-- sharing parity for JVM/JS/iOS Firestore by storing owner UID and removing direct user-scoped assumptions
 - settings/account/notifications expansion
 
 ## Desktop Distributable (Windows .exe)

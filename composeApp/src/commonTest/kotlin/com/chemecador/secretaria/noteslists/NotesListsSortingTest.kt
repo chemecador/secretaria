@@ -9,6 +9,7 @@ class NotesListsSortingTest {
     private val lists = listOf(
         NotesListSummary(
             id = "b",
+            ownerId = "Alex",
             name = "Beta",
             creator = "Alex",
             createdAt = Instant.parse("2026-03-10T12:00:00Z"),
@@ -16,6 +17,7 @@ class NotesListsSortingTest {
         ),
         NotesListSummary(
             id = "a",
+            ownerId = "Alex",
             name = "Alpha",
             creator = "Alex",
             createdAt = Instant.parse("2026-01-10T12:00:00Z"),
@@ -23,6 +25,7 @@ class NotesListsSortingTest {
         ),
         NotesListSummary(
             id = "c",
+            ownerId = "Alex",
             name = "Charlie",
             creator = "Alex",
             createdAt = Instant.parse("2026-05-10T12:00:00Z"),

@@ -62,8 +62,8 @@ class AppModulesTest : KoinTest {
 
     @Test
     fun resolvesParameterizedNotesViewModel() = runTest(dispatcher) {
-        val viewModel = resolveTestViewModel(NotesViewModel::class, key = "work") {
-            parametersOf("work")
+        val viewModel = resolveTestViewModel(NotesViewModel::class, key = "Alex:work") {
+            parametersOf("Alex", "work")
         }
 
         viewModel.load()

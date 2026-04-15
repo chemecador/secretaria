@@ -18,11 +18,12 @@ import org.koin.dsl.module
 
 private val sharedAppModule = module {
     viewModel { LoginViewModel(get()) }
-    viewModel { NotesListsViewModel(get()) }
+    viewModel { NotesListsViewModel(get(), get(), get()) }
     viewModel { FriendsViewModel(get()) }
     viewModel { params ->
         NotesViewModel(
             repository = get(),
+            ownerId = params.get(),
             listId = params.get(),
         )
     }

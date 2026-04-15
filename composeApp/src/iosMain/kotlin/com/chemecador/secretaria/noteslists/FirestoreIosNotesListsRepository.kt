@@ -1,9 +1,13 @@
 package com.chemecador.secretaria.noteslists
 
 import com.chemecador.secretaria.firestore.FirebaseIosFirestoreRestApi
+import com.chemecador.secretaria.firestore.FirestorePrecondition
+import com.chemecador.secretaria.firestore.arrayContainsFilter
+import com.chemecador.secretaria.firestore.collectionQuery
 import com.chemecador.secretaria.firestore.firestoreArray
 import com.chemecador.secretaria.firestore.firestoreBoolean
 import com.chemecador.secretaria.firestore.firestoreInstant
+import com.chemecador.secretaria.firestore.firestoreStringList
 import com.chemecador.secretaria.firestore.firestoreString
 import com.chemecador.secretaria.firestore.firestoreTimestamp
 import com.chemecador.secretaria.login.AuthRepository
@@ -19,18 +23,16 @@ internal class FirestoreIosNotesListsRepository(
 
     override suspend fun getLists(): Result<List<NotesListSummary>> =
         runCatching {
-            firestore.listDocuments(collectionPath = listsCollectionPath())
-                .map { document ->
-                    val fields = document.fields
-                    NotesListSummary(
-                        id = document.id,
-                        name = fields.firestoreString("name").orEmpty(),
-                        creator = fields.firestoreString("creator").orEmpty(),
-                        createdAt = fields.firestoreInstant("date")
-                            ?: Instant.fromEpochMilliseconds(0),
-                        isOrdered = fields.firestoreBoolean("ordered") ?: false,
-                    )
-                }
+            val userId = requireUserId()
+            firestore.runQuery(
+                structuredQuery = collectionQuery(
+                    collectionId = NOTES_LIST,
+                    arrayContainsFilter(CONTRIBUTORS, firestoreString(userId)),
+                    allDescendants = true,
+                ),
+            ).map { document ->
+                document.toNotesListSummary(userId)
+            }
         }
 
     override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> =
@@ -51,10 +53,12 @@ internal class FirestoreIosNotesListsRepository(
             val fields = created.fields
             NotesListSummary(
                 id = created.id,
+                ownerId = ownerIdFromDocumentName(created.name),
                 name = fields.firestoreString("name").orEmpty(),
                 creator = fields.firestoreString("creator").orEmpty(),
                 createdAt = fields.firestoreInstant("date") ?: nowProvider(),
                 isOrdered = fields.firestoreBoolean("ordered") ?: false,
+                isShared = false,
             )
         }
 
@@ -68,12 +72,32 @@ internal class FirestoreIosNotesListsRepository(
             )
         }
 
+    override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> =
+        runCatching {
+            val document = firestore.getDocumentOrNull(listDocumentPath(listId))
+                ?: error("List not found")
+            val contributors = (document.fields.firestoreStringList(CONTRIBUTORS) + friendUserId)
+                .distinct()
+            firestore.patchDocument(
+                documentPath = listDocumentPath(listId),
+                fields = buildJsonObject {
+                    put(
+                        CONTRIBUTORS,
+                        firestoreArray(*contributors.map(::firestoreString).toTypedArray()),
+                    )
+                },
+                updateMask = listOf(CONTRIBUTORS),
+                currentDocument = document.toPrecondition(),
+            )
+        }
+
     override suspend fun updateList(
         listId: String,
         name: String,
         ordered: Boolean,
     ): Result<NotesListSummary> =
         runCatching {
+            val userId = requireUserId()
             val updated = firestore.patchDocument(
                 documentPath = listDocumentPath(listId),
                 fields = buildJsonObject {
@@ -85,10 +109,13 @@ internal class FirestoreIosNotesListsRepository(
             val fields = updated.fields
             NotesListSummary(
                 id = updated.id,
+                ownerId = ownerIdFromDocumentName(updated.name),
                 name = fields.firestoreString("name").orEmpty(),
                 creator = fields.firestoreString("creator").orEmpty(),
                 createdAt = fields.firestoreInstant("date") ?: Instant.fromEpochMilliseconds(0),
                 isOrdered = fields.firestoreBoolean("ordered") ?: false,
+                isShared = ownerIdFromDocumentName(updated.name) != userId ||
+                    fields.firestoreStringList("contributors").distinct().size > 1,
             )
         }
 
@@ -111,5 +138,26 @@ internal class FirestoreIosNotesListsRepository(
         const val USERS = "users"
         const val NOTES_LIST = "noteslist"
         const val NOTES = "notes"
+        const val CONTRIBUTORS = "contributors"
     }
 }
+
+private fun com.chemecador.secretaria.firestore.FirestoreIosDocument.toNotesListSummary(
+    currentUserId: String,
+): NotesListSummary {
+    val documentFields = fields
+    val ownerId = ownerIdFromDocumentName(name)
+    val contributors = documentFields.firestoreStringList("contributors")
+    return NotesListSummary(
+        id = id,
+        ownerId = ownerId,
+        name = documentFields.firestoreString("name").orEmpty(),
+        creator = documentFields.firestoreString("creator").orEmpty(),
+        createdAt = documentFields.firestoreInstant("date") ?: Instant.fromEpochMilliseconds(0),
+        isOrdered = documentFields.firestoreBoolean("ordered") ?: false,
+        isShared = ownerId != currentUserId || contributors.distinct().size > 1,
+    )
+}
+
+private fun com.chemecador.secretaria.firestore.FirestoreIosDocument.toPrecondition(): FirestorePrecondition =
+    FirestorePrecondition(updateTime = updateTime ?: error("Missing update time for $name"))

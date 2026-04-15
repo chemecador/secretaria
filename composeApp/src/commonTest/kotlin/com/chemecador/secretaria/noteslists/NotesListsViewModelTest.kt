@@ -1,5 +1,8 @@
 package com.chemecador.secretaria.noteslists
 
+import com.chemecador.secretaria.friends.FriendSummary
+import com.chemecador.secretaria.friends.FriendsRepository
+import com.chemecador.secretaria.login.AuthRepository
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -37,19 +40,9 @@ class NotesListsViewModelTest {
     @Test
     fun load_transitionsFromLoadingToContent() = runTest(dispatcher) {
         val repository = ControlledRepository(
-            Result.success(
-                listOf(
-                    NotesListSummary(
-                        id = "1",
-                        name = "Compra semanal",
-                        creator = "Alex",
-                        createdAt = Instant.parse("2026-03-28T12:00:00Z"),
-                        isOrdered = false,
-                    ),
-                ),
-            ),
+            Result.success(listOf(listSummary(id = "1", name = "Compra semanal"))),
         )
-        val viewModel = NotesListsViewModel(repository)
+        val viewModel = buildViewModel(repository)
 
         viewModel.load()
         runCurrent()
@@ -66,7 +59,7 @@ class NotesListsViewModelTest {
     @Test
     fun load_transitionsFromLoadingToEmptyContent() = runTest(dispatcher) {
         val repository = ControlledRepository(Result.success(emptyList()))
-        val viewModel = NotesListsViewModel(repository)
+        val viewModel = buildViewModel(repository)
 
         viewModel.load()
         runCurrent()
@@ -85,7 +78,7 @@ class NotesListsViewModelTest {
         val repository = ControlledRepository(
             Result.failure(IllegalStateException("fallo de prueba")),
         )
-        val viewModel = NotesListsViewModel(repository)
+        val viewModel = buildViewModel(repository)
 
         viewModel.load()
         runCurrent()
@@ -102,28 +95,23 @@ class NotesListsViewModelTest {
     @Test
     fun setSort_reordersLoadedItems() = runTest(dispatcher) {
         val items = listOf(
-            NotesListSummary(
+            listSummary(
                 id = "1",
                 name = "Compra semanal",
-                creator = "Alex",
                 createdAt = Instant.parse("2026-03-01T10:00:00Z"),
-                isOrdered = false,
             ),
-            NotesListSummary(
+            listSummary(
                 id = "2",
                 name = "Trabajo",
-                creator = "Alex",
                 createdAt = Instant.parse("2026-03-15T10:00:00Z"),
-                isOrdered = false,
             ),
         )
         val repository = ImmediateRepository(Result.success(items))
-        val viewModel = NotesListsViewModel(repository)
+        val viewModel = buildViewModel(repository)
 
         viewModel.load()
         advanceUntilIdle()
 
-        // Default sort is DATE_DESC → "Trabajo" (Mar 15) first
         assertEquals("Trabajo", viewModel.state.value.items[0].name)
         assertEquals("Compra semanal", viewModel.state.value.items[1].name)
 
@@ -137,7 +125,7 @@ class NotesListsViewModelTest {
     @Test
     fun createList_addsNewItemToState() = runTest(dispatcher) {
         val repository = MutableRepository()
-        val viewModel = NotesListsViewModel(repository)
+        val viewModel = buildViewModel(repository)
 
         viewModel.load()
         advanceUntilIdle()
@@ -154,7 +142,7 @@ class NotesListsViewModelTest {
     @Test
     fun createList_errorSetsErrorMessage() = runTest(dispatcher) {
         val repository = FailingCreateRepository()
-        val viewModel = NotesListsViewModel(repository)
+        val viewModel = buildViewModel(repository)
 
         viewModel.load()
         advanceUntilIdle()
@@ -168,29 +156,24 @@ class NotesListsViewModelTest {
     @Test
     fun load_respectsCurrentSortOption() = runTest(dispatcher) {
         val items = listOf(
-            NotesListSummary(
+            listSummary(
                 id = "1",
                 name = "Compra semanal",
-                creator = "Alex",
                 createdAt = Instant.parse("2026-03-01T10:00:00Z"),
-                isOrdered = false,
             ),
-            NotesListSummary(
+            listSummary(
                 id = "2",
                 name = "Trabajo",
-                creator = "Alex",
                 createdAt = Instant.parse("2026-03-15T10:00:00Z"),
-                isOrdered = false,
             ),
         )
         val repository = ImmediateRepository(Result.success(items))
-        val viewModel = NotesListsViewModel(repository)
+        val viewModel = buildViewModel(repository)
 
         viewModel.setSort(SortOption.NAME_ASC)
         viewModel.load()
         advanceUntilIdle()
 
-        // After reload, items should still respect NAME_ASC
         assertEquals(SortOption.NAME_ASC, viewModel.state.value.sortOption)
         assertEquals("Compra semanal", viewModel.state.value.items[0].name)
         assertEquals("Trabajo", viewModel.state.value.items[1].name)
@@ -199,31 +182,50 @@ class NotesListsViewModelTest {
     @Test
     fun deleteList_removesItemFromState() = runTest(dispatcher) {
         val repository = MutableRepository()
-        val viewModel = NotesListsViewModel(repository)
+        val viewModel = buildViewModel(repository)
 
         viewModel.load()
         advanceUntilIdle()
 
         viewModel.createList("Para borrar", false)
         advanceUntilIdle()
-        assertEquals(1, viewModel.state.value.items.size)
+        val list = viewModel.state.value.items.single()
 
-        val listId = viewModel.state.value.items[0].id
-        viewModel.deleteList(listId)
+        viewModel.deleteList(list)
         advanceUntilIdle()
 
         assertTrue(viewModel.state.value.items.isEmpty())
+        assertEquals(1, repository.deleteCalls)
+    }
+
+    @Test
+    fun deleteList_sharedListSetsErrorAndSkipsRepository() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val sharedList = listSummary(id = "shared", name = "Compartida", ownerId = SHARED_OWNER_ID)
+        repository.seed(sharedList)
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.deleteList(sharedList)
+        advanceUntilIdle()
+
+        assertEquals("Solo el propietario puede modificar esta lista", viewModel.state.value.errorMessage)
+        assertEquals(0, repository.deleteCalls)
+        assertEquals(1, viewModel.state.value.items.size)
     }
 
     @Test
     fun deleteList_errorSetsErrorMessage() = runTest(dispatcher) {
         val repository = FailingDeleteRepository()
-        val viewModel = NotesListsViewModel(repository)
+        val viewModel = buildViewModel(repository)
+        val list = listSummary(id = "any", name = "Any")
 
         viewModel.load()
         advanceUntilIdle()
 
-        viewModel.deleteList("any")
+        viewModel.deleteList(list)
         advanceUntilIdle()
 
         assertEquals("error al eliminar", viewModel.state.value.errorMessage)
@@ -232,37 +234,124 @@ class NotesListsViewModelTest {
     @Test
     fun updateList_updatesItemInState() = runTest(dispatcher) {
         val repository = MutableRepository()
-        val viewModel = NotesListsViewModel(repository)
+        val viewModel = buildViewModel(repository)
 
         viewModel.load()
         advanceUntilIdle()
 
         viewModel.createList("Original", true)
         advanceUntilIdle()
-        assertEquals(1, viewModel.state.value.items.size)
+        val list = viewModel.state.value.items.single()
 
-        val listId = viewModel.state.value.items[0].id
-        viewModel.updateList(listId, "Editada", false)
+        viewModel.updateList(list, "Editada", false)
         advanceUntilIdle()
 
         assertEquals(1, viewModel.state.value.items.size)
         assertEquals("Editada", viewModel.state.value.items[0].name)
         assertFalse(viewModel.state.value.items[0].isOrdered)
+        assertEquals(1, repository.updateCalls)
+    }
+
+    @Test
+    fun updateList_sharedListSetsErrorAndSkipsRepository() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val sharedList = listSummary(id = "shared", name = "Compartida", ownerId = SHARED_OWNER_ID)
+        repository.seed(sharedList)
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.updateList(sharedList, "Editada", false)
+        advanceUntilIdle()
+
+        assertEquals("Solo el propietario puede modificar esta lista", viewModel.state.value.errorMessage)
+        assertEquals(0, repository.updateCalls)
+        assertEquals("Compartida", viewModel.state.value.items.single().name)
     }
 
     @Test
     fun updateList_errorSetsErrorMessage() = runTest(dispatcher) {
         val repository = FailingUpdateRepository()
-        val viewModel = NotesListsViewModel(repository)
+        val viewModel = buildViewModel(repository)
+        val list = listSummary(id = "any", name = "Any")
 
         viewModel.load()
         advanceUntilIdle()
 
-        viewModel.updateList("any", "Nuevo nombre", false)
+        viewModel.updateList(list, "Nuevo nombre", false)
         advanceUntilIdle()
 
         assertEquals("error al actualizar", viewModel.state.value.errorMessage)
     }
+
+    @Test
+    fun loadShareableFriends_loadsFriendsIntoState() = runTest(dispatcher) {
+        val repository = ImmediateRepository(Result.success(emptyList()))
+        val friendsRepository = FakeFriendsRepository(
+            friendsResult = Result.success(
+                listOf(
+                    FriendSummary("friendship-2", "friend-2", "Marina"),
+                    FriendSummary("friendship-1", "friend-1", "Ana"),
+                ),
+            ),
+        )
+        val viewModel = buildViewModel(repository, friendsRepository = friendsRepository)
+
+        viewModel.loadShareableFriends(listSummary(id = "list-1", name = "Trabajo"))
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isLoadingShareableFriends)
+        assertEquals(listOf("Ana", "Marina"), viewModel.state.value.shareableFriends.map { it.name })
+        assertEquals(null, viewModel.state.value.shareErrorMessage)
+    }
+
+    @Test
+    fun shareList_removesFriendFromCandidatesAndPublishesSuccess() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val friend = FriendSummary("friendship-1", "friend-1", "Marina")
+        val viewModel = buildViewModel(
+            repository,
+            friendsRepository = FakeFriendsRepository(friendsResult = Result.success(listOf(friend))),
+        )
+        repository.seed(listSummary(id = "list-1", name = "Trabajo"))
+
+        viewModel.load()
+        advanceUntilIdle()
+        val list = viewModel.state.value.items.single()
+
+        viewModel.loadShareableFriends(list)
+        advanceUntilIdle()
+        viewModel.shareList(list, friend)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.shareCalls)
+        assertEquals("friend-1", repository.lastSharedFriendId)
+        assertTrue(viewModel.state.value.shareableFriends.isEmpty())
+        assertTrue(viewModel.state.value.items.single().isShared)
+        assertEquals("Marina", viewModel.state.value.lastSharedFriendName)
+        assertEquals(null, viewModel.state.value.shareErrorMessage)
+    }
+
+    @Test
+    fun shareList_sharedListSetsErrorAndSkipsRepository() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val friend = FriendSummary("friendship-1", "friend-1", "Marina")
+        val viewModel = buildViewModel(repository)
+        val sharedList = listSummary(id = "shared", name = "Compartida", ownerId = SHARED_OWNER_ID)
+
+        viewModel.shareList(sharedList, friend)
+        advanceUntilIdle()
+
+        assertEquals(0, repository.shareCalls)
+        assertEquals("Solo el propietario puede modificar esta lista", viewModel.state.value.shareErrorMessage)
+    }
+
+    private fun buildViewModel(
+        repository: NotesListsRepository,
+        authRepository: AuthRepository = LoggedInAuthRepository(OWNER_ID),
+        friendsRepository: FriendsRepository = FakeFriendsRepository(),
+    ): NotesListsViewModel = NotesListsViewModel(repository, authRepository, friendsRepository)
 
     private class ImmediateRepository(
         private val result: Result<List<NotesListSummary>>,
@@ -272,8 +361,13 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun deleteList(listId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
-        override suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary> =
+        override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
+        override suspend fun updateList(
+            listId: String,
+            name: String,
+            ordered: Boolean,
+        ): Result<NotesListSummary> = Result.failure(UnsupportedOperationException())
     }
 
     private class ControlledRepository(
@@ -290,8 +384,13 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun deleteList(listId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
-        override suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary> =
+        override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
+        override suspend fun updateList(
+            listId: String,
+            name: String,
+            ordered: Boolean,
+        ): Result<NotesListSummary> = Result.failure(UnsupportedOperationException())
 
         fun release() {
             gate.complete(Unit)
@@ -300,15 +399,26 @@ class NotesListsViewModelTest {
 
     private class MutableRepository : NotesListsRepository {
         private val lists = mutableListOf<NotesListSummary>()
+        var deleteCalls = 0
+            private set
+        var updateCalls = 0
+            private set
+        var shareCalls = 0
+            private set
+        var lastSharedFriendId: String? = null
+            private set
+
+        fun seed(list: NotesListSummary) {
+            lists += list
+        }
 
         override suspend fun getLists(): Result<List<NotesListSummary>> =
             Result.success(lists.toList())
 
         override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> {
-            val item = NotesListSummary(
+            val item = listSummary(
                 id = "new-${lists.size + 1}",
                 name = name,
-                creator = "Test",
                 createdAt = Instant.parse("2026-04-09T12:00:00Z"),
                 isOrdered = ordered,
             )
@@ -317,11 +427,27 @@ class NotesListsViewModelTest {
         }
 
         override suspend fun deleteList(listId: String): Result<Unit> {
+            deleteCalls += 1
             lists.removeAll { it.id == listId }
             return Result.success(Unit)
         }
 
-        override suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary> {
+        override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> {
+            shareCalls += 1
+            lastSharedFriendId = friendUserId
+            val index = lists.indexOfFirst { it.id == listId }
+            if (index != -1) {
+                lists[index] = lists[index].copy(isShared = true)
+            }
+            return Result.success(Unit)
+        }
+
+        override suspend fun updateList(
+            listId: String,
+            name: String,
+            ordered: Boolean,
+        ): Result<NotesListSummary> {
+            updateCalls += 1
             val index = lists.indexOfFirst { it.id == listId }
             if (index == -1) return Result.failure(IllegalStateException("List not found"))
             val updated = lists[index].copy(name = name, isOrdered = ordered)
@@ -338,8 +464,13 @@ class NotesListsViewModelTest {
             Result.failure(IllegalStateException("error al crear"))
         override suspend fun deleteList(listId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
-        override suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary> =
+        override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
+        override suspend fun updateList(
+            listId: String,
+            name: String,
+            ordered: Boolean,
+        ): Result<NotesListSummary> = Result.failure(UnsupportedOperationException())
     }
 
     private class FailingDeleteRepository : NotesListsRepository {
@@ -349,8 +480,13 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun deleteList(listId: String): Result<Unit> =
             Result.failure(IllegalStateException("error al eliminar"))
-        override suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary> =
+        override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
+        override suspend fun updateList(
+            listId: String,
+            name: String,
+            ordered: Boolean,
+        ): Result<NotesListSummary> = Result.failure(UnsupportedOperationException())
     }
 
     private class FailingUpdateRepository : NotesListsRepository {
@@ -360,7 +496,62 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun deleteList(listId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
-        override suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary> =
-            Result.failure(IllegalStateException("error al actualizar"))
+        override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
+        override suspend fun updateList(
+            listId: String,
+            name: String,
+            ordered: Boolean,
+        ): Result<NotesListSummary> = Result.failure(IllegalStateException("error al actualizar"))
+    }
+
+    private class LoggedInAuthRepository(
+        override val currentUserId: String?,
+        override val currentUserEmail: String? = null,
+    ) : AuthRepository {
+        override suspend fun login(email: String, password: String): Result<Unit> = Result.success(Unit)
+        override suspend fun signup(email: String, password: String): Result<Unit> = Result.success(Unit)
+        override suspend fun loginWithGoogle(idToken: String?): Result<Unit> = Result.success(Unit)
+        override suspend fun loginAsGuest(): Result<Unit> = Result.success(Unit)
+        override suspend fun logout(): Result<Unit> = Result.success(Unit)
+        override suspend fun restoreSession(): Result<Boolean> = Result.success(currentUserId != null)
+    }
+
+    private class FakeFriendsRepository(
+        private val friendsResult: Result<List<FriendSummary>> = Result.success(emptyList()),
+    ) : FriendsRepository {
+        override suspend fun getMyFriendCode(): Result<String> = Result.success("123456")
+        override suspend fun getFriends(): Result<List<FriendSummary>> = friendsResult
+        override suspend fun getIncomingRequests(): Result<List<com.chemecador.secretaria.friends.IncomingFriendRequest>> =
+            Result.success(emptyList())
+        override suspend fun getOutgoingRequests(): Result<List<com.chemecador.secretaria.friends.OutgoingFriendRequest>> =
+            Result.success(emptyList())
+        override suspend fun sendFriendRequest(friendCode: String) = Result.success(Unit)
+        override suspend fun acceptFriendRequest(requestId: String) = Result.success(Unit)
+        override suspend fun rejectFriendRequest(requestId: String) = Result.success(Unit)
+        override suspend fun cancelFriendRequest(requestId: String) = Result.success(Unit)
+        override suspend fun deleteFriend(friendshipId: String) = Result.success(Unit)
+    }
+
+    private companion object {
+        const val OWNER_ID = "Alex"
+        const val SHARED_OWNER_ID = "Marta"
+
+        fun listSummary(
+            id: String,
+            name: String,
+            ownerId: String = OWNER_ID,
+            createdAt: Instant = Instant.parse("2026-03-28T12:00:00Z"),
+            isOrdered: Boolean = false,
+            isShared: Boolean = false,
+        ): NotesListSummary = NotesListSummary(
+            id = id,
+            ownerId = ownerId,
+            name = name,
+            creator = ownerId,
+            createdAt = createdAt,
+            isOrdered = isOrdered,
+            isShared = isShared,
+        )
     }
 }

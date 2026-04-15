@@ -49,6 +49,7 @@ class FirestoreRestNotesRepositoryTest {
         )
 
         val result = repository.createNote(
+            ownerId = "owner-999",
             listId = "list-1",
             title = "Nueva nota",
             content = "Contenido",
@@ -60,11 +61,11 @@ class FirestoreRestNotesRepositoryTest {
         assertEquals("Nueva nota", note.title)
         assertEquals(0, note.order)
         assertEquals(
-            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/user-123/noteslist/list-1/notes",
+            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/owner-999/noteslist/list-1/notes",
             transport.requests[0].url,
         )
         assertEquals(
-            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/user-123/noteslist/list-1/notes",
+            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/owner-999/noteslist/list-1/notes",
             transport.requests[1].url,
         )
         assertEquals(

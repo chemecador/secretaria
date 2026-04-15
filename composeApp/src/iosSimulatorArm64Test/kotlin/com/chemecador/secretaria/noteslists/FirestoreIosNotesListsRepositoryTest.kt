@@ -19,19 +19,45 @@ class FirestoreIosNotesListsRepositoryTest {
                 FirebaseIosFirestoreHttpResponse(
                     statusCode = 200,
                     body = """
-                        {
-                          "documents": [
-                            {
+                        [
+                          {
+                            "document": {
                               "name": "projects/project-id/databases/(default)/documents/users/user-123/noteslist/list-1",
                               "fields": {
                                 "name": { "stringValue": "Trabajo" },
+                                "contributors": {
+                                  "arrayValue": {
+                                    "values": [
+                                      { "stringValue": "user-123" }
+                                    ]
+                                  }
+                                },
                                 "creator": { "stringValue": "user-123" },
                                 "date": { "timestampValue": "2026-04-12T10:00:00Z" },
                                 "ordered": { "booleanValue": true }
                               }
                             }
-                          ]
-                        }
+                          },
+                          {
+                            "document": {
+                              "name": "projects/project-id/databases/(default)/documents/users/user-999/noteslist/list-2",
+                              "fields": {
+                                "name": { "stringValue": "Compartida" },
+                                "contributors": {
+                                  "arrayValue": {
+                                    "values": [
+                                      { "stringValue": "user-999" },
+                                      { "stringValue": "user-123" }
+                                    ]
+                                  }
+                                },
+                                "creator": { "stringValue": "user-999" },
+                                "date": { "timestampValue": "2026-04-12T12:00:00Z" },
+                                "ordered": { "booleanValue": false }
+                              }
+                            }
+                          }
+                        ]
                     """.trimIndent(),
                 ),
             ),
@@ -49,18 +75,26 @@ class FirestoreIosNotesListsRepositoryTest {
 
         assertTrue(result.isSuccess)
         val lists = result.getOrThrow()
-        assertEquals(1, lists.size)
-        assertEquals("list-1", lists.single().id)
-        assertEquals("Trabajo", lists.single().name)
-        assertTrue(lists.single().isOrdered)
+        assertEquals(2, lists.size)
+        assertEquals("list-1", lists[0].id)
+        assertEquals("user-123", lists[0].ownerId)
+        assertEquals(false, lists[0].isShared)
+        assertEquals("Trabajo", lists[0].name)
+        assertTrue(lists[0].isOrdered)
+        assertEquals("list-2", lists[1].id)
+        assertEquals("user-999", lists[1].ownerId)
+        assertEquals(true, lists[1].isShared)
         assertEquals(
-            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/user-123/noteslist",
+            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents:runQuery",
             transport.requests.single().url,
         )
+        assertEquals("POST", transport.requests.single().method)
         assertEquals(
             "Bearer ios-token",
             transport.requests.single().headers["Authorization"],
         )
+        assertTrue(transport.requests.single().body!!.contains(""""allDescendants":true"""))
+        assertTrue(transport.requests.single().body!!.contains(""""op":"ARRAY_CONTAINS""""))
     }
 
     @Test
@@ -112,6 +146,76 @@ class FirestoreIosNotesListsRepositoryTest {
                 """"delete":"projects/project-id/databases/(default)/documents/users/user-123/noteslist/list-1"""",
             ),
         )
+    }
+
+    @Test
+    fun shareList_patchesContributorsWithPrecondition() = kotlinx.coroutines.test.runTest {
+        val transport = RecordingFirestoreTransport(
+            responses = listOf(
+                FirebaseIosFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "name": "projects/project-id/databases/(default)/documents/users/user-123/noteslist/list-1",
+                          "fields": {
+                            "contributors": {
+                              "arrayValue": {
+                                "values": [
+                                  { "stringValue": "user-123" }
+                                ]
+                              }
+                            }
+                          },
+                          "updateTime": "2026-04-15T10:00:00Z"
+                        }
+                    """.trimIndent(),
+                ),
+                FirebaseIosFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "name": "projects/project-id/databases/(default)/documents/users/user-123/noteslist/list-1",
+                          "fields": {
+                            "contributors": {
+                              "arrayValue": {
+                                "values": [
+                                  { "stringValue": "user-123" },
+                                  { "stringValue": "friend-1" }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                    """.trimIndent(),
+                ),
+            ),
+        )
+        val repository = FirestoreIosNotesListsRepository(
+            authRepository = LoggedInAuthRepository("user-123"),
+            firestore = FirebaseIosFirestoreRestApi(
+                projectId = "project-id",
+                tokenProvider = StaticTokenProvider("ios-token"),
+                transport = transport,
+            ),
+        )
+
+        val result = repository.shareList("list-1", "friend-1")
+
+        assertTrue(result.isSuccess)
+        assertEquals("GET", transport.requests[0].method)
+        assertEquals("PATCH", transport.requests[1].method)
+        assertEquals(
+            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/user-123/noteslist/list-1",
+            transport.requests[0].url,
+        )
+        assertEquals(
+            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/user-123/noteslist/list-1?updateMask.fieldPaths=contributors&currentDocument.updateTime=2026-04-15T10%3A00%3A00Z",
+            transport.requests[1].url,
+        )
+        assertEquals("Bearer ios-token", transport.requests[1].headers["Authorization"])
+        assertTrue(transport.requests[1].body!!.contains(""""contributors""""))
+        assertTrue(transport.requests[1].body!!.contains(""""stringValue":"user-123""""))
+        assertTrue(transport.requests[1].body!!.contains(""""stringValue":"friend-1""""))
     }
 
     private class RecordingFirestoreTransport(

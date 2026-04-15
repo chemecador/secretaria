@@ -23,7 +23,7 @@ class FirestoreNotesListsRepository(
                 .get()
                 .await()
             val lists = snapshot.documents.map { doc ->
-                doc.toNotesListSummary()
+                doc.toNotesListSummary(userId)
             }
             Result.success(lists)
         } catch (e: Exception) {
@@ -46,7 +46,7 @@ class FirestoreNotesListsRepository(
             )
             docRef.set(data).await()
             val created = docRef.get().await()
-            Result.success(created.toNotesListSummary())
+            Result.success(created.toNotesListSummary(userId))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -86,7 +86,19 @@ class FirestoreNotesListsRepository(
                 )
             ).await()
             val updated = docRef.get().await()
-            Result.success(updated.toNotesListSummary())
+            Result.success(updated.toNotesListSummary(userId))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> {
+        return try {
+            val userId = requireUserId()
+            val docRef = firestore.collection(USERS).document(userId)
+                .collection(NOTES_LIST).document(listId)
+            docRef.update(CONTRIBUTORS, FieldValue.arrayUnion(friendUserId)).await()
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -100,15 +112,21 @@ class FirestoreNotesListsRepository(
     }
 }
 
-private fun com.google.firebase.firestore.DocumentSnapshot.toNotesListSummary(): NotesListSummary {
+private fun com.google.firebase.firestore.DocumentSnapshot.toNotesListSummary(
+    currentUserId: String,
+): NotesListSummary {
     val timestamp = getTimestamp("date")
+    val ownerId = reference.parent.parent?.id.orEmpty()
+    val contributors = (get("contributors") as? List<*>)?.mapNotNull { it as? String }.orEmpty()
     return NotesListSummary(
         id = id,
+        ownerId = ownerId,
         name = getString("name").orEmpty(),
         creator = getString("creator").orEmpty(),
         createdAt = timestamp?.let {
             kotlin.time.Instant.fromEpochMilliseconds(it.toDate().time)
         } ?: kotlin.time.Instant.fromEpochMilliseconds(0),
         isOrdered = getBoolean("ordered") ?: false,
+        isShared = ownerId != currentUserId || contributors.distinct().size > 1,
     )
 }

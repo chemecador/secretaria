@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,8 +32,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -50,7 +55,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
+import com.chemecador.secretaria.friends.FriendSummary
+import com.chemecador.secretaria.login.AuthRepository
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 import secretaria.composeapp.generated.resources.Res
 import secretaria.composeapp.generated.resources.about_author
 import secretaria.composeapp.generated.resources.about_ok
@@ -69,6 +77,7 @@ import secretaria.composeapp.generated.resources.edit_list
 import secretaria.composeapp.generated.resources.edit_list_button
 import secretaria.composeapp.generated.resources.edit_list_title
 import secretaria.composeapp.generated.resources.list_created_by
+import secretaria.composeapp.generated.resources.list_options
 import secretaria.composeapp.generated.resources.list_ordered_badge
 import secretaria.composeapp.generated.resources.logout_confirm
 import secretaria.composeapp.generated.resources.logout_message
@@ -77,8 +86,16 @@ import secretaria.composeapp.generated.resources.menu_about
 import secretaria.composeapp.generated.resources.menu_friends
 import secretaria.composeapp.generated.resources.menu_logout
 import secretaria.composeapp.generated.resources.notes_lists_empty
+import secretaria.composeapp.generated.resources.notes_lists_empty_mine
+import secretaria.composeapp.generated.resources.notes_lists_empty_shared
 import secretaria.composeapp.generated.resources.notes_lists_error_generic
+import secretaria.composeapp.generated.resources.notes_lists_mine_tab
+import secretaria.composeapp.generated.resources.notes_lists_shared_tab
 import secretaria.composeapp.generated.resources.order_by
+import secretaria.composeapp.generated.resources.share_list
+import secretaria.composeapp.generated.resources.share_list_empty_friends
+import secretaria.composeapp.generated.resources.share_list_success
+import secretaria.composeapp.generated.resources.share_list_title
 import secretaria.composeapp.generated.resources.sort_date_asc
 import secretaria.composeapp.generated.resources.sort_date_desc
 import secretaria.composeapp.generated.resources.sort_name_asc
@@ -88,27 +105,63 @@ import secretaria.composeapp.generated.resources.sort_name_desc
 @Composable
 fun NotesListsScreen(
     viewModel: NotesListsViewModel,
-    onListSelected: (id: String, name: String, isOrdered: Boolean) -> Unit,
+    onListSelected: (id: String, ownerId: String, name: String, isOrdered: Boolean) -> Unit,
     onOpenFriends: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val authRepository = koinInject<AuthRepository>()
+    val currentUserId = authRepository.currentUserId
     val state by viewModel.state.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
     var showCreateDialog by remember { mutableStateOf(false) }
     var listForOptions by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToEdit by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToDelete by remember { mutableStateOf<NotesListSummary?>(null) }
+    var listToShare by remember { mutableStateOf<NotesListSummary?>(null) }
     var showOverflowMenu by remember { mutableStateOf(false) }
     var showLogoutConfirmation by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var selectedSection by remember { mutableStateOf(NotesListsSection.MINE) }
+    val openListOptions: (NotesListSummary) -> Unit = { item ->
+        if (item.ownerId == currentUserId) {
+            listForOptions = item
+        }
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.load()
     }
 
+    val shareSuccessMessage = state.lastSharedFriendName?.let { friendName ->
+        stringResource(Res.string.share_list_success, friendName)
+    }
+    val visibleItems = state.items.filter { item ->
+        when (selectedSection) {
+            NotesListsSection.MINE -> !item.isShared
+            NotesListsSection.SHARED -> item.isShared
+        }
+    }
+    val emptyMessage = when (selectedSection) {
+        NotesListsSection.MINE -> stringResource(Res.string.notes_lists_empty_mine)
+        NotesListsSection.SHARED -> stringResource(Res.string.notes_lists_empty_shared)
+    }
+
+    LaunchedEffect(listToShare?.id) {
+        val selectedList = listToShare ?: return@LaunchedEffect
+        viewModel.loadShareableFriends(selectedList)
+    }
+
+    LaunchedEffect(shareSuccessMessage) {
+        val message = shareSuccessMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.consumeShareSuccess()
+    }
+
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(Res.string.app_name)) },
@@ -167,6 +220,7 @@ fun NotesListsScreen(
             CreateListDialog(
                 onDismiss = { showCreateDialog = false },
                 onCreate = { name, ordered ->
+                    selectedSection = NotesListsSection.MINE
                     viewModel.createList(name, ordered)
                     showCreateDialog = false
                 },
@@ -176,6 +230,11 @@ fun NotesListsScreen(
         listForOptions?.let { list ->
             ListOptionsDialog(
                 listName = list.name,
+                isOwner = list.ownerId == currentUserId,
+                onShare = {
+                    listToShare = list
+                    listForOptions = null
+                },
                 onEdit = {
                     listToEdit = list
                     listForOptions = null
@@ -188,12 +247,29 @@ fun NotesListsScreen(
             )
         }
 
+        listToShare?.let { list ->
+            ShareListDialog(
+                listName = list.name,
+                friends = state.shareableFriends,
+                isLoading = state.isLoadingShareableFriends,
+                isSharing = state.isSharingList,
+                errorMessage = state.shareErrorMessage,
+                onShare = { friend ->
+                    viewModel.shareList(list, friend)
+                },
+                onDismiss = {
+                    listToShare = null
+                    viewModel.clearShareState()
+                },
+            )
+        }
+
         listToEdit?.let { list ->
             EditListDialog(
                 list = list,
                 onDismiss = { listToEdit = null },
                 onSave = { name, ordered ->
-                    viewModel.updateList(list.id, name, ordered)
+                    viewModel.updateList(list, name, ordered)
                     listToEdit = null
                 },
             )
@@ -204,7 +280,7 @@ fun NotesListsScreen(
                 listName = list.name,
                 onDismiss = { listToDelete = null },
                 onConfirm = {
-                    viewModel.deleteList(list.id)
+                    viewModel.deleteList(list)
                     listToDelete = null
                 },
             )
@@ -228,6 +304,11 @@ fun NotesListsScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
+            ListsSectionTabs(
+                selectedSection = selectedSection,
+                onSectionSelected = { selectedSection = it },
+            )
+
             SortSelector(
                 selected = state.sortOption,
                 onSortSelected = viewModel::setSort,
@@ -249,20 +330,52 @@ fun NotesListsScreen(
                     )
                 }
 
-                state.items.isEmpty() -> CenteredMessage {
+                visibleItems.isEmpty() -> CenteredMessage {
                     Text(
-                        text = stringResource(Res.string.notes_lists_empty),
+                        text = if (state.items.isEmpty()) {
+                            stringResource(Res.string.notes_lists_empty)
+                        } else {
+                            emptyMessage
+                        },
                         style = MaterialTheme.typography.bodyLarge,
                         textAlign = TextAlign.Center,
                     )
                 }
 
                 else -> NotesListsContent(
-                    items = state.items,
+                    items = visibleItems,
                     onListSelected = onListSelected,
-                    onListLongClick = { listForOptions = it },
+                    currentUserId = currentUserId,
+                    onListLongClick = openListOptions,
+                    onListOptionsClick = openListOptions,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ListsSectionTabs(
+    selectedSection: NotesListsSection,
+    onSectionSelected: (NotesListsSection) -> Unit,
+) {
+    val sections = listOf(NotesListsSection.MINE, NotesListsSection.SHARED)
+    val selectedTabIndex = sections.indexOf(selectedSection)
+
+    PrimaryTabRow(selectedTabIndex = selectedTabIndex) {
+        sections.forEachIndexed { index, section ->
+            Tab(
+                selected = index == selectedTabIndex,
+                onClick = { onSectionSelected(section) },
+                text = {
+                    Text(
+                        text = when (section) {
+                            NotesListsSection.MINE -> stringResource(Res.string.notes_lists_mine_tab)
+                            NotesListsSection.SHARED -> stringResource(Res.string.notes_lists_shared_tab)
+                        },
+                    )
+                },
+            )
         }
     }
 }
@@ -318,8 +431,10 @@ private fun SortSelector(
 @Composable
 private fun NotesListsContent(
     items: List<NotesListSummary>,
-    onListSelected: (id: String, name: String, isOrdered: Boolean) -> Unit,
+    onListSelected: (id: String, ownerId: String, name: String, isOrdered: Boolean) -> Unit,
+    currentUserId: String?,
     onListLongClick: (NotesListSummary) -> Unit,
+    onListOptionsClick: (NotesListSummary) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -329,8 +444,17 @@ private fun NotesListsContent(
         items(items, key = { it.id }) { item ->
             NotesListCard(
                 item = item,
-                onClick = { onListSelected(item.id, item.name, item.isOrdered) },
-                onLongClick = { onListLongClick(item) },
+                onClick = { onListSelected(item.id, item.ownerId, item.name, item.isOrdered) },
+                onLongClick = if (item.ownerId == currentUserId) {
+                    { onListLongClick(item) }
+                } else {
+                    null
+                },
+                onOptionsClick = if (item.ownerId == currentUserId) {
+                    { onListOptionsClick(item) }
+                } else {
+                    null
+                },
             )
         }
     }
@@ -341,7 +465,8 @@ private fun NotesListsContent(
 private fun NotesListCard(
     item: NotesListSummary,
     onClick: () -> Unit,
-    onLongClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
+    onOptionsClick: (() -> Unit)?,
 ) {
     Card(
         modifier = Modifier
@@ -359,10 +484,25 @@ private fun NotesListCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = item.name,
-                style = MaterialTheme.typography.titleMedium,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                onOptionsClick?.let { onOptions ->
+                    IconButton(onClick = onOptions) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = stringResource(Res.string.list_options),
+                        )
+                    }
+                }
+            }
             Text(
                 text = stringResource(Res.string.list_created_by, item.creator),
                 style = MaterialTheme.typography.bodyMedium,
@@ -487,6 +627,8 @@ private fun DeleteListDialog(
 @Composable
 private fun ListOptionsDialog(
     listName: String,
+    isOwner: Boolean,
+    onShare: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
@@ -499,26 +641,125 @@ private fun ListOptionsDialog(
         title = { Text(listName) },
         text = {
             Column {
-                TextButton(
-                    onClick = onEdit,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(Res.string.edit_list))
-                }
-                TextButton(
-                    onClick = onDelete,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = stringResource(Res.string.delete),
-                        color = MaterialTheme.colorScheme.error,
-                    )
+                if (isOwner) {
+                    TextButton(
+                        onClick = onShare,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(Res.string.share_list))
+                    }
+                    TextButton(
+                        onClick = onEdit,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(Res.string.edit_list))
+                    }
+                    TextButton(
+                        onClick = onDelete,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.delete),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
             }
         },
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun ShareListDialog(
+    listName: String,
+    friends: List<FriendSummary>,
+    isLoading: Boolean,
+    isSharing: Boolean,
+    errorMessage: String?,
+    onShare: (FriendSummary) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        title = { Text(stringResource(Res.string.share_list_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = listName,
+                    style = MaterialTheme.typography.titleSmall,
+                )
+
+                if (!errorMessage.isNullOrBlank()) {
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+
+                when {
+                    isLoading -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+
+                    friends.isEmpty() -> {
+                        Text(
+                            text = stringResource(Res.string.share_list_empty_friends),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 320.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            items(friends, key = { it.friendshipId }) { friend ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(
+                                        text = friend.name,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    TextButton(
+                                        enabled = !isSharing,
+                                        onClick = { onShare(friend) },
+                                    ) {
+                                        Text(stringResource(Res.string.share_list))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(
+                enabled = !isSharing,
+                onClick = onDismiss,
+            ) {
                 Text(stringResource(Res.string.cancel))
             }
         },
@@ -650,4 +891,9 @@ private fun SortOption.label(): String {
         SortOption.DATE_DESC,
         SortOption.CUSTOM -> stringResource(Res.string.sort_date_desc)
     }
+}
+
+private enum class NotesListsSection {
+    MINE,
+    SHARED,
 }

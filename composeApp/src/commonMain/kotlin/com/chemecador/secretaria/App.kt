@@ -43,8 +43,15 @@ private sealed class Screen {
     data object Login : Screen()
     data object Lists : Screen()
     data object Friends : Screen()
-    data class Notes(val listId: String, val listName: String, val isOrdered: Boolean) : Screen()
+    data class Notes(
+        val ownerId: String,
+        val listId: String,
+        val listName: String,
+        val isOrdered: Boolean,
+    ) : Screen()
+
     data class NoteDetail(
+        val ownerId: String,
         val listId: String,
         val listName: String,
         val isOrdered: Boolean,
@@ -120,8 +127,8 @@ fun App(
                         is Screen.Lists -> {
                             NotesListsScreen(
                                 viewModel = listsViewModel,
-                                onListSelected = { id, name, isOrdered ->
-                                    screen = Screen.Notes(id, name, isOrdered)
+                                onListSelected = { id, ownerId, name, isOrdered ->
+                                    screen = Screen.Notes(ownerId, id, name, isOrdered)
                                 },
                                 onOpenFriends = { screen = Screen.Friends },
                                 onLogout = {
@@ -143,15 +150,17 @@ fun App(
                         }
 
                         is Screen.Notes -> {
-                            val notesViewModel = koinViewModel<NotesViewModel>(key = current.listId) {
-                                parametersOf(current.listId)
-                            }
+                            val notesViewModel =
+                                koinViewModel<NotesViewModel>(key = "${current.ownerId}:${current.listId}") {
+                                    parametersOf(current.ownerId, current.listId)
+                                }
                             NotesScreen(
                                 viewModel = notesViewModel,
                                 listName = current.listName,
                                 isOrdered = current.isOrdered,
                                 onNoteClick = { note ->
                                     screen = Screen.NoteDetail(
+                                        current.ownerId,
                                         current.listId,
                                         current.listName,
                                         current.isOrdered,
@@ -163,10 +172,12 @@ fun App(
                         }
 
                         is Screen.NoteDetail -> {
-                            val notesViewModel = koinViewModel<NotesViewModel>(key = current.listId) {
-                                parametersOf(current.listId)
-                            }
+                            val notesViewModel =
+                                koinViewModel<NotesViewModel>(key = "${current.ownerId}:${current.listId}") {
+                                    parametersOf(current.ownerId, current.listId)
+                                }
                             val backToNotes = Screen.Notes(
+                                current.ownerId,
                                 current.listId,
                                 current.listName,
                                 current.isOrdered,

@@ -19,10 +19,10 @@ internal class FirestoreIosNotesRepository(
     private val nowProvider: () -> Instant = { Clock.System.now() },
 ) : NotesRepository {
 
-    override suspend fun getNotesForList(listId: String): Result<List<Note>> =
+    override suspend fun getNotesForList(ownerId: String, listId: String): Result<List<Note>> =
         runCatching {
             firestore.listDocuments(
-                collectionPath = notesCollectionPath(listId),
+                collectionPath = notesCollectionPath(ownerId, listId),
                 orderBy = "order",
             ).map { document ->
                 val fields = document.fields
@@ -40,6 +40,7 @@ internal class FirestoreIosNotesRepository(
         }
 
     override suspend fun createNote(
+        ownerId: String,
         listId: String,
         title: String,
         content: String,
@@ -48,9 +49,9 @@ internal class FirestoreIosNotesRepository(
             val userId = requireUserId()
             val creator = authRepository.currentUserEmail ?: userId
             val nextOrder =
-                firestore.listDocuments(collectionPath = notesCollectionPath(listId)).size
+                firestore.listDocuments(collectionPath = notesCollectionPath(ownerId, listId)).size
             val created = firestore.createDocument(
-                parentPath = listDocumentPath(listId),
+                parentPath = listDocumentPath(ownerId, listId),
                 collectionId = NOTES,
                 fields = buildJsonObject {
                     put("title", firestoreString(title))
@@ -75,12 +76,13 @@ internal class FirestoreIosNotesRepository(
             )
         }
 
-    override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> =
+    override suspend fun deleteNote(ownerId: String, listId: String, noteId: String): Result<Unit> =
         runCatching {
-            firestore.deleteDocument(noteDocumentPath(listId, noteId))
+            firestore.deleteDocument(noteDocumentPath(ownerId, listId, noteId))
         }
 
     override suspend fun updateNote(
+        ownerId: String,
         listId: String,
         noteId: String,
         title: String,
@@ -88,7 +90,7 @@ internal class FirestoreIosNotesRepository(
     ): Result<Note> =
         runCatching {
             val updated = firestore.patchDocument(
-                documentPath = noteDocumentPath(listId, noteId),
+                documentPath = noteDocumentPath(ownerId, listId, noteId),
                 fields = buildJsonObject {
                     put("title", firestoreString(title))
                     put("content", firestoreString(content))
@@ -111,17 +113,17 @@ internal class FirestoreIosNotesRepository(
     private fun requireUserId(): String =
         authRepository.currentUserId ?: error("User not logged in")
 
-    private fun userDocumentPath(): String =
-        "$USERS/${requireUserId()}"
+    private fun userDocumentPath(ownerId: String): String =
+        "$USERS/$ownerId"
 
-    private fun listDocumentPath(listId: String): String =
-        "${userDocumentPath()}/$NOTES_LIST/$listId"
+    private fun listDocumentPath(ownerId: String, listId: String): String =
+        "${userDocumentPath(ownerId)}/$NOTES_LIST/$listId"
 
-    private fun notesCollectionPath(listId: String): String =
-        "${listDocumentPath(listId)}/$NOTES"
+    private fun notesCollectionPath(ownerId: String, listId: String): String =
+        "${listDocumentPath(ownerId, listId)}/$NOTES"
 
-    private fun noteDocumentPath(listId: String, noteId: String): String =
-        "${notesCollectionPath(listId)}/$noteId"
+    private fun noteDocumentPath(ownerId: String, listId: String, noteId: String): String =
+        "${notesCollectionPath(ownerId, listId)}/$noteId"
 
     private companion object {
         const val USERS = "users"

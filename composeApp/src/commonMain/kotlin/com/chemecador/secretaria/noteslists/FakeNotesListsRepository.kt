@@ -21,10 +21,12 @@ class FakeNotesListsRepository(
     override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> {
         val newList = NotesListSummary(
             id = "list-${lists.size + 1}",
+            ownerId = "Alex",
             name = name,
             creator = "Alex",
             createdAt = Clock.System.now(),
             isOrdered = ordered,
+            isShared = false,
         )
         lists.add(newList)
         return Result.success(newList)
@@ -32,6 +34,14 @@ class FakeNotesListsRepository(
 
     override suspend fun deleteList(listId: String): Result<Unit> {
         lists.removeAll { it.id == listId }
+        return Result.success(Unit)
+    }
+
+    override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> {
+        val index = lists.indexOfFirst { it.id == listId }
+        if (index != -1) {
+            lists[index] = lists[index].copy(isShared = true)
+        }
         return Result.success(Unit)
     }
 
@@ -47,31 +57,39 @@ class FakeNotesListsRepository(
         val seedLists = listOf(
             NotesListSummary(
                 id = "shopping",
+                ownerId = "Alex",
                 name = "Compra semanal",
                 creator = "Alex",
                 createdAt = Instant.parse("2026-03-28T12:00:00Z"),
                 isOrdered = false,
+                isShared = false,
             ),
             NotesListSummary(
                 id = "work",
+                ownerId = "Alex",
                 name = "Trabajo",
                 creator = "Alex",
                 createdAt = Instant.parse("2026-03-22T12:00:00Z"),
                 isOrdered = true,
+                isShared = false,
             ),
             NotesListSummary(
                 id = "travel",
+                ownerId = "Alex",
                 name = "Viaje a Japón",
                 creator = "Alex",
                 createdAt = Instant.parse("2026-03-30T12:00:00Z"),
                 isOrdered = false,
+                isShared = false,
             ),
             NotesListSummary(
                 id = "books",
+                ownerId = "Marta",
                 name = "Libros pendientes",
                 creator = "Marta",
                 createdAt = Instant.parse("2026-02-18T12:00:00Z"),
                 isOrdered = true,
+                isShared = true,
             ),
         )
     }

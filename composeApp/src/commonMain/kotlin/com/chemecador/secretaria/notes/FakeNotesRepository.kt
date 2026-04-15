@@ -8,22 +8,23 @@ class FakeNotesRepository : NotesRepository {
     private val notes = mutableMapOf<String, MutableList<Note>>()
     private var seeded = false
 
-    override suspend fun getNotesForList(listId: String): Result<List<Note>> {
+    override suspend fun getNotesForList(ownerId: String, listId: String): Result<List<Note>> {
         if (!seeded) {
             seedNotes.forEach { (id, list) ->
                 notes[id] = list.toMutableList()
             }
             seeded = true
         }
-        return Result.success(notes[listId].orEmpty())
+        return Result.success(notes[notesKey(ownerId, listId)].orEmpty())
     }
 
     override suspend fun createNote(
+        ownerId: String,
         listId: String,
         title: String,
         content: String,
     ): Result<Note> {
-        val list = notes.getOrPut(listId) { mutableListOf() }
+        val list = notes.getOrPut(notesKey(ownerId, listId)) { mutableListOf() }
         val newNote = Note(
             id = "$listId-${list.size + 1}",
             title = title,
@@ -36,18 +37,19 @@ class FakeNotesRepository : NotesRepository {
         return Result.success(newNote)
     }
 
-    override suspend fun deleteNote(listId: String, noteId: String): Result<Unit> {
-        notes[listId]?.removeAll { it.id == noteId }
+    override suspend fun deleteNote(ownerId: String, listId: String, noteId: String): Result<Unit> {
+        notes[notesKey(ownerId, listId)]?.removeAll { it.id == noteId }
         return Result.success(Unit)
     }
 
     override suspend fun updateNote(
+        ownerId: String,
         listId: String,
         noteId: String,
         title: String,
         content: String,
     ): Result<Note> {
-        val list = notes[listId]
+        val list = notes[notesKey(ownerId, listId)]
             ?: return Result.failure(IllegalStateException("List not found"))
         val index = list.indexOfFirst { it.id == noteId }
         if (index == -1) return Result.failure(IllegalStateException("Note not found"))
@@ -58,7 +60,7 @@ class FakeNotesRepository : NotesRepository {
 
     companion object {
         val seedNotes: Map<String, List<Note>> = mapOf(
-            "shopping" to listOf(
+            notesKey("Alex", "shopping") to listOf(
                 Note(
                     id = "shopping-1",
                     title = "Leche",
@@ -92,7 +94,7 @@ class FakeNotesRepository : NotesRepository {
                     creator = "Alex",
                 ),
             ),
-            "work" to listOf(
+            notesKey("Alex", "work") to listOf(
                 Note(
                     id = "work-1",
                     title = "Email cliente X",
@@ -118,7 +120,7 @@ class FakeNotesRepository : NotesRepository {
                     creator = "Alex",
                 ),
             ),
-            "travel" to listOf(
+            notesKey("Alex", "travel") to listOf(
                 Note(
                     id = "travel-1",
                     title = "Reservar hotel en Tokio",
@@ -141,7 +143,7 @@ class FakeNotesRepository : NotesRepository {
                     creator = "Alex",
                 ),
             ),
-            "books" to listOf(
+            notesKey("Marta", "books") to listOf(
                 Note(
                     id = "books-1",
                     title = "Los pilares de la tierra",
@@ -168,5 +170,7 @@ class FakeNotesRepository : NotesRepository {
                 ),
             ),
         )
+
+        private fun notesKey(ownerId: String, listId: String): String = "$ownerId:$listId"
     }
 }

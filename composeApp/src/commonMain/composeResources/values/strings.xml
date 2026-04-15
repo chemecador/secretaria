@@ -6,9 +6,14 @@
     <string name="sort_date_asc">Fecha antigua</string>
     <string name="sort_date_desc">Fecha reciente</string>
     <string name="notes_lists_empty">Todavía no hay listas para mostrar.</string>
+    <string name="notes_lists_mine_tab">Mis listas</string>
+    <string name="notes_lists_shared_tab">Compartidas</string>
+    <string name="notes_lists_empty_mine">No tienes listas propias todavía.</string>
+    <string name="notes_lists_empty_shared">No tienes listas compartidas todavía.</string>
     <string name="notes_lists_error_generic">No se han podido cargar las listas.</string>
     <string name="list_created_by">Creada por %1$s</string>
     <string name="list_ordered_badge">Lista ordenada</string>
+    <string name="list_options">Opciones de la lista</string>
     <string name="create_list_title">Nueva lista</string>
     <string name="create_list_name_hint">Nombre de la lista</string>
     <string name="create_list_ordered">Lista ordenada</string>
@@ -32,6 +37,10 @@
     <string name="edit_list">Editar</string>
     <string name="edit_list_title">Editar lista</string>
     <string name="edit_list_button">Guardar</string>
+    <string name="share_list">Compartir</string>
+    <string name="share_list_title">Compartir lista</string>
+    <string name="share_list_empty_friends">Todavía no tienes amigos para compartir esta lista.</string>
+    <string name="share_list_success">Lista compartida con %1$s.</string>
 
     <!-- Login -->
     <string name="label_email">Email</string>
