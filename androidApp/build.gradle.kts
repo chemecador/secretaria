@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.googleServices)
 }
 
+val appVersionCode = providers.gradleProperty("secretaria.app.versionCode").orNull?.toIntOrNull() ?: 1
+val appVersionName = providers.gradleProperty("secretaria.app.versionName").orNull ?: "1.0"
+
 android {
     namespace = "com.chemecador.secretaria"
     compileSdk = 36
@@ -12,8 +15,8 @@ android {
         applicationId = "com.chemecador.secretaria"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
     }
 
     buildTypes {

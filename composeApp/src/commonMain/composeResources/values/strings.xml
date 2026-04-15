@@ -54,18 +54,27 @@
     <!-- Menu -->
     <string name="menu_friends">Amigos</string>
     <string name="menu_logout">Cerrar sesión</string>
-    <string name="menu_about">Acerca de</string>
+    <string name="menu_settings">Configuración</string>
 
     <!-- Logout -->
     <string name="logout_title">Cerrar sesión</string>
     <string name="logout_message">¿Estás seguro de que quieres cerrar sesión?</string>
     <string name="logout_confirm">Cerrar sesión</string>
 
-    <!-- About -->
-    <string name="about_title">Acerca de</string>
-    <string name="about_version">Versión %1$s</string>
-    <string name="about_author">Desarrollada por %1$s</string>
-    <string name="about_ok">Aceptar</string>
+    <!-- Settings -->
+    <string name="settings_title">Configuración</string>
+    <string name="settings_account_section">Cuenta</string>
+    <string name="settings_account_email">Email de la cuenta</string>
+    <string name="settings_app_section">Aplicación</string>
+    <string name="settings_version">Versión</string>
+    <string name="settings_developer">Desarrollador</string>
+    <string name="settings_contact_email">Email de contacto</string>
+    <string name="settings_data_not_provided">Sin informar</string>
+    <string name="settings_project_label">Proyecto</string>
+    <string name="settings_project_summary">Secretaria es un proyecto de código abierto desarrollado en Kotlin Multiplatform.</string>
+    <string name="settings_contact_dialog_title">Enviar email</string>
+    <string name="settings_contact_dialog_message">¿Quieres enviar un email a %1$s?</string>
+    <string name="settings_contact_dialog_confirm">Enviar</string>
 
     <!-- Auth errors -->
     <string name="error_invalid_user">El usuario no existe</string>

@@ -31,6 +31,7 @@ import com.chemecador.secretaria.notes.NotesScreen
 import com.chemecador.secretaria.notes.NotesViewModel
 import com.chemecador.secretaria.noteslists.NotesListsScreen
 import com.chemecador.secretaria.noteslists.NotesListsViewModel
+import com.chemecador.secretaria.settings.SettingsScreen
 import kotlinx.coroutines.launch
 import org.koin.compose.KoinApplication
 import org.koin.compose.koinInject
@@ -43,6 +44,7 @@ private sealed class Screen {
     data object Login : Screen()
     data object Lists : Screen()
     data object Friends : Screen()
+    data object Settings : Screen()
     data class Notes(
         val ownerId: String,
         val listId: String,
@@ -131,6 +133,7 @@ fun App(
                                     screen = Screen.Notes(ownerId, id, name, isOrdered)
                                 },
                                 onOpenFriends = { screen = Screen.Friends },
+                                onOpenSettings = { screen = Screen.Settings },
                                 onLogout = {
                                     coroutineScope.launch {
                                         authRepository.logout()
@@ -145,6 +148,12 @@ fun App(
                         is Screen.Friends -> {
                             FriendsScreen(
                                 viewModel = friendsViewModel,
+                                onBack = { screen = Screen.Lists },
+                            )
+                        }
+
+                        is Screen.Settings -> {
+                            SettingsScreen(
                                 onBack = { screen = Screen.Lists },
                             )
                         }

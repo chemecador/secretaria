@@ -59,6 +59,50 @@ class FirestoreRestFriendsRepositoryTest {
         assertEquals("Bearer desktop-token", transport.requests.single().headers["Authorization"])
         assertTrue(transport.requests.single().body!!.contains("structuredQuery"))
         assertTrue(transport.requests.single().body!!.contains("receiverId"))
+        assertTrue(!transport.requests.single().body!!.contains("orderBy"))
+    }
+
+    @Test
+    fun getOutgoingRequests_doesNotRequestServerOrdering() = kotlinx.coroutines.test.runTest {
+        val transport = RecordingFirestoreTransport(
+            responses = listOf(
+                FirebaseFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        [
+                          {
+                            "document": {
+                              "name": "projects/project-id/databases/(default)/documents/friendships/request-1",
+                              "fields": {
+                                "receiverId": { "stringValue": "friend-1" },
+                                "receiverCode": { "stringValue": "26010602" },
+                                "requestDate": { "timestampValue": "2026-04-13T10:00:00Z" },
+                                "acceptanceDate": { "nullValue": null }
+                              }
+                            }
+                          }
+                        ]
+                    """.trimIndent(),
+                ),
+            ),
+        )
+        val repository = FirestoreRestFriendsRepository(
+            authRepository = LoggedInAuthRepository("user-123"),
+            firestore = FirebaseFirestoreRestApi(
+                projectId = "project-id",
+                tokenProvider = StaticTokenProvider("desktop-token"),
+                transport = transport,
+            ),
+        )
+
+        val result = repository.getOutgoingRequests()
+
+        assertTrue(result.isSuccess)
+        val requests = result.getOrThrow()
+        assertEquals(1, requests.size)
+        assertEquals("request-1", requests.single().id)
+        assertTrue(transport.requests.single().body!!.contains("senderId"))
+        assertTrue(!transport.requests.single().body!!.contains("orderBy"))
     }
 
     @Test

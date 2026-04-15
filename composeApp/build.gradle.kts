@@ -1,6 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 import java.security.SecureRandom
 import java.util.Properties
 
@@ -16,8 +17,23 @@ fun parseWebClientIdFromGoogleServices(json: String): String? =
         ?.groupValues
         ?.getOrNull(1)
 
+fun normalizeDesktopPackageVersion(versionName: String): String {
+    val parts = versionName
+        .split('.')
+        .filter { it.isNotBlank() }
+
+    return when (parts.size) {
+        0 -> "1.0.0"
+        1 -> "${parts[0]}.0.0"
+        2 -> "${parts[0]}.${parts[1]}.0"
+        else -> parts.take(3).joinToString(".")
+    }
+}
+
 val androidCompileSdk = 36
 val androidMinSdk = 26
+val appVersionName =
+    providers.gradleProperty("secretaria.app.versionName").orNull ?: "1.0"
 val localProperties = Properties().apply {
     val localPropertiesFile = rootProject.file("local.properties")
     if (localPropertiesFile.exists()) {
@@ -57,8 +73,43 @@ val resolvedGoogleWebClientId =
         ?: localProperties.getProperty("secretaria.googleWebClientId")
         ?: googleServicesWebClientId
 val desktopFirebaseApiKey = resolvedFirebaseApiKey
+val desktopPackageVersion = normalizeDesktopPackageVersion(appVersionName)
+val generatedAppConfigDir = layout.buildDirectory.dir("generated/commonMain/kotlin")
 val generatedWebResourcesDir = layout.buildDirectory.dir("generated/webMain/resources")
 val generatedDesktopConfigDir = layout.buildDirectory.dir("generated/jvmMain/kotlin")
+abstract class GenerateAppBuildInfoTask : DefaultTask() {
+
+    @get:Input
+    abstract val versionName: Property<String>
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        fun escapeKotlinString(value: String): String =
+            value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+
+        val dir = outputDir.get().asFile
+            .resolve("com/chemecador/secretaria/config")
+        dir.mkdirs()
+        dir.resolve("AppBuildInfo.kt").writeText(
+            buildString {
+                appendLine("package com.chemecador.secretaria.config")
+                appendLine()
+                appendLine("internal object AppBuildInfo {")
+                appendLine("    const val versionName = \"${escapeKotlinString(versionName.get())}\"")
+                appendLine("}")
+            },
+        )
+    }
+}
+val generateAppBuildInfo by tasks.registering(GenerateAppBuildInfoTask::class) {
+    versionName.set(appVersionName)
+    outputDir.set(generatedAppConfigDir)
+}
 val generateDesktopBuildConfig by tasks.registering {
     val apiKey = resolvedFirebaseApiKey.orEmpty()
     val projectId = resolvedFirebaseProjectId.orEmpty()
@@ -214,6 +265,9 @@ kotlin {
     }
     
     sourceSets {
+        getByName("commonMain") {
+            kotlin.srcDir(generatedAppConfigDir)
+        }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
@@ -269,6 +323,10 @@ tasks.matching { it.name == "jsProcessResources" || it.name == "wasmJsProcessRes
     }
 }
 
+tasks.withType<KotlinCompilationTask<*>>().configureEach {
+    dependsOn(generateAppBuildInfo)
+}
+
 tasks.named("compileKotlinJvm") {
     dependsOn(generateDesktopBuildConfig)
 }
@@ -284,7 +342,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "com.chemecador.secretaria"
-            packageVersion = "1.0.0"
+            packageVersion = desktopPackageVersion
             modules("java.desktop", "java.net.http", "jdk.httpserver")
         }
     }

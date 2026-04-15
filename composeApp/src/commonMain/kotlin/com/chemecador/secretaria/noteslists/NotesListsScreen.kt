@@ -60,10 +60,6 @@ import com.chemecador.secretaria.login.AuthRepository
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import secretaria.composeapp.generated.resources.Res
-import secretaria.composeapp.generated.resources.about_author
-import secretaria.composeapp.generated.resources.about_ok
-import secretaria.composeapp.generated.resources.about_title
-import secretaria.composeapp.generated.resources.about_version
 import secretaria.composeapp.generated.resources.app_name
 import secretaria.composeapp.generated.resources.cancel
 import secretaria.composeapp.generated.resources.create_list_button
@@ -82,9 +78,9 @@ import secretaria.composeapp.generated.resources.list_ordered_badge
 import secretaria.composeapp.generated.resources.logout_confirm
 import secretaria.composeapp.generated.resources.logout_message
 import secretaria.composeapp.generated.resources.logout_title
-import secretaria.composeapp.generated.resources.menu_about
 import secretaria.composeapp.generated.resources.menu_friends
 import secretaria.composeapp.generated.resources.menu_logout
+import secretaria.composeapp.generated.resources.menu_settings
 import secretaria.composeapp.generated.resources.notes_lists_empty
 import secretaria.composeapp.generated.resources.notes_lists_empty_mine
 import secretaria.composeapp.generated.resources.notes_lists_empty_shared
@@ -107,6 +103,7 @@ fun NotesListsScreen(
     viewModel: NotesListsViewModel,
     onListSelected: (id: String, ownerId: String, name: String, isOrdered: Boolean) -> Unit,
     onOpenFriends: () -> Unit,
+    onOpenSettings: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -121,7 +118,6 @@ fun NotesListsScreen(
     var listToShare by remember { mutableStateOf<NotesListSummary?>(null) }
     var showOverflowMenu by remember { mutableStateOf(false) }
     var showLogoutConfirmation by remember { mutableStateOf(false) }
-    var showAboutDialog by remember { mutableStateOf(false) }
     var selectedSection by remember { mutableStateOf(NotesListsSection.MINE) }
     val openListOptions: (NotesListSummary) -> Unit = { item ->
         if (item.ownerId == currentUserId) {
@@ -187,10 +183,10 @@ fun NotesListsScreen(
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text(stringResource(Res.string.menu_about)) },
+                                text = { Text(stringResource(Res.string.menu_settings)) },
                                 onClick = {
                                     showOverflowMenu = false
-                                    showAboutDialog = true
+                                    onOpenSettings()
                                 },
                             )
                             DropdownMenuItem(
@@ -296,9 +292,6 @@ fun NotesListsScreen(
             )
         }
 
-        if (showAboutDialog) {
-            AboutDialog(onDismiss = { showAboutDialog = false })
-        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -843,40 +836,6 @@ private fun LogoutConfirmationDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(stringResource(Res.string.cancel))
-            }
-        },
-    )
-}
-
-@Composable
-private fun AboutDialog(
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        titleContentColor = MaterialTheme.colorScheme.onSurface,
-        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        title = { Text(stringResource(Res.string.about_title)) },
-        text = {
-            Column {
-                Text(
-                    text = stringResource(Res.string.app_name),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    text = stringResource(Res.string.about_version, "1.0"),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    text = stringResource(Res.string.about_author, "chemecador"),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(Res.string.about_ok))
             }
         },
     )

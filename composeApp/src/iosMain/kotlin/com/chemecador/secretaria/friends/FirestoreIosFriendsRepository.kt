@@ -89,12 +89,6 @@ internal class FirestoreIosFriendsRepository(
                         firestoreString(requireUserId())
                     ),
                     isNullFilter(FriendsFirestoreSchema.ACCEPTANCE_DATE),
-                    orderBy = listOf(
-                        orderBy(
-                            FriendsFirestoreSchema.REQUEST_DATE,
-                            descending = true
-                        )
-                    ),
                 ),
             ).map { document ->
                 IncomingFriendRequest(
@@ -123,12 +117,6 @@ internal class FirestoreIosFriendsRepository(
                         firestoreString(requireUserId())
                     ),
                     isNullFilter(FriendsFirestoreSchema.ACCEPTANCE_DATE),
-                    orderBy = listOf(
-                        orderBy(
-                            FriendsFirestoreSchema.REQUEST_DATE,
-                            descending = true
-                        )
-                    ),
                 ),
             ).map { document ->
                 OutgoingFriendRequest(
