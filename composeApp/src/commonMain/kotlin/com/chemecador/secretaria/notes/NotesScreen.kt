@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.chemecador.secretaria.SecretariaOverflowMenu
 import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
 import com.chemecador.secretaria.noteslists.formatNotesListDate
@@ -71,6 +72,9 @@ fun NotesScreen(
     isOrdered: Boolean,
     onNoteClick: (Note) -> Unit,
     onBack: () -> Unit,
+    onOpenFriends: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onLogout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
@@ -91,11 +95,19 @@ fun NotesScreen(
                     containerColor = SecretariaTopBarColor,
                     titleContentColor = SecretariaTopBarContentColor,
                     navigationIconContentColor = SecretariaTopBarContentColor,
+                    actionIconContentColor = SecretariaTopBarContentColor,
                 ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
+                },
+                actions = {
+                    SecretariaOverflowMenu(
+                        onOpenFriends = onOpenFriends,
+                        onOpenSettings = onOpenSettings,
+                        onLogout = onLogout,
+                    )
                 },
             )
         },

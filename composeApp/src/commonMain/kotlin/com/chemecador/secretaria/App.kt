@@ -61,6 +61,10 @@ private sealed class Screen {
     ) : Screen()
 }
 
+private fun Screen.canRestoreAfterUtilityScreen(): Boolean {
+    return this is Screen.Lists || this is Screen.Notes || this is Screen.NoteDetail
+}
+
 @Composable
 @Preview
 fun App(
@@ -84,11 +88,38 @@ fun App(
         val friendsViewModel = koinViewModel<FriendsViewModel>()
 
         var screen by remember { mutableStateOf<Screen>(Screen.Restoring) }
+        var utilityReturnScreen by remember { mutableStateOf<Screen>(Screen.Lists) }
         val coroutineScope = rememberCoroutineScope()
+
+        val openFriends = {
+            if (screen.canRestoreAfterUtilityScreen()) {
+                utilityReturnScreen = screen
+            }
+            screen = Screen.Friends
+        }
+        val openSettings = {
+            if (screen.canRestoreAfterUtilityScreen()) {
+                utilityReturnScreen = screen
+            }
+            screen = Screen.Settings
+        }
+        val closeUtilityScreen = {
+            screen = utilityReturnScreen
+        }
+        val logout: () -> Unit = {
+            coroutineScope.launch {
+                authRepository.logout()
+                googleSignInController?.clearCredentialState()
+                loginViewModel.resetState()
+                utilityReturnScreen = Screen.Lists
+                screen = Screen.Login
+            }
+        }
 
         LaunchedEffect(authRepository) {
             val restored = authRepository.restoreSession().getOrDefault(false)
             screen = if (restored) Screen.Lists else Screen.Login
+            utilityReturnScreen = Screen.Lists
         }
 
         SecretariaTheme {
@@ -115,7 +146,10 @@ fun App(
                         is Screen.Login -> {
                             LoginScreen(
                                 viewModel = loginViewModel,
-                                onLoginSuccess = { screen = Screen.Lists },
+                                onLoginSuccess = {
+                                    utilityReturnScreen = Screen.Lists
+                                    screen = Screen.Lists
+                                },
                                 onGoogleLogin = {
                                     loginViewModel.loginWithGoogle(
                                         tokenProvider = googleSignInController?.let { controller ->
@@ -132,29 +166,28 @@ fun App(
                                 onListSelected = { id, ownerId, name, isOrdered ->
                                     screen = Screen.Notes(ownerId, id, name, isOrdered)
                                 },
-                                onOpenFriends = { screen = Screen.Friends },
-                                onOpenSettings = { screen = Screen.Settings },
-                                onLogout = {
-                                    coroutineScope.launch {
-                                        authRepository.logout()
-                                        googleSignInController?.clearCredentialState()
-                                        loginViewModel.resetState()
-                                        screen = Screen.Login
-                                    }
-                                },
+                                onOpenFriends = openFriends,
+                                onOpenSettings = openSettings,
+                                onLogout = logout,
                             )
                         }
 
                         is Screen.Friends -> {
                             FriendsScreen(
                                 viewModel = friendsViewModel,
-                                onBack = { screen = Screen.Lists },
+                                onBack = closeUtilityScreen,
+                                onOpenFriends = openFriends,
+                                onOpenSettings = openSettings,
+                                onLogout = logout,
                             )
                         }
 
                         is Screen.Settings -> {
                             SettingsScreen(
-                                onBack = { screen = Screen.Lists },
+                                onBack = closeUtilityScreen,
+                                onOpenFriends = openFriends,
+                                onOpenSettings = openSettings,
+                                onLogout = logout,
                             )
                         }
 
@@ -177,6 +210,9 @@ fun App(
                                     )
                                 },
                                 onBack = { screen = Screen.Lists },
+                                onOpenFriends = openFriends,
+                                onOpenSettings = openSettings,
+                                onLogout = logout,
                             )
                         }
 
@@ -202,6 +238,9 @@ fun App(
                                     screen = backToNotes
                                 },
                                 onBack = { screen = backToNotes },
+                                onOpenFriends = openFriends,
+                                onOpenSettings = openSettings,
+                                onLogout = logout,
                             )
                         }
                     }

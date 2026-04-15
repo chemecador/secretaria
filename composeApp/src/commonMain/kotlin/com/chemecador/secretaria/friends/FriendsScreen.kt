@@ -54,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.chemecador.secretaria.SecretariaOverflowMenu
 import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
 import com.chemecador.secretaria.noteslists.formatNotesListDate
@@ -98,6 +99,9 @@ import secretaria.composeapp.generated.resources.friends_title
 fun FriendsScreen(
     viewModel: FriendsViewModel,
     onBack: () -> Unit,
+    onOpenFriends: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onLogout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
@@ -155,7 +159,15 @@ fun FriendsScreen(
                     containerColor = SecretariaTopBarColor,
                     titleContentColor = SecretariaTopBarContentColor,
                     navigationIconContentColor = SecretariaTopBarContentColor,
+                    actionIconContentColor = SecretariaTopBarContentColor,
                 ),
+                actions = {
+                    SecretariaOverflowMenu(
+                        onOpenFriends = onOpenFriends,
+                        onOpenSettings = onOpenSettings,
+                        onLogout = onLogout,
+                    )
+                },
             )
         },
     ) { innerPadding ->

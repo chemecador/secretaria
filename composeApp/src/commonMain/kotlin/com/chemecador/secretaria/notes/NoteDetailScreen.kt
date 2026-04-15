@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.chemecador.secretaria.SecretariaOverflowMenu
 import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
 import org.jetbrains.compose.resources.stringResource
@@ -46,6 +47,9 @@ fun NoteDetailScreen(
     onSave: (title: String, content: String) -> Unit,
     onDelete: () -> Unit,
     onBack: () -> Unit,
+    onOpenFriends: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onLogout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var title by remember { mutableStateOf(note.title) }
@@ -97,6 +101,11 @@ fun NoteDetailScreen(
                     ) {
                         Text(stringResource(Res.string.note_detail_save))
                     }
+                    SecretariaOverflowMenu(
+                        onOpenFriends = onOpenFriends,
+                        onOpenSettings = onOpenSettings,
+                        onLogout = onLogout,
+                    )
                 },
             )
         },

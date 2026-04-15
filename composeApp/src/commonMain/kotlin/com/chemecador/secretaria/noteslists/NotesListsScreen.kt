@@ -53,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.chemecador.secretaria.SecretariaOverflowMenu
 import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
 import com.chemecador.secretaria.friends.FriendSummary
@@ -75,12 +76,6 @@ import secretaria.composeapp.generated.resources.edit_list_title
 import secretaria.composeapp.generated.resources.list_created_by
 import secretaria.composeapp.generated.resources.list_options
 import secretaria.composeapp.generated.resources.list_ordered_badge
-import secretaria.composeapp.generated.resources.logout_confirm
-import secretaria.composeapp.generated.resources.logout_message
-import secretaria.composeapp.generated.resources.logout_title
-import secretaria.composeapp.generated.resources.menu_friends
-import secretaria.composeapp.generated.resources.menu_logout
-import secretaria.composeapp.generated.resources.menu_settings
 import secretaria.composeapp.generated.resources.notes_lists_empty
 import secretaria.composeapp.generated.resources.notes_lists_empty_mine
 import secretaria.composeapp.generated.resources.notes_lists_empty_shared
@@ -116,8 +111,6 @@ fun NotesListsScreen(
     var listToEdit by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToDelete by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToShare by remember { mutableStateOf<NotesListSummary?>(null) }
-    var showOverflowMenu by remember { mutableStateOf(false) }
-    var showLogoutConfirmation by remember { mutableStateOf(false) }
     var selectedSection by remember { mutableStateOf(NotesListsSection.MINE) }
     val openListOptions: (NotesListSummary) -> Unit = { item ->
         if (item.ownerId == currentUserId) {
@@ -167,37 +160,11 @@ fun NotesListsScreen(
                     actionIconContentColor = SecretariaTopBarContentColor,
                 ),
                 actions = {
-                    Box {
-                        IconButton(onClick = { showOverflowMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = null)
-                        }
-                        DropdownMenu(
-                            expanded = showOverflowMenu,
-                            onDismissRequest = { showOverflowMenu = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(Res.string.menu_friends)) },
-                                onClick = {
-                                    showOverflowMenu = false
-                                    onOpenFriends()
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(Res.string.menu_settings)) },
-                                onClick = {
-                                    showOverflowMenu = false
-                                    onOpenSettings()
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(Res.string.menu_logout)) },
-                                onClick = {
-                                    showOverflowMenu = false
-                                    showLogoutConfirmation = true
-                                },
-                            )
-                        }
-                    }
+                    SecretariaOverflowMenu(
+                        onOpenFriends = onOpenFriends,
+                        onOpenSettings = onOpenSettings,
+                        onLogout = onLogout,
+                    )
                 },
             )
         },
@@ -278,16 +245,6 @@ fun NotesListsScreen(
                 onConfirm = {
                     viewModel.deleteList(list)
                     listToDelete = null
-                },
-            )
-        }
-
-        if (showLogoutConfirmation) {
-            LogoutConfirmationDialog(
-                onDismiss = { showLogoutConfirmation = false },
-                onConfirm = {
-                    showLogoutConfirmation = false
-                    onLogout()
                 },
             )
         }
@@ -806,31 +763,6 @@ private fun EditListDialog(
                 enabled = name.isNotBlank(),
             ) {
                 Text(stringResource(Res.string.edit_list_button))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(Res.string.cancel))
-            }
-        },
-    )
-}
-
-@Composable
-private fun LogoutConfirmationDialog(
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        titleContentColor = MaterialTheme.colorScheme.onSurface,
-        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        title = { Text(stringResource(Res.string.logout_title)) },
-        text = { Text(stringResource(Res.string.logout_message)) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(stringResource(Res.string.logout_confirm))
             }
         },
         dismissButton = {
