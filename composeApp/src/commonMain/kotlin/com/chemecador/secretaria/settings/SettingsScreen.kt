@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
@@ -32,6 +33,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,6 +47,7 @@ import com.chemecador.secretaria.SecretariaTheme
 import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
 import com.chemecador.secretaria.config.AppBuildInfo
+import com.chemecador.secretaria.friends.FriendsRepository
 import com.chemecador.secretaria.login.AuthRepository
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -52,6 +55,7 @@ import secretaria.composeapp.generated.resources.Res
 import secretaria.composeapp.generated.resources.cancel
 import secretaria.composeapp.generated.resources.settings_account_email
 import secretaria.composeapp.generated.resources.settings_account_section
+import secretaria.composeapp.generated.resources.settings_account_user_code
 import secretaria.composeapp.generated.resources.settings_app_section
 import secretaria.composeapp.generated.resources.settings_contact_dialog_confirm
 import secretaria.composeapp.generated.resources.settings_contact_dialog_message
@@ -73,11 +77,17 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
 ) {
     val authRepository = koinInject<AuthRepository>()
+    val friendsRepository = koinInject<FriendsRepository>()
     val accountEmail = authRepository.currentUserEmail
         ?: stringResource(Res.string.settings_data_not_provided)
+    val accountUserCode by produceState<String?>(initialValue = null, authRepository.currentUserId, friendsRepository) {
+        value = authRepository.currentUserId
+            ?.let { friendsRepository.getMyFriendCode().getOrNull() }
+    }
 
     SettingsScreenContent(
         accountEmail = accountEmail,
+        accountUserCode = accountUserCode ?: stringResource(Res.string.settings_data_not_provided),
         onBack = onBack,
         onOpenFriends = onOpenFriends,
         onOpenSettings = onOpenSettings,
@@ -90,6 +100,7 @@ fun SettingsScreen(
 @Composable
 private fun SettingsScreenContent(
     accountEmail: String,
+    accountUserCode: String,
     onBack: () -> Unit,
     onOpenFriends: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -173,6 +184,12 @@ private fun SettingsScreenContent(
                     label = stringResource(Res.string.settings_account_email),
                     value = accountEmail,
                 )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsRow(
+                    icon = Icons.Default.Person,
+                    label = stringResource(Res.string.settings_account_user_code),
+                    value = accountUserCode,
+                )
             }
 
             SettingsSection(title = stringResource(Res.string.settings_app_section)) {
@@ -183,7 +200,7 @@ private fun SettingsScreenContent(
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 SettingsRow(
-                    icon = Icons.Default.Person,
+                    icon = Icons.Default.Computer,
                     label = stringResource(Res.string.settings_developer),
                     value = AppMetadata.DEVELOPER,
                 )
@@ -329,6 +346,7 @@ private fun SettingsScreenPreview() {
     SecretariaTheme {
         SettingsScreenContent(
             accountEmail = "user@example.com",
+            accountUserCode = "261051",
             onBack = {},
             onOpenFriends = {},
             onOpenSettings = {},
