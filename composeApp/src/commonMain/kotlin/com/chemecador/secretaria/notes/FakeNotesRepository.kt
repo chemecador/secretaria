@@ -48,12 +48,19 @@ class FakeNotesRepository : NotesRepository {
         noteId: String,
         title: String,
         content: String,
+        completed: Boolean,
+        color: Long,
     ): Result<Note> {
         val list = notes[notesKey(ownerId, listId)]
             ?: return Result.failure(IllegalStateException("List not found"))
         val index = list.indexOfFirst { it.id == noteId }
         if (index == -1) return Result.failure(IllegalStateException("Note not found"))
-        val updated = list[index].copy(title = title, content = content)
+        val updated = list[index].copy(
+            title = title,
+            content = content,
+            completed = completed,
+            color = color,
+        )
         list[index] = updated
         return Result.success(updated)
     }
@@ -68,6 +75,7 @@ class FakeNotesRepository : NotesRepository {
                     createdAt = Instant.parse("2026-03-28T12:05:00Z"),
                     completed = true,
                     creator = "Alex",
+                    color = 0xFFC8E6C9L,
                 ),
                 Note(
                     id = "shopping-2",
@@ -76,6 +84,7 @@ class FakeNotesRepository : NotesRepository {
                     createdAt = Instant.parse("2026-03-28T12:06:00Z"),
                     completed = false,
                     creator = "Alex",
+                    color = 0xFFFFF9C4L,
                 ),
                 Note(
                     id = "shopping-3",
@@ -84,6 +93,7 @@ class FakeNotesRepository : NotesRepository {
                     createdAt = Instant.parse("2026-03-28T12:07:00Z"),
                     completed = false,
                     creator = "Alex",
+                    color = 0xFFFFE0B2L,
                 ),
                 Note(
                     id = "shopping-4",
@@ -92,6 +102,7 @@ class FakeNotesRepository : NotesRepository {
                     createdAt = Instant.parse("2026-03-28T12:08:00Z"),
                     completed = false,
                     creator = "Alex",
+                    color = 0xFFFFCDD2L,
                 ),
             ),
             notesKey("Alex", "work") to listOf(
@@ -102,6 +113,7 @@ class FakeNotesRepository : NotesRepository {
                     createdAt = Instant.parse("2026-03-22T12:10:00Z"),
                     order = 0,
                     creator = "Alex",
+                    color = 0xFFBBDEFBL,
                 ),
                 Note(
                     id = "work-2",
@@ -110,6 +122,7 @@ class FakeNotesRepository : NotesRepository {
                     createdAt = Instant.parse("2026-03-22T12:11:00Z"),
                     order = 1,
                     creator = "Alex",
+                    color = 0xFFD1C4E9L,
                 ),
                 Note(
                     id = "work-3",
@@ -118,6 +131,7 @@ class FakeNotesRepository : NotesRepository {
                     createdAt = Instant.parse("2026-03-22T12:12:00Z"),
                     order = 2,
                     creator = "Alex",
+                    color = 0xFFE0E0E0L,
                 ),
             ),
             notesKey("Alex", "travel") to listOf(
@@ -127,6 +141,7 @@ class FakeNotesRepository : NotesRepository {
                     content = "Barrio Shinjuku, 4 noches",
                     createdAt = Instant.parse("2026-03-30T12:15:00Z"),
                     creator = "Alex",
+                    color = 0xFFB2DFDBL,
                 ),
                 Note(
                     id = "travel-2",
@@ -134,6 +149,7 @@ class FakeNotesRepository : NotesRepository {
                     content = "7 días, comprarlo antes de salir",
                     createdAt = Instant.parse("2026-03-30T12:16:00Z"),
                     creator = "Alex",
+                    color = 0xFFFFF9C4L,
                 ),
                 Note(
                     id = "travel-3",
@@ -141,6 +157,7 @@ class FakeNotesRepository : NotesRepository {
                     content = "Cobertura médica y cancelación",
                     createdAt = Instant.parse("2026-03-30T12:17:00Z"),
                     creator = "Alex",
+                    color = 0xFFF8BBD0L,
                 ),
             ),
             notesKey("Marta", "books") to listOf(
@@ -151,6 +168,7 @@ class FakeNotesRepository : NotesRepository {
                     createdAt = Instant.parse("2026-02-18T12:20:00Z"),
                     order = 0,
                     creator = "Marta",
+                    color = 0xFFE1BEE7L,
                 ),
                 Note(
                     id = "books-2",
@@ -159,6 +177,7 @@ class FakeNotesRepository : NotesRepository {
                     createdAt = Instant.parse("2026-02-18T12:21:00Z"),
                     order = 1,
                     creator = "Marta",
+                    color = 0xFFBBDEFBL,
                 ),
                 Note(
                     id = "books-3",
@@ -167,6 +186,7 @@ class FakeNotesRepository : NotesRepository {
                     createdAt = Instant.parse("2026-02-18T12:22:00Z"),
                     order = 2,
                     creator = "Marta",
+                    color = 0xFFFFE0B2L,
                 ),
             ),
         )

@@ -79,6 +79,8 @@ class FirestoreNotesRepository(
         noteId: String,
         title: String,
         content: String,
+        completed: Boolean,
+        color: Long,
     ): Result<Note> {
         return try {
             val docRef = notesCollection(ownerId, listId).document(noteId)
@@ -86,6 +88,8 @@ class FirestoreNotesRepository(
                 mapOf(
                     "title" to title,
                     "content" to content,
+                    "completed" to completed,
+                    "color" to color,
                 )
             ).await()
             val updated = docRef.get().await()

@@ -1,8 +1,10 @@
 package com.chemecador.secretaria
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -34,38 +36,39 @@ fun SecretariaOverflowMenu(
     var showMenu by remember { mutableStateOf(false) }
     var showLogoutConfirmation by remember { mutableStateOf(false) }
 
-    Box {
-        IconButton(onClick = { showMenu = true }) {
+    Row {
+        IconButton(onClick = onOpenFriends) {
             Icon(
-                imageVector = Icons.Default.MoreVert,
-                contentDescription = null,
+                imageVector = Icons.Default.People,
+                contentDescription = stringResource(Res.string.menu_friends),
             )
         }
-        DropdownMenu(
-            expanded = showMenu,
-            onDismissRequest = { showMenu = false },
-        ) {
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.menu_friends)) },
-                onClick = {
-                    showMenu = false
-                    onOpenFriends()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.menu_settings)) },
-                onClick = {
-                    showMenu = false
-                    onOpenSettings()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.menu_logout)) },
-                onClick = {
-                    showMenu = false
-                    showLogoutConfirmation = true
-                },
-            )
+        Box {
+            IconButton(onClick = { showMenu = true }) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = null,
+                )
+            }
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.menu_settings)) },
+                    onClick = {
+                        showMenu = false
+                        onOpenSettings()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.menu_logout)) },
+                    onClick = {
+                        showMenu = false
+                        showLogoutConfirmation = true
+                    },
+                )
+            }
         }
     }
 

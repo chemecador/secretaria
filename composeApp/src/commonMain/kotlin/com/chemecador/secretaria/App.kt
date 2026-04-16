@@ -229,8 +229,14 @@ fun App(
                             )
                             NoteDetailScreen(
                                 note = current.note,
-                                onSave = { title, content ->
-                                    notesViewModel.updateNote(current.note.id, title, content)
+                                onSave = { title, content, completed, color ->
+                                    notesViewModel.updateNote(
+                                        noteId = current.note.id,
+                                        title = title,
+                                        content = content,
+                                        completed = completed,
+                                        color = color,
+                                    )
                                     screen = backToNotes
                                 },
                                 onDelete = {

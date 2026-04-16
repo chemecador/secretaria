@@ -87,6 +87,8 @@ internal class FirestoreIosNotesRepository(
         noteId: String,
         title: String,
         content: String,
+        completed: Boolean,
+        color: Long,
     ): Result<Note> =
         runCatching {
             val updated = firestore.patchDocument(
@@ -94,8 +96,10 @@ internal class FirestoreIosNotesRepository(
                 fields = buildJsonObject {
                     put("title", firestoreString(title))
                     put("content", firestoreString(content))
+                    put("completed", firestoreBoolean(completed))
+                    put("color", firestoreLong(color))
                 },
-                updateMask = listOf("title", "content"),
+                updateMask = listOf("title", "content", "completed", "color"),
             )
             val fields = updated.fields
             Note(

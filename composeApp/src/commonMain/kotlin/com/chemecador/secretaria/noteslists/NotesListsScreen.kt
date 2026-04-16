@@ -2,6 +2,7 @@ package com.chemecador.secretaria.noteslists
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,11 +15,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -27,6 +33,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +58,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.chemecador.secretaria.SecretariaOverflowMenu
@@ -590,29 +600,29 @@ private fun ListOptionsDialog(
         textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { Text(listName) },
         text = {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(bottom = 4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                )
                 if (isOwner) {
-                    TextButton(
+                    OptionRow(
+                        icon = Icons.Outlined.Share,
+                        label = stringResource(Res.string.share_list),
                         onClick = onShare,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(Res.string.share_list))
-                    }
-                    TextButton(
+                    )
+                    OptionRow(
+                        icon = Icons.Outlined.Edit,
+                        label = stringResource(Res.string.edit_list),
                         onClick = onEdit,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(Res.string.edit_list))
-                    }
-                    TextButton(
+                    )
+                    OptionRow(
+                        icon = Icons.Outlined.DeleteOutline,
+                        label = stringResource(Res.string.delete),
+                        tint = MaterialTheme.colorScheme.error,
+                        textColor = MaterialTheme.colorScheme.error,
                         onClick = onDelete,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = stringResource(Res.string.delete),
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
+                    )
                 }
             }
         },
@@ -623,6 +633,32 @@ private fun ListOptionsDialog(
             }
         },
     )
+}
+
+@Composable
+private fun OptionRow(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    tint: Color = MaterialTheme.colorScheme.primary,
+    textColor: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = tint)
+        Spacer(Modifier.width(16.dp))
+        Text(
+            text = label,
+            color = textColor,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+    }
 }
 
 @Composable

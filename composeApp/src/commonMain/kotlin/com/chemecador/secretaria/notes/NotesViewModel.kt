@@ -38,9 +38,23 @@ class NotesViewModel(
         }
     }
 
-    fun updateNote(noteId: String, title: String, content: String) {
+    fun updateNote(
+        noteId: String,
+        title: String,
+        content: String,
+        completed: Boolean,
+        color: Long,
+    ) {
         viewModelScope.launch {
-            repository.updateNote(ownerId, listId, noteId, title, content)
+            repository.updateNote(
+                ownerId = ownerId,
+                listId = listId,
+                noteId = noteId,
+                title = title,
+                content = content,
+                completed = completed,
+                color = color,
+            )
                 .onSuccess { fetchNotes() }
                 .onFailure { throwable ->
                     _state.update { it.copy(errorMessage = throwable.message) }

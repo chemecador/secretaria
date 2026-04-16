@@ -10,5 +10,7 @@ interface NotesRepository {
         noteId: String,
         title: String,
         content: String,
+        completed: Boolean,
+        color: Long,
     ): Result<Note>
 }

@@ -223,12 +223,20 @@ class NotesViewModelTest {
         assertEquals(1, viewModel.state.value.notes.size)
 
         val noteId = viewModel.state.value.notes[0].id
-        viewModel.updateNote(noteId, "Editado", "contenido editado")
+        viewModel.updateNote(
+            noteId = noteId,
+            title = "Editado",
+            content = "contenido editado",
+            completed = true,
+            color = 0xFFC8E6C9L,
+        )
         advanceUntilIdle()
 
         assertEquals(1, viewModel.state.value.notes.size)
         assertEquals("Editado", viewModel.state.value.notes[0].title)
         assertEquals("contenido editado", viewModel.state.value.notes[0].content)
+        assertTrue(viewModel.state.value.notes[0].completed)
+        assertEquals(0xFFC8E6C9L, viewModel.state.value.notes[0].color)
         assertNull(viewModel.state.value.errorMessage)
     }
 
@@ -240,7 +248,13 @@ class NotesViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        viewModel.updateNote("any", "titulo", "contenido")
+        viewModel.updateNote(
+            noteId = "any",
+            title = "titulo",
+            content = "contenido",
+            completed = false,
+            color = 0xFFFFFFFFL,
+        )
         advanceUntilIdle()
 
         assertEquals("fallo al actualizar", viewModel.state.value.errorMessage)
@@ -285,6 +299,8 @@ class NotesViewModelTest {
             noteId: String,
             title: String,
             content: String,
+            completed: Boolean,
+            color: Long,
         ): Result<Note> = throw UnsupportedOperationException()
 
         fun release() {
@@ -317,6 +333,8 @@ class NotesViewModelTest {
             noteId: String,
             title: String,
             content: String,
+            completed: Boolean,
+            color: Long,
         ): Result<Note> = throw UnsupportedOperationException()
     }
 
@@ -347,6 +365,8 @@ class NotesViewModelTest {
             noteId: String,
             title: String,
             content: String,
+            completed: Boolean,
+            color: Long,
         ): Result<Note> = throw UnsupportedOperationException()
     }
 
@@ -386,12 +406,19 @@ class NotesViewModelTest {
             noteId: String,
             title: String,
             content: String,
+            completed: Boolean,
+            color: Long,
         ): Result<Note> {
             val list = notes[notesKey(ownerId, listId)]
                 ?: return Result.failure(IllegalStateException("List not found"))
             val index = list.indexOfFirst { it.id == noteId }
             if (index == -1) return Result.failure(IllegalStateException("Note not found"))
-            val updated = list[index].copy(title = title, content = content)
+            val updated = list[index].copy(
+                title = title,
+                content = content,
+                completed = completed,
+                color = color,
+            )
             list[index] = updated
             return Result.success(updated)
         }
@@ -420,6 +447,8 @@ class NotesViewModelTest {
             noteId: String,
             title: String,
             content: String,
+            completed: Boolean,
+            color: Long,
         ): Result<Note> = throw UnsupportedOperationException()
     }
 
@@ -446,6 +475,8 @@ class NotesViewModelTest {
             noteId: String,
             title: String,
             content: String,
+            completed: Boolean,
+            color: Long,
         ): Result<Note> = throw UnsupportedOperationException()
     }
 
@@ -472,6 +503,8 @@ class NotesViewModelTest {
             noteId: String,
             title: String,
             content: String,
+            completed: Boolean,
+            color: Long,
         ): Result<Note> = Result.failure(IllegalStateException("fallo al actualizar"))
     }
 
