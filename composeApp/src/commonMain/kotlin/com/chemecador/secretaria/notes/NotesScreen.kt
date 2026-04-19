@@ -51,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.chemecador.secretaria.PlatformBackHandler
 import com.chemecador.secretaria.SecretariaOverflowMenu
 import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
@@ -90,6 +91,11 @@ fun NotesScreen(
     LaunchedEffect(viewModel) {
         viewModel.load()
     }
+
+    PlatformBackHandler(
+        enabled = !showCreateDialog && noteToDelete == null,
+        onBack = onBack,
+    )
 
     Scaffold(
         modifier = modifier,

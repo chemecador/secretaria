@@ -292,6 +292,7 @@ kotlin {
             implementation(libs.kotlinx.coroutinesTest)
         }
         androidMain.dependencies {
+            implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.credentials)
             implementation(libs.androidx.credentials.play.services.auth)
             implementation(libs.firebase.auth)

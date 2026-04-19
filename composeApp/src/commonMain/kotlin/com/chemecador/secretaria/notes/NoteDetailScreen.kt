@@ -58,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.chemecador.secretaria.PlatformBackHandler
 import com.chemecador.secretaria.SecretariaOverflowMenu
 import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
@@ -117,6 +118,11 @@ fun NoteDetailScreen(
             onBack()
         }
     }
+
+    PlatformBackHandler(
+        enabled = !showDeleteDialog && !showUnsavedDialog,
+        onBack = attemptBack,
+    )
 
     if (showUnsavedDialog) {
         AlertDialog(

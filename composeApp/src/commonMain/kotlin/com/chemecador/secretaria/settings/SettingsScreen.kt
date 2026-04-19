@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.chemecador.secretaria.PlatformBackHandler
 import com.chemecador.secretaria.SecretariaOverflowMenu
 import com.chemecador.secretaria.SecretariaTheme
 import com.chemecador.secretaria.SecretariaTopBarColor
@@ -109,6 +110,11 @@ private fun SettingsScreenContent(
 ) {
     val uriHandler = LocalUriHandler.current
     var showSendMailDialog by remember { mutableStateOf(false) }
+
+    PlatformBackHandler(
+        enabled = !showSendMailDialog,
+        onBack = onBack,
+    )
 
     if (showSendMailDialog) {
         AlertDialog(
