@@ -6,6 +6,8 @@ import com.chemecador.secretaria.friends.FriendsViewModel
 import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.login.FakeAuthRepository
 import com.chemecador.secretaria.login.LoginViewModel
+import com.chemecador.secretaria.messaging.FcmTokenRegister
+import com.chemecador.secretaria.messaging.NoopFcmTokenRegister
 import com.chemecador.secretaria.notes.FakeNotesRepository
 import com.chemecador.secretaria.notes.NotesRepository
 import com.chemecador.secretaria.notes.NotesViewModel
@@ -40,4 +42,5 @@ private fun previewPlatformModule(): Module = module {
     single<NotesListsRepository> { FakeNotesListsRepository() }
     single<NotesRepository> { FakeNotesRepository() }
     single<FriendsRepository> { FakeFriendsRepository() }
+    single<FcmTokenRegister> { NoopFcmTokenRegister() }
 }

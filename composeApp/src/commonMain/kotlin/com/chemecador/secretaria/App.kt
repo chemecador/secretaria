@@ -25,6 +25,7 @@ import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.login.LoginScreen
 import com.chemecador.secretaria.login.LoginViewModel
 import com.chemecador.secretaria.login.rememberGoogleSignInController
+import com.chemecador.secretaria.messaging.FcmTokenRegister
 import com.chemecador.secretaria.notes.Note
 import com.chemecador.secretaria.notes.NoteDetailScreen
 import com.chemecador.secretaria.notes.NotesScreen
@@ -82,6 +83,7 @@ fun App(
 
     KoinApplication(koinConfig) {
         val authRepository = koinInject<AuthRepository>()
+        val fcmTokenRegister = koinInject<FcmTokenRegister>()
         val googleSignInController = rememberGoogleSignInController(googleServerClientId)
         val loginViewModel = koinViewModel<LoginViewModel>()
         val listsViewModel = koinViewModel<NotesListsViewModel>()
@@ -108,6 +110,7 @@ fun App(
         }
         val logout: () -> Unit = {
             coroutineScope.launch {
+                fcmTokenRegister.unregisterCurrentToken()
                 authRepository.logout()
                 googleSignInController?.clearCredentialState()
                 loginViewModel.resetState()
@@ -120,6 +123,9 @@ fun App(
             val restored = authRepository.restoreSession().getOrDefault(false)
             screen = if (restored) Screen.Lists else Screen.Login
             utilityReturnScreen = Screen.Lists
+            if (restored) {
+                fcmTokenRegister.registerCurrentToken()
+            }
         }
 
         SecretariaTheme {
@@ -149,6 +155,9 @@ fun App(
                                 onLoginSuccess = {
                                     utilityReturnScreen = Screen.Lists
                                     screen = Screen.Lists
+                                    coroutineScope.launch {
+                                        fcmTokenRegister.registerCurrentToken()
+                                    }
                                 },
                                 onGoogleLogin = {
                                     loginViewModel.loginWithGoogle(

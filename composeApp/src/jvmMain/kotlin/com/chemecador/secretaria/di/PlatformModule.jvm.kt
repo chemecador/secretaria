@@ -10,6 +10,8 @@ import com.chemecador.secretaria.login.FirebaseIdTokenProvider
 import com.chemecador.secretaria.login.FirebaseRestAuthRepository
 import com.chemecador.secretaria.login.SessionStore
 import com.chemecador.secretaria.login.resolveFirebaseApiKey
+import com.chemecador.secretaria.messaging.FcmTokenRegister
+import com.chemecador.secretaria.messaging.NoopFcmTokenRegister
 import com.chemecador.secretaria.notes.FirestoreRestNotesRepository
 import com.chemecador.secretaria.notes.NotesRepository
 import com.chemecador.secretaria.noteslists.FirestoreRestNotesListsRepository
@@ -19,6 +21,7 @@ import org.koin.dsl.module
 
 internal actual fun platformModule(): Module = module {
     single<SessionStore> { FileSessionStore() }
+    single<FcmTokenRegister> { NoopFcmTokenRegister() }
     single<AuthRepository> {
         FirebaseRestAuthRepository(
             apiKey = resolveFirebaseApiKey(),

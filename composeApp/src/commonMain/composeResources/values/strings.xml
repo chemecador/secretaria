@@ -55,7 +55,7 @@
     <string name="label_email">Email</string>
     <string name="label_password">Contraseña</string>
     <string name="label_login">Iniciar sesión</string>
-    <string name="label_sign_up">Registrarse</string>
+    <string name="label_sign_up">Registerse</string>
     <string name="label_login_google">Iniciar sesión con Google</string>
     <string name="label_login_guest">Acceder como invitado</string>
     <string name="login_or_divider">O</string>
