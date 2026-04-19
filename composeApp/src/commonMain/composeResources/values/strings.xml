@@ -49,7 +49,17 @@
     <string name="share_list">Compartir</string>
     <string name="share_list_title">Compartir lista</string>
     <string name="share_list_empty_friends">Todavía no tienes amigos para compartir esta lista.</string>
+    <string name="share_list_no_available_friends">No hay más amigos disponibles para compartir esta lista.</string>
+    <string name="share_list_current_access">Compartida con</string>
+    <string name="share_list_available_friends">Amigos disponibles</string>
+    <string name="share_list_private">Nadie</string>
+    <string name="share_list_shared_with_one">Compartida con %1$s</string>
+    <string name="share_list_shared_with_many">Compartida con %1$s y %2$d más</string>
+    <string name="share_list_shared_with_count_one">Compartida con 1 persona</string>
+    <string name="share_list_shared_with_count_many">Compartida con %1$d personas</string>
     <string name="share_list_success">Lista compartida con %1$s.</string>
+    <string name="unshare_list">Dejar de compartir</string>
+    <string name="unshare_list_success">La lista ya no está compartida con %1$s.</string>
 
     <!-- Login -->
     <string name="label_email">Email</string>

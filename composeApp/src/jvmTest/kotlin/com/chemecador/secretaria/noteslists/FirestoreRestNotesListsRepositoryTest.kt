@@ -78,8 +78,10 @@ class FirestoreRestNotesListsRepositoryTest {
         assertEquals(2, lists.size)
         assertEquals("user-123", lists[0].ownerId)
         assertEquals(false, lists[0].isShared)
+        assertEquals(listOf("user-123"), lists[0].contributors)
         assertEquals("user-999", lists[1].ownerId)
         assertEquals(true, lists[1].isShared)
+        assertEquals(listOf("user-999", "user-123"), lists[1].contributors)
         assertEquals(
             "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents:runQuery",
             transport.requests.single().url,
@@ -162,6 +164,67 @@ class FirestoreRestNotesListsRepositoryTest {
         assertTrue(transport.requests[1].body!!.contains(""""contributors""""))
         assertTrue(transport.requests[1].body!!.contains(""""stringValue":"user-123""""))
         assertTrue(transport.requests[1].body!!.contains(""""stringValue":"friend-1""""))
+    }
+
+    @Test
+    fun unshareList_removesContributorWithPrecondition() = kotlinx.coroutines.test.runTest {
+        val transport = RecordingFirestoreTransport(
+            responses = listOf(
+                FirebaseFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "name": "projects/project-id/databases/(default)/documents/users/user-123/noteslist/list-1",
+                          "fields": {
+                            "contributors": {
+                              "arrayValue": {
+                                "values": [
+                                  { "stringValue": "user-123" },
+                                  { "stringValue": "friend-1" }
+                                ]
+                              }
+                            }
+                          },
+                          "updateTime": "2026-04-15T10:00:00Z"
+                        }
+                    """.trimIndent(),
+                ),
+                FirebaseFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "name": "projects/project-id/databases/(default)/documents/users/user-123/noteslist/list-1",
+                          "fields": {
+                            "contributors": {
+                              "arrayValue": {
+                                "values": [
+                                  { "stringValue": "user-123" }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                    """.trimIndent(),
+                ),
+            ),
+        )
+        val repository = FirestoreRestNotesListsRepository(
+            authRepository = LoggedInAuthRepository("user-123"),
+            firestore = FirebaseFirestoreRestApi(
+                projectId = "project-id",
+                tokenProvider = StaticTokenProvider("desktop-token"),
+                transport = transport,
+            ),
+        )
+
+        val result = repository.unshareList("list-1", "friend-1")
+
+        assertTrue(result.isSuccess)
+        assertEquals("GET", transport.requests[0].method)
+        assertEquals("PATCH", transport.requests[1].method)
+        assertTrue(transport.requests[1].body!!.contains(""""contributors""""))
+        assertTrue(transport.requests[1].body!!.contains(""""stringValue":"user-123""""))
+        assertTrue(!transport.requests[1].body!!.contains(""""stringValue":"friend-1""""))
     }
 
     private class RecordingFirestoreTransport(

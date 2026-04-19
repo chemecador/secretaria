@@ -7,9 +7,10 @@ data class NotesListsState(
     val items: List<NotesListSummary> = emptyList(),
     val sortOption: SortOption = SortOption.DATE_DESC,
     val errorMessage: String? = null,
+    val collaboratorsByListId: Map<String, List<ListCollaborator>> = emptyMap(),
     val shareableFriends: List<FriendSummary> = emptyList(),
     val isLoadingShareableFriends: Boolean = false,
-    val isSharingList: Boolean = false,
+    val isUpdatingSharing: Boolean = false,
     val shareErrorMessage: String? = null,
-    val lastSharedFriendName: String? = null,
+    val shareFeedback: ListSharingFeedback? = null,
 )

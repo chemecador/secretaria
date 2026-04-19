@@ -104,6 +104,18 @@ class FirestoreNotesListsRepository(
         }
     }
 
+    override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> {
+        return try {
+            val userId = requireUserId()
+            val docRef = firestore.collection(USERS).document(userId)
+                .collection(NOTES_LIST).document(listId)
+            docRef.update(CONTRIBUTORS, FieldValue.arrayRemove(friendUserId)).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     companion object {
         private const val USERS = "users"
         private const val NOTES_LIST = "noteslist"
@@ -128,5 +140,6 @@ private fun com.google.firebase.firestore.DocumentSnapshot.toNotesListSummary(
         } ?: kotlin.time.Instant.fromEpochMilliseconds(0),
         isOrdered = getBoolean("ordered") ?: false,
         isShared = ownerId != currentUserId || contributors.distinct().size > 1,
+        contributors = contributors.distinct(),
     )
 }

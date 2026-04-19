@@ -12,13 +12,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
@@ -95,13 +97,22 @@ import secretaria.composeapp.generated.resources.notes_lists_mine_tab
 import secretaria.composeapp.generated.resources.notes_lists_shared_tab
 import secretaria.composeapp.generated.resources.order_by
 import secretaria.composeapp.generated.resources.share_list
+import secretaria.composeapp.generated.resources.share_list_available_friends
+import secretaria.composeapp.generated.resources.share_list_current_access
 import secretaria.composeapp.generated.resources.share_list_empty_friends
+import secretaria.composeapp.generated.resources.share_list_no_available_friends
+import secretaria.composeapp.generated.resources.share_list_private
+import secretaria.composeapp.generated.resources.share_list_shared_with_count_many
+import secretaria.composeapp.generated.resources.share_list_shared_with_count_one
+import secretaria.composeapp.generated.resources.share_list_shared_with_many
+import secretaria.composeapp.generated.resources.share_list_shared_with_one
 import secretaria.composeapp.generated.resources.share_list_success
-import secretaria.composeapp.generated.resources.share_list_title
 import secretaria.composeapp.generated.resources.sort_date_asc
 import secretaria.composeapp.generated.resources.sort_date_desc
 import secretaria.composeapp.generated.resources.sort_name_asc
 import secretaria.composeapp.generated.resources.sort_name_desc
+import secretaria.composeapp.generated.resources.unshare_list
+import secretaria.composeapp.generated.resources.unshare_list_success
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,8 +144,18 @@ fun NotesListsScreen(
         viewModel.load()
     }
 
-    val shareSuccessMessage = state.lastSharedFriendName?.let { friendName ->
-        stringResource(Res.string.share_list_success, friendName)
+    val shareFeedbackMessage = state.shareFeedback?.let { feedback ->
+        when (feedback.action) {
+            ListSharingAction.SHARED -> stringResource(
+                Res.string.share_list_success,
+                feedback.friendName
+            )
+
+            ListSharingAction.UNSHARED -> stringResource(
+                Res.string.unshare_list_success,
+                feedback.friendName
+            )
+        }
     }
     val visibleItems = state.items.filter { item ->
         when (selectedSection) {
@@ -152,10 +173,10 @@ fun NotesListsScreen(
         viewModel.loadShareableFriends(selectedList)
     }
 
-    LaunchedEffect(shareSuccessMessage) {
-        val message = shareSuccessMessage ?: return@LaunchedEffect
+    LaunchedEffect(shareFeedbackMessage) {
+        val message = shareFeedbackMessage ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(message)
-        viewModel.consumeShareSuccess()
+        viewModel.consumeShareFeedback()
     }
 
     Scaffold(
@@ -224,12 +245,16 @@ fun NotesListsScreen(
         listToShare?.let { list ->
             ShareListDialog(
                 listName = list.name,
+                collaborators = state.collaboratorsByListId[list.id].orEmpty(),
                 friends = state.shareableFriends,
                 isLoading = state.isLoadingShareableFriends,
-                isSharing = state.isSharingList,
+                isUpdatingSharing = state.isUpdatingSharing,
                 errorMessage = state.shareErrorMessage,
                 onShare = { friend ->
                     viewModel.shareList(list, friend)
+                },
+                onUnshare = { collaborator ->
+                    viewModel.unshareList(list, collaborator)
                 },
                 onDismiss = {
                     listToShare = null
@@ -305,6 +330,7 @@ fun NotesListsScreen(
 
                 else -> NotesListsContent(
                     items = visibleItems,
+                    collaboratorsByListId = state.collaboratorsByListId,
                     onListSelected = onListSelected,
                     currentUserId = currentUserId,
                     onListLongClick = openListOptions,
@@ -392,6 +418,7 @@ private fun SortSelector(
 @Composable
 private fun NotesListsContent(
     items: List<NotesListSummary>,
+    collaboratorsByListId: Map<String, List<ListCollaborator>>,
     onListSelected: (id: String, ownerId: String, name: String, isOrdered: Boolean) -> Unit,
     currentUserId: String?,
     onListLongClick: (NotesListSummary) -> Unit,
@@ -405,6 +432,8 @@ private fun NotesListsContent(
         items(items, key = { it.id }) { item ->
             NotesListCard(
                 item = item,
+                collaborators = collaboratorsByListId[item.id].orEmpty(),
+                currentUserId = currentUserId,
                 onClick = { onListSelected(item.id, item.ownerId, item.name, item.isOrdered) },
                 onLongClick = if (item.ownerId == currentUserId) {
                     { onListLongClick(item) }
@@ -425,10 +454,18 @@ private fun NotesListsContent(
 @Composable
 private fun NotesListCard(
     item: NotesListSummary,
+    collaborators: List<ListCollaborator>,
+    currentUserId: String?,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
     onOptionsClick: (() -> Unit)?,
 ) {
+    val sharingSummary = sharingSummaryText(
+        item = item,
+        collaborators = collaborators,
+        currentUserId = currentUserId,
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -469,6 +506,13 @@ private fun NotesListCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            sharingSummary?.let { summary ->
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -488,6 +532,42 @@ private fun NotesListCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun sharingSummaryText(
+    item: NotesListSummary,
+    collaborators: List<ListCollaborator>,
+    currentUserId: String?,
+): String? {
+    if (item.ownerId != currentUserId) return null
+
+    val sharedCount = item.sharedWithUserIds.size
+    if (sharedCount == 0) return null
+
+    return if (collaborators.isNotEmpty()) {
+        val firstResolvedCollaborator =
+            collaborators.firstOrNull { collaborator -> collaborator.isResolvedName }
+        if (firstResolvedCollaborator != null && collaborators.size == 1) {
+            stringResource(Res.string.share_list_shared_with_one, firstResolvedCollaborator.name)
+        } else if (firstResolvedCollaborator != null) {
+            stringResource(
+                Res.string.share_list_shared_with_many,
+                firstResolvedCollaborator.name,
+                collaborators.size - 1,
+            )
+        } else {
+            if (sharedCount == 1) {
+                stringResource(Res.string.share_list_shared_with_count_one)
+            } else {
+                stringResource(Res.string.share_list_shared_with_count_many, sharedCount)
+            }
+        }
+    } else if (sharedCount == 1) {
+        stringResource(Res.string.share_list_shared_with_count_one)
+    } else {
+        stringResource(Res.string.share_list_shared_with_count_many, sharedCount)
     }
 }
 
@@ -669,11 +749,13 @@ private fun OptionRow(
 @Composable
 private fun ShareListDialog(
     listName: String,
+    collaborators: List<ListCollaborator>,
     friends: List<FriendSummary>,
     isLoading: Boolean,
-    isSharing: Boolean,
+    isUpdatingSharing: Boolean,
     errorMessage: String?,
     onShare: (FriendSummary) -> Unit,
+    onUnshare: (ListCollaborator) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -681,12 +763,11 @@ private fun ShareListDialog(
         containerColor = MaterialTheme.colorScheme.surface,
         titleContentColor = MaterialTheme.colorScheme.onSurface,
         textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        title = { Text(stringResource(Res.string.share_list_title)) },
+        title = { Text(listName) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = listName,
-                    style = MaterialTheme.typography.titleSmall,
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 )
 
                 if (!errorMessage.isNullOrBlank()) {
@@ -707,36 +788,77 @@ private fun ShareListDialog(
                         }
                     }
 
-                    friends.isEmpty() -> {
-                        Text(
-                            text = stringResource(Res.string.share_list_empty_friends),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-
                     else -> {
-                        LazyColumn(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 320.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                .heightIn(max = 360.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            items(friends, key = { it.friendshipId }) { friend ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Text(
-                                        text = friend.name,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    TextButton(
-                                        enabled = !isSharing,
-                                        onClick = { onShare(friend) },
+                            SharingSectionTitle(stringResource(Res.string.share_list_current_access))
+
+                            if (collaborators.isEmpty()) {
+                                Text(
+                                    text = stringResource(Res.string.share_list_private),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            } else {
+                                collaborators.forEach { collaborator ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
                                     ) {
-                                        Text(stringResource(Res.string.share_list))
+                                        Text(
+                                            text = collaborator.name,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        TextButton(
+                                            enabled = !isUpdatingSharing,
+                                            onClick = { onUnshare(collaborator) },
+                                        ) {
+                                            Text(
+                                                text = stringResource(Res.string.unshare_list),
+                                                color = MaterialTheme.colorScheme.error,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            SharingSectionTitle(stringResource(Res.string.share_list_available_friends))
+
+                            if (friends.isEmpty()) {
+                                Text(
+                                    text = if (collaborators.isEmpty()) {
+                                        stringResource(Res.string.share_list_empty_friends)
+                                    } else {
+                                        stringResource(Res.string.share_list_no_available_friends)
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            } else {
+                                friends.forEach { friend ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                    ) {
+                                        Text(
+                                            text = friend.name,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        TextButton(
+                                            enabled = !isUpdatingSharing,
+                                            onClick = { onShare(friend) },
+                                        ) {
+                                            Text(stringResource(Res.string.share_list))
+                                        }
                                     }
                                 }
                             }
@@ -748,12 +870,23 @@ private fun ShareListDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(
-                enabled = !isSharing,
+                enabled = !isUpdatingSharing,
                 onClick = onDismiss,
             ) {
                 Text(stringResource(Res.string.cancel))
             }
         },
+    )
+}
+
+@Composable
+private fun SharingSectionTitle(
+    text: String,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
     )
 }
 

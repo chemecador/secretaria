@@ -10,4 +10,10 @@ data class NotesListSummary(
     val createdAt: Instant,
     val isOrdered: Boolean,
     val isShared: Boolean = false,
+    val contributors: List<String> = emptyList(),
 )
+
+val NotesListSummary.sharedWithUserIds: List<String>
+    get() = contributors
+        .distinct()
+        .filterNot { contributorId -> contributorId == ownerId }

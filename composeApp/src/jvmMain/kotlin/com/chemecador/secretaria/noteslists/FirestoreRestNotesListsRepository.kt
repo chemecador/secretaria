@@ -60,6 +60,7 @@ internal class FirestoreRestNotesListsRepository(
                 createdAt = fields.firestoreInstant("date") ?: nowProvider(),
                 isOrdered = fields.firestoreBoolean("ordered") ?: false,
                 isShared = false,
+                contributors = fields.firestoreStringList(CONTRIBUTORS).ifEmpty { listOf(userId) },
             )
         }
 
@@ -77,6 +78,25 @@ internal class FirestoreRestNotesListsRepository(
                 ?: error("List not found")
             val contributors = (document.fields.firestoreStringList(CONTRIBUTORS) + friendUserId)
                 .distinct()
+            firestore.patchDocument(
+                documentPath = listDocumentPath(listId),
+                fields = buildJsonObject {
+                    put(
+                        CONTRIBUTORS,
+                        firestoreArray(*contributors.map(::firestoreString).toTypedArray()),
+                    )
+                },
+                updateMask = listOf(CONTRIBUTORS),
+                currentDocument = document.toPrecondition(),
+            )
+        }
+
+    override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
+        runCatching {
+            val document = firestore.getDocumentOrNull(listDocumentPath(listId))
+                ?: error("List not found")
+            val contributors = document.fields.firestoreStringList(CONTRIBUTORS)
+                .filterNot { contributorId -> contributorId == friendUserId }
             firestore.patchDocument(
                 documentPath = listDocumentPath(listId),
                 fields = buildJsonObject {
@@ -115,6 +135,7 @@ internal class FirestoreRestNotesListsRepository(
                 isOrdered = fields.firestoreBoolean("ordered") ?: false,
                 isShared = ownerIdFromDocumentName(updated.name) != userId ||
                     fields.firestoreStringList("contributors").distinct().size > 1,
+                contributors = fields.firestoreStringList(CONTRIBUTORS).distinct(),
             )
         }
 
@@ -155,6 +176,7 @@ private fun FirestoreDocument.toNotesListSummary(
         createdAt = documentFields.firestoreInstant("date") ?: Instant.fromEpochMilliseconds(0),
         isOrdered = documentFields.firestoreBoolean("ordered") ?: false,
         isShared = ownerId != currentUserId || contributors.distinct().size > 1,
+        contributors = contributors.distinct(),
     )
 }
 

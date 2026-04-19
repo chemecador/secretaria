@@ -27,6 +27,7 @@ class FakeNotesListsRepository(
             createdAt = Clock.System.now(),
             isOrdered = ordered,
             isShared = false,
+            contributors = listOf("Alex"),
         )
         lists.add(newList)
         return Result.success(newList)
@@ -40,7 +41,25 @@ class FakeNotesListsRepository(
     override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> {
         val index = lists.indexOfFirst { it.id == listId }
         if (index != -1) {
-            lists[index] = lists[index].copy(isShared = true)
+            val updatedContributors = (lists[index].contributors + friendUserId).distinct()
+            lists[index] = lists[index].copy(
+                isShared = updatedContributors.size > 1,
+                contributors = updatedContributors,
+            )
+        }
+        return Result.success(Unit)
+    }
+
+    override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> {
+        val index = lists.indexOfFirst { it.id == listId }
+        if (index != -1) {
+            val updatedContributors = lists[index].contributors.filterNot { contributorId ->
+                contributorId == friendUserId
+            }
+            lists[index] = lists[index].copy(
+                isShared = updatedContributors.distinct().size > 1,
+                contributors = updatedContributors,
+            )
         }
         return Result.success(Unit)
     }
@@ -63,6 +82,7 @@ class FakeNotesListsRepository(
                 createdAt = Instant.parse("2026-03-28T12:00:00Z"),
                 isOrdered = false,
                 isShared = false,
+                contributors = listOf("Alex"),
             ),
             NotesListSummary(
                 id = "work",
@@ -72,6 +92,7 @@ class FakeNotesListsRepository(
                 createdAt = Instant.parse("2026-03-22T12:00:00Z"),
                 isOrdered = true,
                 isShared = false,
+                contributors = listOf("Alex"),
             ),
             NotesListSummary(
                 id = "travel",
@@ -81,6 +102,7 @@ class FakeNotesListsRepository(
                 createdAt = Instant.parse("2026-03-30T12:00:00Z"),
                 isOrdered = false,
                 isShared = false,
+                contributors = listOf("Alex"),
             ),
             NotesListSummary(
                 id = "books",
@@ -90,6 +112,7 @@ class FakeNotesListsRepository(
                 createdAt = Instant.parse("2026-02-18T12:00:00Z"),
                 isOrdered = true,
                 isShared = true,
+                contributors = listOf("Marta", "Alex"),
             ),
         )
     }

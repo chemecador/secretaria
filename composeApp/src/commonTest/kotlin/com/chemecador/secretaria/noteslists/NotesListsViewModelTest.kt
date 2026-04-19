@@ -307,6 +307,57 @@ class NotesListsViewModelTest {
     }
 
     @Test
+    fun load_mapsCollaboratorsForOwnerSharedList() = runTest(dispatcher) {
+        val sharedList = listSummary(
+            id = "list-1",
+            name = "Trabajo",
+            contributors = listOf(OWNER_ID, "friend-1"),
+        )
+        val repository = ImmediateRepository(Result.success(listOf(sharedList)))
+        val friendsRepository = FakeFriendsRepository(
+            friendsResult = Result.success(listOf(FriendSummary("friendship-1", "friend-1", "Marina"))),
+        )
+        val viewModel = buildViewModel(repository, friendsRepository = friendsRepository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("Marina"),
+            viewModel.state.value.collaboratorsByListId["list-1"]?.map { collaborator -> collaborator.name },
+        )
+    }
+
+    @Test
+    fun loadShareableFriends_excludesExistingCollaborators() = runTest(dispatcher) {
+        val repository = ImmediateRepository(Result.success(emptyList()))
+        val friendsRepository = FakeFriendsRepository(
+            friendsResult = Result.success(
+                listOf(
+                    FriendSummary("friendship-1", "friend-1", "Marina"),
+                    FriendSummary("friendship-2", "friend-2", "Ana"),
+                ),
+            ),
+        )
+        val viewModel = buildViewModel(repository, friendsRepository = friendsRepository)
+
+        viewModel.loadShareableFriends(
+            listSummary(
+                id = "list-1",
+                name = "Trabajo",
+                contributors = listOf(OWNER_ID, "friend-1"),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf("Ana"), viewModel.state.value.shareableFriends.map { it.name })
+        assertEquals(
+            listOf("Marina"),
+            viewModel.state.value.collaboratorsByListId["list-1"]?.map { collaborator -> collaborator.name },
+        )
+    }
+
+    @Test
     fun shareList_removesFriendFromCandidatesAndPublishesSuccess() = runTest(dispatcher) {
         val repository = MutableRepository()
         val friend = FriendSummary("friendship-1", "friend-1", "Marina")
@@ -329,7 +380,12 @@ class NotesListsViewModelTest {
         assertEquals("friend-1", repository.lastSharedFriendId)
         assertTrue(viewModel.state.value.shareableFriends.isEmpty())
         assertTrue(viewModel.state.value.items.single().isShared)
-        assertEquals("Marina", viewModel.state.value.lastSharedFriendName)
+        assertEquals("Marina", viewModel.state.value.shareFeedback?.friendName)
+        assertEquals(ListSharingAction.SHARED, viewModel.state.value.shareFeedback?.action)
+        assertEquals(
+            listOf("Marina"),
+            viewModel.state.value.collaboratorsByListId["list-1"]?.map { collaborator -> collaborator.name },
+        )
         assertEquals(null, viewModel.state.value.shareErrorMessage)
     }
 
@@ -347,6 +403,43 @@ class NotesListsViewModelTest {
         assertEquals("Solo el propietario puede modificar esta lista", viewModel.state.value.shareErrorMessage)
     }
 
+    @Test
+    fun unshareList_removesCollaboratorAndPublishesSuccess() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val friend = FriendSummary("friendship-1", "friend-1", "Marina")
+        val viewModel = buildViewModel(
+            repository,
+            friendsRepository = FakeFriendsRepository(friendsResult = Result.success(listOf(friend))),
+        )
+        repository.seed(
+            listSummary(
+                id = "list-1",
+                name = "Trabajo",
+                contributors = listOf(OWNER_ID, "friend-1"),
+            ),
+        )
+
+        viewModel.load()
+        advanceUntilIdle()
+        val list = viewModel.state.value.items.single()
+
+        viewModel.loadShareableFriends(list)
+        advanceUntilIdle()
+        val collaborator = viewModel.state.value.collaboratorsByListId["list-1"].orEmpty().single()
+
+        viewModel.unshareList(list, collaborator)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.unshareCalls)
+        assertEquals("friend-1", repository.lastUnsharedFriendId)
+        assertFalse(viewModel.state.value.items.single().isShared)
+        assertTrue(viewModel.state.value.collaboratorsByListId["list-1"].isNullOrEmpty())
+        assertEquals(listOf("Marina"), viewModel.state.value.shareableFriends.map { it.name })
+        assertEquals("Marina", viewModel.state.value.shareFeedback?.friendName)
+        assertEquals(ListSharingAction.UNSHARED, viewModel.state.value.shareFeedback?.action)
+        assertEquals(null, viewModel.state.value.shareErrorMessage)
+    }
+
     private fun buildViewModel(
         repository: NotesListsRepository,
         authRepository: AuthRepository = LoggedInAuthRepository(OWNER_ID),
@@ -362,6 +455,8 @@ class NotesListsViewModelTest {
         override suspend fun deleteList(listId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
         override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
+        override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
         override suspend fun updateList(
             listId: String,
@@ -386,6 +481,8 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
+        override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
         override suspend fun updateList(
             listId: String,
             name: String,
@@ -405,7 +502,11 @@ class NotesListsViewModelTest {
             private set
         var shareCalls = 0
             private set
+        var unshareCalls = 0
+            private set
         var lastSharedFriendId: String? = null
+            private set
+        var lastUnsharedFriendId: String? = null
             private set
 
         fun seed(list: NotesListSummary) {
@@ -437,7 +538,27 @@ class NotesListsViewModelTest {
             lastSharedFriendId = friendUserId
             val index = lists.indexOfFirst { it.id == listId }
             if (index != -1) {
-                lists[index] = lists[index].copy(isShared = true)
+                val contributors = (lists[index].contributors + friendUserId).distinct()
+                lists[index] = lists[index].copy(
+                    isShared = contributors.size > 1,
+                    contributors = contributors,
+                )
+            }
+            return Result.success(Unit)
+        }
+
+        override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> {
+            unshareCalls += 1
+            lastUnsharedFriendId = friendUserId
+            val index = lists.indexOfFirst { it.id == listId }
+            if (index != -1) {
+                val contributors = lists[index].contributors.filterNot { contributorId ->
+                    contributorId == friendUserId
+                }
+                lists[index] = lists[index].copy(
+                    isShared = contributors.distinct().size > 1,
+                    contributors = contributors,
+                )
             }
             return Result.success(Unit)
         }
@@ -466,6 +587,8 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
+        override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
         override suspend fun updateList(
             listId: String,
             name: String,
@@ -482,6 +605,8 @@ class NotesListsViewModelTest {
             Result.failure(IllegalStateException("error al eliminar"))
         override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
+        override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
         override suspend fun updateList(
             listId: String,
             name: String,
@@ -497,6 +622,8 @@ class NotesListsViewModelTest {
         override suspend fun deleteList(listId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
         override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
+        override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
         override suspend fun updateList(
             listId: String,
@@ -543,7 +670,8 @@ class NotesListsViewModelTest {
             ownerId: String = OWNER_ID,
             createdAt: Instant = Instant.parse("2026-03-28T12:00:00Z"),
             isOrdered: Boolean = false,
-            isShared: Boolean = false,
+            isShared: Boolean? = null,
+            contributors: List<String> = emptyList(),
         ): NotesListSummary = NotesListSummary(
             id = id,
             ownerId = ownerId,
@@ -551,7 +679,27 @@ class NotesListsViewModelTest {
             creator = ownerId,
             createdAt = createdAt,
             isOrdered = isOrdered,
-            isShared = isShared,
+            isShared = isShared ?: run {
+                val resolvedContributors = if (contributors.isEmpty()) {
+                    if (ownerId == OWNER_ID) {
+                        listOf(ownerId)
+                    } else {
+                        listOf(ownerId, OWNER_ID)
+                    }
+                } else {
+                    contributors
+                }
+                ownerId != OWNER_ID || resolvedContributors.distinct().size > 1
+            },
+            contributors = if (contributors.isEmpty()) {
+                if (ownerId == OWNER_ID) {
+                    listOf(ownerId)
+                } else {
+                    listOf(ownerId, OWNER_ID)
+                }
+            } else {
+                contributors
+            },
         )
     }
 }

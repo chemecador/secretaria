@@ -6,4 +6,5 @@ interface NotesListsRepository {
     suspend fun deleteList(listId: String): Result<Unit>
     suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary>
     suspend fun shareList(listId: String, friendUserId: String): Result<Unit>
+    suspend fun unshareList(listId: String, friendUserId: String): Result<Unit>
 }
