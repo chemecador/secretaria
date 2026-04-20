@@ -34,7 +34,7 @@ class SecretariaMessagingService : FirebaseMessagingService() {
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
 
-        createContentIntent(context)?.let(builder::setContentIntent)
+        createContentIntent(context, message)?.let(builder::setContentIntent)
 
         val manager = NotificationManagerCompat.from(context)
         if (manager.areNotificationsEnabled()) {
@@ -59,9 +59,22 @@ class SecretariaMessagingService : FirebaseMessagingService() {
             )
     }
 
-    private fun createContentIntent(context: Context): PendingIntent? {
+    private fun createContentIntent(context: Context, message: RemoteMessage): PendingIntent? {
         val launchIntent = Intent(context, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            val ownerId = message.data[DATA_OPEN_LIST_OWNER_ID].orEmpty()
+            val listId = message.data[DATA_OPEN_LIST_ID].orEmpty()
+            val listName = message.data[DATA_OPEN_LIST_NAME].orEmpty()
+            if (ownerId.isNotBlank() && listId.isNotBlank() && listName.isNotBlank()) {
+                action = NotificationOpenListIntent.ACTION_OPEN_LIST
+                putExtra(NotificationOpenListIntent.EXTRA_OWNER_ID, ownerId)
+                putExtra(NotificationOpenListIntent.EXTRA_LIST_ID, listId)
+                putExtra(NotificationOpenListIntent.EXTRA_LIST_NAME, listName)
+                putExtra(
+                    NotificationOpenListIntent.EXTRA_LIST_ORDERED,
+                    message.data[DATA_OPEN_LIST_ORDERED].toBoolean(),
+                )
+            }
         }
         return PendingIntent.getActivity(
             context,
@@ -82,6 +95,10 @@ class SecretariaMessagingService : FirebaseMessagingService() {
         const val DATA_BODY = "body"
         const val DATA_CHANNEL_ID = "channelId"
         const val DATA_NOTIFICATION_TAG = "notificationTag"
+        const val DATA_OPEN_LIST_ID = "openListId"
+        const val DATA_OPEN_LIST_NAME = "openListName"
+        const val DATA_OPEN_LIST_ORDERED = "openListOrdered"
+        const val DATA_OPEN_LIST_OWNER_ID = "openListOwnerId"
         const val DATA_TITLE = "title"
         const val FCM_TOKENS = "fcm_tokens"
         const val USERS = "users"

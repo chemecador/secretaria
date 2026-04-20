@@ -70,6 +70,8 @@ private fun Screen.canRestoreAfterUtilityScreen(): Boolean {
 @Preview
 fun App(
     googleServerClientId: String? = null,
+    openListRequest: OpenListRequest? = null,
+    onOpenListRequestConsumed: () -> Unit = {},
 ) {
     val inspectionMode = LocalInspectionMode.current
     val modules = remember(inspectionMode) {
@@ -92,6 +94,17 @@ fun App(
         var screen by remember { mutableStateOf<Screen>(Screen.Restoring) }
         var utilityReturnScreen by remember { mutableStateOf<Screen>(Screen.Lists) }
         val coroutineScope = rememberCoroutineScope()
+
+        fun openRequestedList(request: OpenListRequest) {
+            utilityReturnScreen = Screen.Lists
+            screen = Screen.Notes(
+                ownerId = request.ownerId,
+                listId = request.listId,
+                listName = request.listName,
+                isOrdered = request.isOrdered,
+            )
+            onOpenListRequestConsumed()
+        }
 
         val openFriends = {
             if (screen.canRestoreAfterUtilityScreen()) {
@@ -128,6 +141,12 @@ fun App(
             }
         }
 
+        LaunchedEffect(openListRequest, screen) {
+            val request = openListRequest ?: return@LaunchedEffect
+            if (screen is Screen.Restoring || screen is Screen.Login) return@LaunchedEffect
+            openRequestedList(request)
+        }
+
         SecretariaTheme {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -154,7 +173,9 @@ fun App(
                                 viewModel = loginViewModel,
                                 onLoginSuccess = {
                                     utilityReturnScreen = Screen.Lists
-                                    screen = Screen.Lists
+                                    openListRequest?.let(::openRequestedList) ?: run {
+                                        screen = Screen.Lists
+                                    }
                                     coroutineScope.launch {
                                         fcmTokenRegister.registerCurrentToken()
                                     }

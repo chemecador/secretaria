@@ -16,6 +16,7 @@ const NOTES_LIST_COLLECTION = "noteslist";
 const NOTES_COLLECTION = "notes";
 const CHANNEL_LIST_SHARED = "list_shared";
 const CHANNEL_FRIEND_REQUESTS = "friend_requests";
+const CLICK_ACTION_OPEN_LIST = "com.chemecador.secretaria.OPEN_LIST";
 
 type PushPayload = {
   title: string;
@@ -23,6 +24,8 @@ type PushPayload = {
   channelId: string;
   type: string;
   tag: string;
+  clickAction?: string;
+  data?: Record<string, string>;
 };
 
 export const onListShared = onDocumentUpdated(
@@ -51,6 +54,13 @@ export const onListShared = onDocumentUpdated(
           channelId: CHANNEL_LIST_SHARED,
           type: "list_shared",
           tag: `list_shared_${event.params.listId}`,
+          clickAction: CLICK_ACTION_OPEN_LIST,
+          data: openListData(
+            event.params.userId,
+            event.params.listId,
+            listName,
+            Boolean(after.ordered),
+          ),
         });
       }),
     );
@@ -130,6 +140,13 @@ export const onSharedListNoteCreated = onDocumentCreatedWithAuthContext(
           channelId: CHANNEL_LIST_SHARED,
           type: "shared_list_note",
           tag: `shared_list_note_${event.params.ownerId}_${event.params.listId}_${event.params.noteId}`,
+          clickAction: CLICK_ACTION_OPEN_LIST,
+          data: openListData(
+            event.params.ownerId,
+            event.params.listId,
+            listName,
+            Boolean(listData.ordered),
+          ),
         });
       }),
     );
@@ -176,12 +193,14 @@ async function sendPushToUser(
       channelId: payload.channelId,
       type: payload.type,
       notificationTag: payload.tag,
+      ...(payload.data ?? {}),
     },
     android: {
       notification: {
         icon: "ic_launcher",
         channelId: payload.channelId,
         tag: payload.tag,
+        clickAction: payload.clickAction,
       },
     },
   });
@@ -271,4 +290,26 @@ function ifUserIdResolved(
   fallback: string[],
 ): string[] {
   return actorUserId ? filtered : fallback;
+}
+
+/**
+ * Builds the notification data payload needed to open a list directly.
+ * @param {string} ownerId List owner uid.
+ * @param {string} listId List id.
+ * @param {string} listName List display name.
+ * @param {boolean} isOrdered Whether the list is ordered.
+ * @return {Record<string, string>} FCM data payload fields.
+ */
+function openListData(
+  ownerId: string,
+  listId: string,
+  listName: string,
+  isOrdered: boolean,
+): Record<string, string> {
+  return {
+    openListOwnerId: ownerId,
+    openListId: listId,
+    openListName: listName,
+    openListOrdered: String(isOrdered),
+  };
 }
