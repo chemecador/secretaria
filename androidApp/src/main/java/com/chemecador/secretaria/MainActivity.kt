@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import com.chemecador.secretaria.messaging.SecretariaNotificationChannels
 
 class MainActivity : ComponentActivity() {
 
@@ -19,6 +20,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
+        SecretariaNotificationChannels.ensureCreated(this)
         maybeRequestNotificationPermission()
 
         setContent {

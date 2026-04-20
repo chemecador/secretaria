@@ -48,6 +48,8 @@ dependencies {
     implementation(projects.composeApp)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
     implementation(libs.firebase.messaging)
 
     debugImplementation(libs.compose.uiTooling)
