@@ -25,6 +25,7 @@
     <string name="create_note_button">Crear</string>
     <string name="notes_empty">Esta lista todavía no tiene notas.</string>
     <string name="notes_error_generic">No se han podido cargar las notas.</string>
+    <string name="reorder_note_handle">Mantén pulsado para reordenar la nota</string>
     <string name="note_completed_badge">Completada</string>
     <string name="note_pending_badge">Pendiente</string>
     <string name="delete">Eliminar</string>

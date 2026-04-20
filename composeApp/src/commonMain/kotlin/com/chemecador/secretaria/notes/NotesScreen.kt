@@ -5,6 +5,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -28,30 +33,35 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.zIndex
 import com.chemecador.secretaria.PlatformBackHandler
 import com.chemecador.secretaria.SecretariaOverflowMenu
 import com.chemecador.secretaria.SecretariaTopBarColor
@@ -71,6 +81,7 @@ import secretaria.composeapp.generated.resources.list_created_by
 import secretaria.composeapp.generated.resources.note_completed_badge
 import secretaria.composeapp.generated.resources.notes_empty
 import secretaria.composeapp.generated.resources.notes_error_generic
+import secretaria.composeapp.generated.resources.reorder_note_handle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -196,6 +207,7 @@ fun NotesScreen(
                         isOrdered = isOrdered,
                         onNoteClick = onNoteClick,
                         onNoteLongClick = { noteToDelete = it },
+                        onNotesReordered = viewModel::reorderNotes,
                     )
                 }
             }
@@ -209,19 +221,119 @@ private fun NotesContent(
     isOrdered: Boolean,
     onNoteClick: (Note) -> Unit,
     onNoteLongClick: (Note) -> Unit,
+    onNotesReordered: (List<String>) -> Unit,
 ) {
+    if (isOrdered) {
+        OrderedNotesContent(
+            notes = notes.sortedBy(Note::order),
+            onNoteClick = onNoteClick,
+            onNoteLongClick = onNoteLongClick,
+            onNotesReordered = onNotesReordered,
+        )
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            itemsIndexed(notes, key = { _, note -> note.id }) { index, note ->
+                NoteCard(
+                    note = note,
+                    isOrdered = false,
+                    orderIndex = index + 1,
+                    onClick = { onNoteClick(note) },
+                    onLongClick = { onNoteLongClick(note) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrderedNotesContent(
+    notes: List<Note>,
+    onNoteClick: (Note) -> Unit,
+    onNoteLongClick: (Note) -> Unit,
+    onNotesReordered: (List<String>) -> Unit,
+) {
+    val lazyListState = rememberLazyListState()
+    var displayNotes by remember { mutableStateOf(notes) }
+    var pressedDragHandleNoteId by remember { mutableStateOf<String?>(null) }
+    val reorderState = remember(lazyListState) {
+        NotesReorderState(lazyListState) { fromIndex, toIndex ->
+            displayNotes = displayNotes.moveNote(fromIndex, toIndex)
+        }
+    }
+
+    LaunchedEffect(notes) {
+        if (!reorderState.isDragging) {
+            displayNotes = notes
+        }
+    }
+
     LazyColumn(
+        state = lazyListState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        itemsIndexed(notes, key = { _, note -> note.id }) { index, note ->
+        itemsIndexed(displayNotes, key = { _, note -> note.id }) { index, note ->
+            val currentIndex by rememberUpdatedState(index)
+            val dragHandleModifier = Modifier
+                .size(40.dp)
+                .pointerInput(note.id) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        pressedDragHandleNoteId = note.id
+                        waitForUpOrCancellation()
+                        pressedDragHandleNoteId = null
+                    }
+                }
+                .pointerInput(note.id) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { reorderState.startDrag(currentIndex) },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            reorderState.dragBy(dragAmount.y)
+                        },
+                        onDragEnd = {
+                            onNotesReordered(displayNotes.map(Note::id))
+                            reorderState.endDrag()
+                        },
+                        onDragCancel = {
+                            displayNotes = notes
+                            reorderState.endDrag()
+                        },
+                    )
+                }
+
             NoteCard(
                 note = note,
-                isOrdered = isOrdered,
+                isOrdered = true,
                 orderIndex = index + 1,
+                modifier = Modifier
+                    .graphicsLayer {
+                        translationY = reorderState.translationFor(index)
+                    }
+                    .zIndex(if (reorderState.draggingItemIndex == index) 1f else 0f),
                 onClick = { onNoteClick(note) },
-                onLongClick = { onNoteLongClick(note) },
+                onLongClick = {
+                    if (pressedDragHandleNoteId != note.id) {
+                        onNoteLongClick(note)
+                    }
+                },
+                dragHandle = {
+                    Box(
+                        modifier = dragHandleModifier,
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.DragIndicator,
+                            contentDescription = stringResource(Res.string.reorder_note_handle),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
             )
         }
     }
@@ -233,11 +345,13 @@ private fun NoteCard(
     note: Note,
     isOrdered: Boolean,
     orderIndex: Int,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    dragHandle: (@Composable () -> Unit)? = null,
 ) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         colors = CardDefaults.cardColors(
@@ -278,6 +392,7 @@ private fun NoteCard(
                             shape = CircleShape,
                         ),
                 )
+                dragHandle?.invoke()
             }
             if (note.content.isNotBlank()) {
                 Text(

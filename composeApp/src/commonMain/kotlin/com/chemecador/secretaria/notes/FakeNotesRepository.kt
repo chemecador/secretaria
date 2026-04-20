@@ -42,6 +42,19 @@ class FakeNotesRepository : NotesRepository {
         return Result.success(Unit)
     }
 
+    override suspend fun reorderNotes(
+        ownerId: String,
+        listId: String,
+        noteIdsInOrder: List<String>,
+    ): Result<Unit> {
+        val key = notesKey(ownerId, listId)
+        val list = notes[key] ?: return Result.failure(IllegalStateException("List not found"))
+        val reorderedNotes = list.applyNoteOrder(noteIdsInOrder)
+            ?: return Result.failure(IllegalStateException("Invalid note order"))
+        notes[key] = reorderedNotes.toMutableList()
+        return Result.success(Unit)
+    }
+
     override suspend fun updateNote(
         ownerId: String,
         listId: String,

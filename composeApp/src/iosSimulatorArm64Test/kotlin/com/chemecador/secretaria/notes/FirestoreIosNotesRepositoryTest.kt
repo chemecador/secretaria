@@ -76,6 +76,50 @@ class FirestoreIosNotesRepositoryTest {
         assertTrue(transport.requests[1].body!!.contains(""""creator":{"stringValue":"user-123"}"""))
     }
 
+    @Test
+    fun reorderNotes_commitsOrderUpdatesAtomically() = kotlinx.coroutines.test.runTest {
+        val transport = RecordingFirestoreTransport(
+            responses = listOf(
+                FirebaseIosFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """{}""",
+                ),
+            ),
+        )
+        val repository = FirestoreIosNotesRepository(
+            authRepository = LoggedInAuthRepository("user-123"),
+            firestore = FirebaseIosFirestoreRestApi(
+                projectId = "project-id",
+                tokenProvider = StaticTokenProvider("ios-token"),
+                transport = transport,
+            ),
+        )
+
+        val result = repository.reorderNotes(
+            ownerId = "owner-999",
+            listId = "list-1",
+            noteIdsInOrder = listOf("note-3", "note-1", "note-2"),
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals(1, transport.requests.size)
+        assertEquals(
+            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents:commit",
+            transport.requests.single().url,
+        )
+        assertTrue(
+            transport.requests.single().body!!.contains(
+                """"name":"projects/project-id/databases/(default)/documents/users/owner-999/noteslist/list-1/notes/note-3"""",
+            ),
+        )
+        assertTrue(transport.requests.single().body!!.contains(""""fieldPaths":["order"]"""))
+        assertTrue(transport.requests.single().body!!.contains(""""order":{"integerValue":"0"}"""))
+        assertEquals(
+            "Bearer ios-token",
+            transport.requests.single().headers["Authorization"],
+        )
+    }
+
     private class RecordingFirestoreTransport(
         responses: List<FirebaseIosFirestoreHttpResponse>,
     ) : FirebaseIosFirestoreTransport {

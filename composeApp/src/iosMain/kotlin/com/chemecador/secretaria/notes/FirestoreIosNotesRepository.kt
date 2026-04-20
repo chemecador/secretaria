@@ -1,5 +1,6 @@
 package com.chemecador.secretaria.notes
 
+import com.chemecador.secretaria.firestore.FirestoreIosDocumentPatch
 import com.chemecador.secretaria.firestore.FirebaseIosFirestoreRestApi
 import com.chemecador.secretaria.firestore.firestoreBoolean
 import com.chemecador.secretaria.firestore.firestoreInstant
@@ -79,6 +80,25 @@ internal class FirestoreIosNotesRepository(
     override suspend fun deleteNote(ownerId: String, listId: String, noteId: String): Result<Unit> =
         runCatching {
             firestore.deleteDocument(noteDocumentPath(ownerId, listId, noteId))
+        }
+
+    override suspend fun reorderNotes(
+        ownerId: String,
+        listId: String,
+        noteIdsInOrder: List<String>,
+    ): Result<Unit> =
+        runCatching {
+            firestore.commitPatches(
+                noteIdsInOrder.mapIndexed { index, noteId ->
+                    FirestoreIosDocumentPatch(
+                        documentPath = noteDocumentPath(ownerId, listId, noteId),
+                        fields = buildJsonObject {
+                            put("order", firestoreInteger(index))
+                        },
+                        updateMask = listOf("order"),
+                    )
+                },
+            )
         }
 
     override suspend fun updateNote(

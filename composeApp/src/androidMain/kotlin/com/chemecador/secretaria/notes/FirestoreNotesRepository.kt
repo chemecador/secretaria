@@ -73,6 +73,23 @@ class FirestoreNotesRepository(
         }
     }
 
+    override suspend fun reorderNotes(
+        ownerId: String,
+        listId: String,
+        noteIdsInOrder: List<String>,
+    ): Result<Unit> {
+        return try {
+            val batch = firestore.batch()
+            noteIdsInOrder.forEachIndexed { index, noteId ->
+                batch.update(notesCollection(ownerId, listId).document(noteId), "order", index)
+            }
+            batch.commit().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     override suspend fun updateNote(
         ownerId: String,
         listId: String,

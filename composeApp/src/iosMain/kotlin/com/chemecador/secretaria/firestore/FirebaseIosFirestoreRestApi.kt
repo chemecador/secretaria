@@ -199,6 +199,55 @@ internal class FirebaseIosFirestoreRestApi(
         )
     }
 
+    suspend fun commitPatches(patches: List<FirestoreIosDocumentPatch>) {
+        if (patches.isEmpty()) {
+            return
+        }
+
+        request(
+            FirebaseIosFirestoreRequest(
+                method = "POST",
+                url = "$databaseUrl/documents:commit",
+                body = buildJsonObject {
+                    put(
+                        "writes",
+                        buildJsonArray {
+                            patches.forEach { patch ->
+                                add(
+                                    buildJsonObject {
+                                        put(
+                                            "update",
+                                            buildJsonObject {
+                                                put(
+                                                    "name",
+                                                    JsonPrimitive(fullDocumentName(patch.documentPath)),
+                                                )
+                                                put("fields", patch.fields)
+                                            },
+                                        )
+                                        put(
+                                            "updateMask",
+                                            buildJsonObject {
+                                                put(
+                                                    "fieldPaths",
+                                                    buildJsonArray {
+                                                        patch.updateMask.forEach { fieldPath ->
+                                                            add(JsonPrimitive(fieldPath))
+                                                        }
+                                                    },
+                                                )
+                                            },
+                                        )
+                                    },
+                                )
+                            }
+                        },
+                    )
+                }.toString(),
+            ),
+        )
+    }
+
     private suspend fun authenticatedRequest(
         request: FirebaseIosFirestoreRequest,
     ): FirebaseIosFirestoreHttpResponse {
@@ -259,6 +308,12 @@ internal data class FirestoreIosDocument(
     val id: String
         get() = name.substringAfterLast('/')
 }
+
+internal data class FirestoreIosDocumentPatch(
+    val documentPath: String,
+    val fields: JsonObject,
+    val updateMask: List<String>,
+)
 
 internal data class FirebaseIosFirestoreRequest(
     val method: String,

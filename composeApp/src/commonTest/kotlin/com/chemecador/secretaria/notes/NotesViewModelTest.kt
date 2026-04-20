@@ -211,6 +211,58 @@ class NotesViewModelTest {
     }
 
     @Test
+    fun reorderNotes_updatesStateAndPersistsOrder() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val viewModel = buildViewModel(repository, listId = "test-list")
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.createNote("Primera", "1")
+        viewModel.createNote("Segunda", "2")
+        viewModel.createNote("Tercera", "3")
+        advanceUntilIdle()
+
+        val initialNotes = viewModel.state.value.notes.sortedBy(Note::order)
+        viewModel.reorderNotes(
+            listOf(
+                initialNotes[2].id,
+                initialNotes[0].id,
+                initialNotes[1].id,
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("Tercera", "Primera", "Segunda"),
+            viewModel.state.value.notes.sortedBy(Note::order).map(Note::title),
+        )
+        assertEquals(
+            listOf(0, 1, 2),
+            viewModel.state.value.notes.sortedBy(Note::order).map(Note::order),
+        )
+        assertNull(viewModel.state.value.errorMessage)
+    }
+
+    @Test
+    fun reorderNotes_errorRestoresPreviousOrder() = runTest(dispatcher) {
+        val repository = FailingReorderRepository()
+        val viewModel = buildViewModel(repository, listId = "test-list")
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.reorderNotes(listOf("n2", "n1"))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("n1", "n2"),
+            viewModel.state.value.notes.sortedBy(Note::order).map(Note::id),
+        )
+        assertEquals("fallo al reordenar", viewModel.state.value.errorMessage)
+    }
+
+    @Test
     fun updateNote_updatesNoteInState() = runTest(dispatcher) {
         val repository = MutableRepository()
         val viewModel = buildViewModel(repository, listId = "test-list")
@@ -293,6 +345,12 @@ class NotesViewModelTest {
             noteId: String,
         ): Result<Unit> = throw UnsupportedOperationException()
 
+        override suspend fun reorderNotes(
+            ownerId: String,
+            listId: String,
+            noteIdsInOrder: List<String>,
+        ): Result<Unit> = throw UnsupportedOperationException()
+
         override suspend fun updateNote(
             ownerId: String,
             listId: String,
@@ -327,6 +385,12 @@ class NotesViewModelTest {
             noteId: String,
         ): Result<Unit> = throw UnsupportedOperationException()
 
+        override suspend fun reorderNotes(
+            ownerId: String,
+            listId: String,
+            noteIdsInOrder: List<String>,
+        ): Result<Unit> = throw UnsupportedOperationException()
+
         override suspend fun updateNote(
             ownerId: String,
             listId: String,
@@ -357,6 +421,12 @@ class NotesViewModelTest {
             ownerId: String,
             listId: String,
             noteId: String,
+        ): Result<Unit> = throw UnsupportedOperationException()
+
+        override suspend fun reorderNotes(
+            ownerId: String,
+            listId: String,
+            noteIdsInOrder: List<String>,
         ): Result<Unit> = throw UnsupportedOperationException()
 
         override suspend fun updateNote(
@@ -400,6 +470,19 @@ class NotesViewModelTest {
             return Result.success(Unit)
         }
 
+        override suspend fun reorderNotes(
+            ownerId: String,
+            listId: String,
+            noteIdsInOrder: List<String>,
+        ): Result<Unit> {
+            val key = notesKey(ownerId, listId)
+            val list = notes[key] ?: return Result.failure(IllegalStateException("List not found"))
+            val reorderedNotes = list.applyNoteOrder(noteIdsInOrder)
+                ?: return Result.failure(IllegalStateException("Invalid note order"))
+            notes[key] = reorderedNotes.toMutableList()
+            return Result.success(Unit)
+        }
+
         override suspend fun updateNote(
             ownerId: String,
             listId: String,
@@ -424,6 +507,59 @@ class NotesViewModelTest {
         }
     }
 
+    private class FailingReorderRepository : NotesRepository {
+        private val notes = listOf(
+            Note(
+                id = "n1",
+                title = "Primera",
+                content = "1",
+                createdAt = Instant.parse("2026-04-01T10:00:00Z"),
+                order = 0,
+                creator = "Test",
+            ),
+            Note(
+                id = "n2",
+                title = "Segunda",
+                content = "2",
+                createdAt = Instant.parse("2026-04-01T10:01:00Z"),
+                order = 1,
+                creator = "Test",
+            ),
+        )
+
+        override suspend fun getNotesForList(ownerId: String, listId: String): Result<List<Note>> =
+            Result.success(notes)
+
+        override suspend fun createNote(
+            ownerId: String,
+            listId: String,
+            title: String,
+            content: String,
+        ): Result<Note> = throw UnsupportedOperationException()
+
+        override suspend fun deleteNote(
+            ownerId: String,
+            listId: String,
+            noteId: String,
+        ): Result<Unit> = throw UnsupportedOperationException()
+
+        override suspend fun reorderNotes(
+            ownerId: String,
+            listId: String,
+            noteIdsInOrder: List<String>,
+        ): Result<Unit> = Result.failure(IllegalStateException("fallo al reordenar"))
+
+        override suspend fun updateNote(
+            ownerId: String,
+            listId: String,
+            noteId: String,
+            title: String,
+            content: String,
+            completed: Boolean,
+            color: Long,
+        ): Result<Note> = throw UnsupportedOperationException()
+    }
+
     private class FailingCreateRepository : NotesRepository {
         override suspend fun getNotesForList(ownerId: String, listId: String): Result<List<Note>> =
             Result.success(emptyList())
@@ -439,6 +575,12 @@ class NotesViewModelTest {
             ownerId: String,
             listId: String,
             noteId: String,
+        ): Result<Unit> = throw UnsupportedOperationException()
+
+        override suspend fun reorderNotes(
+            ownerId: String,
+            listId: String,
+            noteIdsInOrder: List<String>,
         ): Result<Unit> = throw UnsupportedOperationException()
 
         override suspend fun updateNote(
@@ -469,6 +611,12 @@ class NotesViewModelTest {
             noteId: String,
         ): Result<Unit> = Result.failure(IllegalStateException("fallo al eliminar"))
 
+        override suspend fun reorderNotes(
+            ownerId: String,
+            listId: String,
+            noteIdsInOrder: List<String>,
+        ): Result<Unit> = throw UnsupportedOperationException()
+
         override suspend fun updateNote(
             ownerId: String,
             listId: String,
@@ -495,6 +643,12 @@ class NotesViewModelTest {
             ownerId: String,
             listId: String,
             noteId: String,
+        ): Result<Unit> = throw UnsupportedOperationException()
+
+        override suspend fun reorderNotes(
+            ownerId: String,
+            listId: String,
+            noteIdsInOrder: List<String>,
         ): Result<Unit> = throw UnsupportedOperationException()
 
         override suspend fun updateNote(

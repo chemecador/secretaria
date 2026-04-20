@@ -72,6 +72,24 @@ class NotesViewModel(
         }
     }
 
+    fun reorderNotes(noteIdsInOrder: List<String>) {
+        val currentNotes = _state.value.notes.sortedBy(Note::order)
+        val reorderedNotes = currentNotes.applyNoteOrder(noteIdsInOrder) ?: return
+
+        if (currentNotes.map(Note::id) == reorderedNotes.map(Note::id)) {
+            return
+        }
+
+        _state.update { it.copy(notes = reorderedNotes, errorMessage = null) }
+
+        viewModelScope.launch {
+            repository.reorderNotes(ownerId, listId, noteIdsInOrder)
+                .onFailure { throwable ->
+                    _state.update { it.copy(notes = currentNotes, errorMessage = throwable.message) }
+                }
+        }
+    }
+
     private suspend fun fetchNotes() {
         _state.update { currentState ->
             currentState.copy(isLoading = true, errorMessage = null)
