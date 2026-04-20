@@ -36,7 +36,7 @@
 ## Current Product State
 
 - Shared flows implemented: login -> lists -> notes -> note detail, plus friends.
-- Android push notifications already cover shared lists and incoming friend requests.
+- Android push notifications already cover shared lists, incoming friend requests, and new notes in shared lists.
 - Lists support:
   - read, create, delete
   - sort by name/date

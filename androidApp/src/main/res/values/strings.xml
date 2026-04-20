@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">Secretaria</string>
     <string name="channel_list_shared_name">Listas compartidas</string>
-    <string name="channel_list_shared_desc">Avisos cuando un amigo te comparte una lista.</string>
+    <string name="channel_list_shared_desc">Avisos cuando comparten una lista o añaden notas en una lista compartida.</string>
     <string name="channel_friend_requests_name">Solicitudes de amistad</string>
     <string name="channel_friend_requests_desc">Avisos cuando te llega una nueva solicitud de amistad.</string>
 </resources>

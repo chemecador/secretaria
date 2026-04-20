@@ -54,6 +54,7 @@ class FirestoreNotesRepository(
                 "completed" to false,
                 "order" to nextOrder,
                 "creator" to creator,
+                "creatorId" to userId,
                 "color" to COLOR_DEFAULT,
             )
             docRef.set(data).await()

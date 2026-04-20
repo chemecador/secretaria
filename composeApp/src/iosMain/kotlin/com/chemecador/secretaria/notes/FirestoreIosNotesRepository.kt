@@ -61,6 +61,7 @@ internal class FirestoreIosNotesRepository(
                     put("completed", firestoreBoolean(false))
                     put("order", firestoreInteger(nextOrder))
                     put("creator", firestoreString(creator))
+                    put("creatorId", firestoreString(userId))
                     put("color", firestoreLong(COLOR_DEFAULT))
                 },
             )

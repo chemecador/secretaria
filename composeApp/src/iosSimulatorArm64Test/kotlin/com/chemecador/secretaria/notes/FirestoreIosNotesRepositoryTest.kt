@@ -74,6 +74,7 @@ class FirestoreIosNotesRepositoryTest {
         )
         assertTrue(transport.requests[1].body!!.contains(""""order":{"integerValue":"0"}"""))
         assertTrue(transport.requests[1].body!!.contains(""""creator":{"stringValue":"user-123"}"""))
+        assertTrue(transport.requests[1].body!!.contains(""""creatorId":{"stringValue":"user-123"}"""))
     }
 
     @Test

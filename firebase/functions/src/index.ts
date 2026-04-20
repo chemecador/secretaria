@@ -1,5 +1,6 @@
 import {
   onDocumentCreated,
+  onDocumentCreatedWithAuthContext,
   onDocumentUpdated,
 } from "firebase-functions/v2/firestore";
 import { logger } from "firebase-functions";
@@ -11,6 +12,8 @@ const db = admin.firestore();
 const messaging = admin.messaging();
 const USERS_COLLECTION = "users";
 const FCM_TOKENS_COLLECTION = "fcm_tokens";
+const NOTES_LIST_COLLECTION = "noteslist";
+const NOTES_COLLECTION = "notes";
 const CHANNEL_LIST_SHARED = "list_shared";
 const CHANNEL_FRIEND_REQUESTS = "friend_requests";
 
@@ -74,6 +77,62 @@ export const onFriendRequestCreated = onDocumentCreated(
       type: "friend_request",
       tag: `friend_request_${event.params.requestId}`,
     });
+  },
+);
+
+export const onSharedListNoteCreated = onDocumentCreatedWithAuthContext(
+  `users/{ownerId}/${NOTES_LIST_COLLECTION}/{listId}/${NOTES_COLLECTION}/{noteId}`,
+  async (event) => {
+    const note = event.data?.data();
+    if (!note) return;
+
+    const creatorId = resolveActorUserId(
+      asNonBlankString(note.creatorId),
+      asNonBlankString(event.authId),
+    );
+    if (!asNonBlankString(note.creatorId) && creatorId && event.data) {
+      await event.data.ref.set({ creatorId }, { merge: true });
+    } else if (!creatorId) {
+      logger.warn("Shared list note notification without resolved creatorId", {
+        ownerId: event.params.ownerId,
+        listId: event.params.listId,
+        noteId: event.params.noteId,
+        authType: event.authType,
+        authId: event.authId,
+      });
+    }
+
+    const listSnapshot = await db
+      .collection(USERS_COLLECTION)
+      .doc(event.params.ownerId)
+      .collection(NOTES_LIST_COLLECTION)
+      .doc(event.params.listId)
+      .get();
+    const listData = listSnapshot.data();
+    if (!listData) return;
+
+    const contributors = asStringList(listData.contributors);
+    const recipients = ifUserIdResolved(
+      creatorId,
+      contributors.filter((uid) => uid !== creatorId),
+      contributors,
+    );
+    if (recipients.length === 0) return;
+
+    const listName = asNonBlankString(listData.name) ?? "lista compartida";
+    const noteTitle = asNonBlankString(note.title) ?? "Nota sin titulo";
+
+    await Promise.all(
+      recipients.map(async (uid) => {
+        await sendPushToUser(uid, {
+          title: `Nueva nota en ${listName}`,
+          body: noteTitle,
+          channelId: CHANNEL_LIST_SHARED,
+          type: "shared_list_note",
+          tag: `shared_list_note_${event.params.ownerId}_${event.params.listId}_${event.params.noteId}`,
+        });
+      }),
+    );
   },
 );
 
@@ -162,4 +221,54 @@ function asNonBlankString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
+ * Returns a normalized string list with blanks removed and duplicates collapsed.
+ * @param {unknown} value Value to normalize.
+ * @return {string[]} Normalized unique string list.
+ */
+function asStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(asNonBlankString).filter((item): item is string => item != null))];
+}
+
+/**
+ * Resolves the actor uid from persisted note data or Firestore auth context.
+ * @param {string | null} creatorId Persisted creator uid.
+ * @param {string | null} authId Event auth identifier.
+ * @return {string | null} Resolved uid when available.
+ */
+function resolveActorUserId(
+  creatorId: string | null,
+  authId: string | null,
+): string | null {
+  if (creatorId) return creatorId;
+  if (!authId) return null;
+
+  if (authId.startsWith("user:")) {
+    return asNonBlankString(authId.slice("user:".length));
+  }
+
+  const usersMatch = /\/users\/([^/]+)$/.exec(authId);
+  if (usersMatch?.[1]) {
+    return asNonBlankString(usersMatch[1]);
+  }
+
+  return asNonBlankString(authId);
+}
+
+/**
+ * Returns the filtered recipient list when the actor is known, otherwise all candidates.
+ * @param {string | null} actorUserId Resolved actor uid.
+ * @param {string[]} filtered Recipients excluding actor.
+ * @param {string[]} fallback Fallback recipients.
+ * @return {string[]} Recipient list to notify.
+ */
+function ifUserIdResolved(
+  actorUserId: string | null,
+  filtered: string[],
+  fallback: string[],
+): string[] {
+  return actorUserId ? filtered : fallback;
 }
