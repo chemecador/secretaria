@@ -24,7 +24,7 @@ class NotesViewModel(
 
     fun refresh() {
         viewModelScope.launch {
-            fetchNotes()
+            fetchNotes(isRefresh = true)
         }
     }
 
@@ -90,25 +90,37 @@ class NotesViewModel(
         }
     }
 
-    private suspend fun fetchNotes() {
+    private suspend fun fetchNotes(isRefresh: Boolean = false) {
         _state.update { currentState ->
-            currentState.copy(isLoading = true, errorMessage = null)
+            if (isRefresh) {
+                currentState.copy(isRefreshing = true, errorMessage = null)
+            } else {
+                currentState.copy(isLoading = true, errorMessage = null)
+            }
         }
 
         repository.getNotesForList(ownerId, listId)
             .onSuccess { items ->
                 _state.value = _state.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     notes = items,
                     errorMessage = null,
                 )
             }
             .onFailure { throwable ->
-                _state.value = _state.value.copy(
-                    isLoading = false,
-                    notes = emptyList(),
-                    errorMessage = throwable.message,
-                )
+                if (isRefresh) {
+                    _state.value = _state.value.copy(
+                        isRefreshing = false,
+                        errorMessage = throwable.message,
+                    )
+                } else {
+                    _state.value = _state.value.copy(
+                        isLoading = false,
+                        notes = emptyList(),
+                        errorMessage = throwable.message,
+                    )
+                }
             }
     }
 }

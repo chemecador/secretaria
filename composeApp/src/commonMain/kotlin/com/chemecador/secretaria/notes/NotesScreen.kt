@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -40,6 +42,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -172,43 +175,51 @@ fun NotesScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            when {
-                state.isLoading -> CenteredMessage {
+            if (state.isLoading) {
+                CenteredMessage {
                     CircularProgressIndicator()
                 }
+            } else {
+                PullToRefreshBox(
+                    isRefreshing = state.isRefreshing,
+                    onRefresh = viewModel::refresh,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    when {
+                        state.errorMessage != null -> ScrollableCenteredMessage {
+                            val errorMessage = state.errorMessage?.takeIf { it.isNotBlank() }
+                                ?: stringResource(Res.string.notes_error_generic)
+                            Text(
+                                text = errorMessage,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
 
-                state.errorMessage != null -> CenteredMessage {
-                    val errorMessage = state.errorMessage?.takeIf { it.isNotBlank() }
-                        ?: stringResource(Res.string.notes_error_generic)
-                    Text(
-                        text = errorMessage,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center,
-                    )
-                }
+                        state.notes.isEmpty() -> ScrollableCenteredMessage {
+                            Text(
+                                text = stringResource(Res.string.notes_empty),
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
 
-                state.notes.isEmpty() -> CenteredMessage {
-                    Text(
-                        text = stringResource(Res.string.notes_empty),
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-
-                else -> {
-                    val displayNotes = if (isOrdered) {
-                        state.notes.sortedBy { it.order }
-                    } else {
-                        state.notes
+                        else -> {
+                            val displayNotes = if (isOrdered) {
+                                state.notes.sortedBy { it.order }
+                            } else {
+                                state.notes
+                            }
+                            NotesContent(
+                                notes = displayNotes,
+                                isOrdered = isOrdered,
+                                onNoteClick = onNoteClick,
+                                onNoteLongClick = { noteToDelete = it },
+                                onNotesReordered = viewModel::reorderNotes,
+                            )
+                        }
                     }
-                    NotesContent(
-                        notes = displayNotes,
-                        isOrdered = isOrdered,
-                        onNoteClick = onNoteClick,
-                        onNoteLongClick = { noteToDelete = it },
-                        onNotesReordered = viewModel::reorderNotes,
-                    )
                 }
             }
         }
@@ -439,6 +450,20 @@ private fun CenteredMessage(
 ) {
     Box(
         modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun ScrollableCenteredMessage(
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
         contentAlignment = Alignment.Center,
     ) {
         content()
