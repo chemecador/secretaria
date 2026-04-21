@@ -9,6 +9,7 @@ composeMultiplatform = "1.10.3"
 kotlin = "2.3.20"
 google-services = "4.4.4"
 googleid = "1.2.0"
+google-mobile-ads = "24.9.0"
 koin = "4.2.1"
 kotlinx-coroutines = "1.10.2"
 kotlinx-datetime = "0.7.1"
@@ -41,6 +42,7 @@ firebase-auth = { module = "com.google.firebase:firebase-auth", version = "24.0.
 firebase-firestore = { module = "com.google.firebase:firebase-firestore", version = "26.2.0" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging", version = "24.1.2" }
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
+google-mobile-ads = { module = "com.google.android.gms:play-services-ads", version.ref = "google-mobile-ads" }
 koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
 koin-compose-viewmodel = { module = "io.insert-koin:koin-compose-viewmodel", version.ref = "koin" }
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }

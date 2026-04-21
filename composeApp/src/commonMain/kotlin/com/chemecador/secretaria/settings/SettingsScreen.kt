@@ -11,12 +11,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -66,6 +68,9 @@ import secretaria.composeapp.generated.resources.settings_data_not_provided
 import secretaria.composeapp.generated.resources.settings_developer
 import secretaria.composeapp.generated.resources.settings_project_label
 import secretaria.composeapp.generated.resources.settings_project_summary
+import secretaria.composeapp.generated.resources.settings_support_description
+import secretaria.composeapp.generated.resources.settings_support_label
+import secretaria.composeapp.generated.resources.settings_support_section
 import secretaria.composeapp.generated.resources.settings_title
 import secretaria.composeapp.generated.resources.settings_version
 
@@ -74,6 +79,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenFriends: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSupportCreator: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -89,6 +95,7 @@ fun SettingsScreen(
     SettingsScreenContent(
         accountEmail = accountEmail,
         accountUserCode = accountUserCode ?: stringResource(Res.string.settings_data_not_provided),
+        onOpenSupportCreator = onOpenSupportCreator,
         onBack = onBack,
         onOpenFriends = onOpenFriends,
         onOpenSettings = onOpenSettings,
@@ -102,6 +109,7 @@ fun SettingsScreen(
 private fun SettingsScreenContent(
     accountEmail: String,
     accountUserCode: String,
+    onOpenSupportCreator: () -> Unit,
     onBack: () -> Unit,
     onOpenFriends: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -223,6 +231,10 @@ private fun SettingsScreenContent(
                     onOpenGithub = { uriHandler.openUri(AppMetadata.URL_GITHUB) },
                 )
             }
+
+            SettingsSection(title = stringResource(Res.string.settings_support_section)) {
+                SupportCreatorNavigationRow(onClick = onOpenSupportCreator)
+            }
         }
     }
 }
@@ -292,6 +304,49 @@ private fun ProjectCard(
 }
 
 @Composable
+private fun SupportCreatorNavigationRow(
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Default.VolunteerActivism,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = stringResource(Res.string.settings_support_label),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(Res.string.settings_support_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            modifier = Modifier
+                .padding(start = 8.dp)
+                .align(Alignment.CenterVertically),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
 private fun SettingsRow(
     icon: ImageVector,
     label: String,
@@ -353,6 +408,7 @@ private fun SettingsScreenPreview() {
         SettingsScreenContent(
             accountEmail = "user@example.com",
             accountUserCode = "261051",
+            onOpenSupportCreator = {},
             onBack = {},
             onOpenFriends = {},
             onOpenSettings = {},

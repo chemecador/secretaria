@@ -33,6 +33,7 @@ import com.chemecador.secretaria.notes.NotesViewModel
 import com.chemecador.secretaria.noteslists.NotesListsScreen
 import com.chemecador.secretaria.noteslists.NotesListsViewModel
 import com.chemecador.secretaria.settings.SettingsScreen
+import com.chemecador.secretaria.settings.SupportCreatorScreen
 import kotlinx.coroutines.launch
 import org.koin.compose.KoinApplication
 import org.koin.compose.koinInject
@@ -46,6 +47,7 @@ private sealed class Screen {
     data object Lists : Screen()
     data object Friends : Screen()
     data object Settings : Screen()
+    data object SupportCreator : Screen()
     data class Notes(
         val ownerId: String,
         val listId: String,
@@ -117,6 +119,10 @@ fun App(
                 utilityReturnScreen = screen
             }
             screen = Screen.Settings
+        }
+        val openSupportCreator = {
+            utilityReturnScreen = Screen.Settings
+            screen = Screen.SupportCreator
         }
         val closeUtilityScreen = {
             screen = utilityReturnScreen
@@ -214,6 +220,16 @@ fun App(
 
                         is Screen.Settings -> {
                             SettingsScreen(
+                                onBack = closeUtilityScreen,
+                                onOpenFriends = openFriends,
+                                onOpenSettings = openSettings,
+                                onOpenSupportCreator = openSupportCreator,
+                                onLogout = logout,
+                            )
+                        }
+
+                        is Screen.SupportCreator -> {
+                            SupportCreatorScreen(
                                 onBack = closeUtilityScreen,
                                 onOpenFriends = openFriends,
                                 onOpenSettings = openSettings,

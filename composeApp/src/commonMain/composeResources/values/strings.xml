@@ -96,6 +96,16 @@
     <string name="settings_contact_dialog_title">Enviar email</string>
     <string name="settings_contact_dialog_message">¿Quieres enviar un email a %1$s?</string>
     <string name="settings_contact_dialog_confirm">Enviar</string>
+    <string name="settings_support_section">Apoyar al creador</string>
+    <string name="settings_support_label">Ver anuncios de apoyo</string>
+    <string name="settings_support_description">Abre una pantalla independiente con anuncios opcionales.</string>
+    <string name="settings_support_screen_title">Apoyar al creador</string>
+    <string name="settings_support_screen_summary">Viendo estos anuncios, estás apoyando a mantener el proyecto gratuito y de código abierto.</string>
+    <string name="settings_support_screen_note">¡Gracias por apoyarnos!</string>
+    <string name="settings_support_ads_loading">Preparando anuncios opcionales…</string>
+    <string name="settings_support_ads_preview">Aquí aparecerán los anuncios de apoyo en esta pantalla.</string>
+    <string name="settings_support_ads_not_configured">Esta compilación todavía no tiene configurado AdMob para mostrar anuncios de apoyo.</string>
+    <string name="settings_support_ads_unavailable">Los anuncios de apoyo todavía no están disponibles en esta plataforma.</string>
 
     <!-- Auth errors -->
     <string name="error_invalid_user">El usuario no existe</string>

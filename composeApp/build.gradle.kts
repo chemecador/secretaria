@@ -299,6 +299,7 @@ kotlin {
             implementation(libs.firebase.firestore)
             implementation(libs.firebase.messaging)
             implementation(libs.googleid)
+            implementation(libs.google.mobile.ads)
             implementation(libs.kotlinx.coroutinesPlayServices)
         }
         iosMain.dependencies {
