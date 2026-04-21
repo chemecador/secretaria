@@ -43,6 +43,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -300,42 +301,50 @@ fun NotesListsScreen(
                 onSortSelected = viewModel::setSort,
             )
 
-            when {
-                state.isLoading -> CenteredMessage {
+            if (state.isLoading) {
+                CenteredMessage {
                     CircularProgressIndicator()
                 }
+            } else {
+                PullToRefreshBox(
+                    isRefreshing = state.isRefreshing,
+                    onRefresh = viewModel::refresh,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    when {
+                        state.errorMessage != null -> ScrollableCenteredMessage {
+                            val errorMessage = state.errorMessage?.takeIf { it.isNotBlank() }
+                                ?: stringResource(Res.string.notes_lists_error_generic)
+                            Text(
+                                text = errorMessage,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
 
-                state.errorMessage != null -> CenteredMessage {
-                    val errorMessage = state.errorMessage?.takeIf { it.isNotBlank() }
-                        ?: stringResource(Res.string.notes_lists_error_generic)
-                    Text(
-                        text = errorMessage,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center,
-                    )
+                        visibleItems.isEmpty() -> ScrollableCenteredMessage {
+                            Text(
+                                text = if (state.items.isEmpty()) {
+                                    stringResource(Res.string.notes_lists_empty)
+                                } else {
+                                    emptyMessage
+                                },
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+
+                        else -> NotesListsContent(
+                            items = visibleItems,
+                            collaboratorsByListId = state.collaboratorsByListId,
+                            onListSelected = onListSelected,
+                            currentUserId = currentUserId,
+                            onListLongClick = openListOptions,
+                            onListOptionsClick = openListOptions,
+                        )
+                    }
                 }
-
-                visibleItems.isEmpty() -> CenteredMessage {
-                    Text(
-                        text = if (state.items.isEmpty()) {
-                            stringResource(Res.string.notes_lists_empty)
-                        } else {
-                            emptyMessage
-                        },
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-
-                else -> NotesListsContent(
-                    items = visibleItems,
-                    collaboratorsByListId = state.collaboratorsByListId,
-                    onListSelected = onListSelected,
-                    currentUserId = currentUserId,
-                    onListLongClick = openListOptions,
-                    onListOptionsClick = openListOptions,
-                )
             }
         }
     }
@@ -577,6 +586,20 @@ private fun CenteredMessage(
 ) {
     Box(
         modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun ScrollableCenteredMessage(
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
         contentAlignment = Alignment.Center,
     ) {
         content()

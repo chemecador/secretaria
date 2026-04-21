@@ -4,6 +4,7 @@ import com.chemecador.secretaria.friends.FriendSummary
 
 data class NotesListsState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val items: List<NotesListSummary> = emptyList(),
     val sortOption: SortOption = SortOption.DATE_DESC,
     val errorMessage: String? = null,

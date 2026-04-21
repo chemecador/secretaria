@@ -28,6 +28,12 @@ class NotesListsViewModel(
         }
     }
 
+    fun refresh() {
+        viewModelScope.launch {
+            fetchLists(isRefresh = true)
+        }
+    }
+
     fun setSort(sortOption: SortOption) {
         _state.update { currentState ->
             currentState.copy(
@@ -257,9 +263,13 @@ class NotesListsViewModel(
         _state.update { it.copy(shareFeedback = null) }
     }
 
-    private suspend fun fetchLists() {
+    private suspend fun fetchLists(isRefresh: Boolean = false) {
         _state.update { currentState ->
-            currentState.copy(isLoading = true, errorMessage = null)
+            if (isRefresh) {
+                currentState.copy(isRefreshing = true, errorMessage = null)
+            } else {
+                currentState.copy(isLoading = true, errorMessage = null)
+            }
         }
 
         repository.getLists()
@@ -267,6 +277,7 @@ class NotesListsViewModel(
                 allItems = items
                 _state.value = _state.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     items = items.sortedByOption(_state.value.sortOption),
                     errorMessage = null,
                     collaboratorsByListId = emptyMap(),
@@ -274,13 +285,20 @@ class NotesListsViewModel(
                 refreshCollaborators(items)
             }
             .onFailure { throwable ->
-                allItems = emptyList()
-                _state.value = _state.value.copy(
-                    isLoading = false,
-                    items = emptyList(),
-                    errorMessage = throwable.message,
-                    collaboratorsByListId = emptyMap(),
-                )
+                if (isRefresh) {
+                    _state.value = _state.value.copy(
+                        isRefreshing = false,
+                        errorMessage = throwable.message,
+                    )
+                } else {
+                    allItems = emptyList()
+                    _state.value = _state.value.copy(
+                        isLoading = false,
+                        items = emptyList(),
+                        errorMessage = throwable.message,
+                        collaboratorsByListId = emptyMap(),
+                    )
+                }
             }
     }
 
