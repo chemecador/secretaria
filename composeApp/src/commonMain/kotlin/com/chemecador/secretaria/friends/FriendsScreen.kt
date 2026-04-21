@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -34,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
@@ -214,35 +217,43 @@ fun FriendsScreen(
                 }
             }
 
-            when {
-                state.isLoading -> CenteredContainer {
+            if (state.isLoading) {
+                CenteredContainer {
                     CircularProgressIndicator()
                 }
+            } else {
+                PullToRefreshBox(
+                    isRefreshing = state.isRefreshing,
+                    onRefresh = viewModel::pullToRefresh,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    when {
+                        state.contentError != null -> ErrorContent(onRetry = viewModel::refresh)
 
-                state.contentError != null -> ErrorContent(onRetry = viewModel::refresh)
+                        else -> when (selectedTab) {
+                            FriendsTab.FRIENDS -> FriendsListTab(
+                                items = state.friends,
+                                onDelete = { friendToDelete = it },
+                            )
 
-                else -> when (selectedTab) {
-                    FriendsTab.FRIENDS -> FriendsListTab(
-                        items = state.friends,
-                        onDelete = { friendToDelete = it },
-                    )
+                            FriendsTab.REQUESTS -> RequestsTab(
+                                items = state.incomingRequests,
+                                isBusy = state.isWorking,
+                                onAccept = viewModel::acceptFriendRequest,
+                                onReject = viewModel::rejectFriendRequest,
+                            )
 
-                    FriendsTab.REQUESTS -> RequestsTab(
-                        items = state.incomingRequests,
-                        isBusy = state.isWorking,
-                        onAccept = viewModel::acceptFriendRequest,
-                        onReject = viewModel::rejectFriendRequest,
-                    )
-
-                    FriendsTab.ADD -> AddFriendTab(
-                        myCode = state.userCode,
-                        friendCode = friendCode,
-                        outgoingRequests = state.outgoingRequests,
-                        isBusy = state.isWorking,
-                        onFriendCodeChange = { friendCode = it },
-                        onSend = { viewModel.sendFriendRequest(friendCode) },
-                        onCancelRequest = { outgoingRequestToCancel = it },
-                    )
+                            FriendsTab.ADD -> AddFriendTab(
+                                myCode = state.userCode,
+                                friendCode = friendCode,
+                                outgoingRequests = state.outgoingRequests,
+                                isBusy = state.isWorking,
+                                onFriendCodeChange = { friendCode = it },
+                                onSend = { viewModel.sendFriendRequest(friendCode) },
+                                onCancelRequest = { outgoingRequestToCancel = it },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -289,7 +300,7 @@ private fun FriendsListTab(
     onDelete: (FriendSummary) -> Unit,
 ) {
     if (items.isEmpty()) {
-        CenteredContainer {
+        ScrollableCenteredContainer {
             Text(
                 text = stringResource(Res.string.friends_empty),
                 style = MaterialTheme.typography.bodyLarge,
@@ -328,7 +339,7 @@ private fun RequestsTab(
     onReject: (String) -> Unit,
 ) {
     if (items.isEmpty()) {
-        CenteredContainer {
+        ScrollableCenteredContainer {
             Text(
                 text = stringResource(Res.string.friends_friend_requests_empty),
                 style = MaterialTheme.typography.bodyLarge,
@@ -507,7 +518,7 @@ private fun FriendCard(
 private fun ErrorContent(
     onRetry: () -> Unit,
 ) {
-    CenteredContainer {
+    ScrollableCenteredContainer {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = stringResource(Res.string.friends_error_load),
@@ -530,6 +541,20 @@ private fun CenteredContainer(
         contentAlignment = Alignment.Center,
         content = content,
     )
+}
+
+@Composable
+private fun ScrollableCenteredContainer(
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
+    }
 }
 
 @Composable

@@ -2,6 +2,7 @@ package com.chemecador.secretaria.friends
 
 data class FriendsState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val isWorking: Boolean = false,
     val userCode: String? = null,
     val friends: List<FriendSummary> = emptyList(),

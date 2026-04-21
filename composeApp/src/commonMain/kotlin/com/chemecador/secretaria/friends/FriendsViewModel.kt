@@ -28,6 +28,12 @@ class FriendsViewModel(
         }
     }
 
+    fun pullToRefresh() {
+        viewModelScope.launch {
+            refresh(showLoading = false, isRefreshing = true)
+        }
+    }
+
     fun sendFriendRequest(friendCode: String) {
         val trimmedCode = friendCode.trim()
         when {
@@ -123,11 +129,13 @@ class FriendsViewModel(
     private suspend fun refresh(
         showLoading: Boolean,
         successMessage: FriendsMessage? = null,
+        isRefreshing: Boolean = false,
     ) {
         _state.update {
             it.copy(
                 isLoading = showLoading,
-                isWorking = !showLoading,
+                isRefreshing = isRefreshing,
+                isWorking = !showLoading && !isRefreshing,
                 contentError = if (showLoading) null else it.contentError,
             )
         }
@@ -149,6 +157,7 @@ class FriendsViewModel(
             _state.update {
                 it.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     isWorking = false,
                     userCode = snapshot.userCode,
                     friends = snapshot.friends,
@@ -162,6 +171,7 @@ class FriendsViewModel(
             _state.update { current ->
                 current.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     isWorking = false,
                     contentError = if (hasContent(current)) null else FriendsMessage.LOAD_FAILED,
                     message = if (showLoading) current.message else FriendsMessage.ACTION_FAILED,
