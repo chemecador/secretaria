@@ -106,6 +106,13 @@
     <string name="settings_support_ads_preview">Aquí aparecerán los anuncios de apoyo en esta pantalla.</string>
     <string name="settings_support_ads_not_configured">Esta compilación todavía no tiene configurado AdMob para mostrar anuncios de apoyo.</string>
     <string name="settings_support_ads_unavailable">Los anuncios de apoyo todavía no están disponibles en esta plataforma.</string>
+    <string name="settings_support_ads_tab_banner">Banner</string>
+    <string name="settings_support_ads_tab_interstitial">Pantalla completa</string>
+    <string name="settings_support_ads_tab_native">Nativo</string>
+    <string name="settings_support_ads_load_error">No se ha podido cargar el anuncio. Inténtalo más tarde.</string>
+    <string name="settings_support_ads_show_fullscreen">Ver anuncio</string>
+    <string name="settings_support_ads_fullscreen_description">El anuncio a pantalla completa solo se abrirá cuando pulses el botón.</string>
+    <string name="settings_support_ads_ad_label">Anuncio</string>
 
     <!-- Auth errors -->
     <string name="error_invalid_user">El usuario no existe</string>

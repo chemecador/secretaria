@@ -1,9 +1,5 @@
 package com.chemecador.secretaria.settings
 
-import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Handler
-import android.os.Looper
 import android.view.ViewGroup
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,15 +17,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
-import com.google.android.gms.ads.MobileAds
 import org.jetbrains.compose.resources.stringResource
 import secretaria.composeapp.generated.resources.Res
 import secretaria.composeapp.generated.resources.settings_support_ads_loading
 import secretaria.composeapp.generated.resources.settings_support_ads_not_configured
 import secretaria.composeapp.generated.resources.settings_support_ads_preview
-
-private const val ADMOB_APP_ID_METADATA = "com.google.android.gms.ads.APPLICATION_ID"
-private const val BANNER_AD_UNIT_ID_METADATA = "com.chemecador.secretaria.ads.BANNER_AD_UNIT_ID"
 
 @Composable
 internal actual fun SupportCreatorAdBanner(modifier: Modifier) {
@@ -97,43 +89,5 @@ internal actual fun SupportCreatorAdBanner(modifier: Modifier) {
             modifier = Modifier.fillMaxWidth(),
             factory = { adView },
         )
-    }
-}
-
-private fun resolveManifestMetadata(
-    context: Context,
-    key: String,
-): String? = try {
-    @Suppress("DEPRECATION")
-    val appInfo = context.packageManager.getApplicationInfo(
-        context.packageName,
-        PackageManager.GET_META_DATA,
-    )
-    appInfo.metaData?.getString(key)
-        ?.trim()
-        ?.takeUnless(String::isBlank)
-} catch (_: Throwable) {
-    null
-}
-
-private object AndroidSupportCreatorAds {
-    @Volatile
-    private var initialized = false
-
-    fun isInitialized(): Boolean = initialized
-
-    fun initialize(
-        context: Context,
-        onInitialized: () -> Unit,
-    ) {
-        if (initialized) {
-            onInitialized()
-            return
-        }
-
-        MobileAds.initialize(context.applicationContext) {
-            initialized = true
-            Handler(Looper.getMainLooper()).post(onInitialized)
-        }
     }
 }

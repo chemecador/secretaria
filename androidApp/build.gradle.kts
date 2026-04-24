@@ -16,6 +16,8 @@ val localProperties = Properties().apply {
 }
 val debugAdMobAppId = "ca-app-pub-3940256099942544~3347511713"
 val debugBannerAdUnitId = "ca-app-pub-3940256099942544/9214589741"
+val debugInterstitialAdUnitId = "ca-app-pub-3940256099942544/1033173712"
+val debugNativeAdUnitId = "ca-app-pub-3940256099942544/2247696110"
 val releaseAdMobAppId =
     providers.gradleProperty("secretaria.admobAppId").orNull
         ?: providers.environmentVariable("SECRETARIA_ADMOB_APP_ID").orNull
@@ -25,6 +27,16 @@ val releaseBannerAdUnitId =
     providers.gradleProperty("secretaria.admobBannerAdUnitId").orNull
         ?: providers.environmentVariable("SECRETARIA_ADMOB_BANNER_AD_UNIT_ID").orNull
         ?: localProperties.getProperty("secretaria.admobBannerAdUnitId")
+        ?: ""
+val releaseInterstitialAdUnitId =
+    providers.gradleProperty("secretaria.admobInterstitialAdUnitId").orNull
+        ?: providers.environmentVariable("SECRETARIA_ADMOB_INTERSTITIAL_AD_UNIT_ID").orNull
+        ?: localProperties.getProperty("secretaria.admobInterstitialAdUnitId")
+        ?: ""
+val releaseNativeAdUnitId =
+    providers.gradleProperty("secretaria.admobNativeAdUnitId").orNull
+        ?: providers.environmentVariable("SECRETARIA_ADMOB_NATIVE_AD_UNIT_ID").orNull
+        ?: localProperties.getProperty("secretaria.admobNativeAdUnitId")
         ?: ""
 
 android {
@@ -39,6 +51,8 @@ android {
         versionName = appVersionName
         manifestPlaceholders["admobAppId"] = releaseAdMobAppId
         manifestPlaceholders["admobBannerAdUnitId"] = releaseBannerAdUnitId
+        manifestPlaceholders["admobInterstitialAdUnitId"] = releaseInterstitialAdUnitId
+        manifestPlaceholders["admobNativeAdUnitId"] = releaseNativeAdUnitId
     }
 
     buildTypes {
@@ -46,12 +60,16 @@ android {
             applicationIdSuffix = ".debug"
             manifestPlaceholders["admobAppId"] = debugAdMobAppId
             manifestPlaceholders["admobBannerAdUnitId"] = debugBannerAdUnitId
+            manifestPlaceholders["admobInterstitialAdUnitId"] = debugInterstitialAdUnitId
+            manifestPlaceholders["admobNativeAdUnitId"] = debugNativeAdUnitId
         }
         getByName("release") {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("debug")
             manifestPlaceholders["admobAppId"] = releaseAdMobAppId
             manifestPlaceholders["admobBannerAdUnitId"] = releaseBannerAdUnitId
+            manifestPlaceholders["admobInterstitialAdUnitId"] = releaseInterstitialAdUnitId
+            manifestPlaceholders["admobNativeAdUnitId"] = releaseNativeAdUnitId
         }
     }
 

@@ -47,6 +47,12 @@
         <meta-data
             android:name="com.chemecador.secretaria.ads.BANNER_AD_UNIT_ID"
             android:value="${admobBannerAdUnitId}" />
+        <meta-data
+            android:name="com.chemecador.secretaria.ads.INTERSTITIAL_AD_UNIT_ID"
+            android:value="${admobInterstitialAdUnitId}" />
+        <meta-data
+            android:name="com.chemecador.secretaria.ads.NATIVE_AD_UNIT_ID"
+            android:value="${admobNativeAdUnitId}" />
     </application>
 
 </manifest>
