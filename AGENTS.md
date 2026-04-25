@@ -44,7 +44,8 @@
   - overflow menu with logout/about/amigos
   - shared-list visibility parity on Android/JVM/JS/iOS via `contributors`
   - owner can share a list with existing friends
-  - list groups as shareable containers; child lists keep optional `groupId`
+  - list groups as shareable containers; child lists keep optional `groupOwnerId` + `groupId`
+  - accessible shared lists can be added to groups owned by the current user
   - group shares propagate inherited contributors while individual list shares stay direct
   - only owner can rename/delete; shared users can still open
 - Notes support:

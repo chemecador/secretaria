@@ -2,6 +2,7 @@ package com.chemecador.secretaria.noteslists
 
 import com.chemecador.secretaria.login.AuthRepository
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -56,6 +57,7 @@ class FirestoreNotesListsRepository(
                 "ordered" to ordered,
                 IS_GROUP to isGroup,
                 GROUP_ID to null,
+                GROUP_OWNER_ID to null,
                 GROUP_ORDER to 0,
                 DIRECT_CONTRIBUTORS to listOf(userId),
                 INHERITED_GROUP_CONTRIBUTORS to emptyList<String>(),
@@ -76,29 +78,35 @@ class FirestoreNotesListsRepository(
             val listRef = listDocument(userId, listId)
             val listSnapshot = listRef.get().await()
             if (listSnapshot.getBoolean(IS_GROUP) == true) {
-                val childLists = firestore.collection(USERS).document(userId)
-                    .collection(NOTES_LIST)
-                    .whereEqualTo(GROUP_ID, listId)
+                val childLists = firestore.collectionGroup(NOTES_LIST)
+                    .whereArrayContains(CONTRIBUTORS, userId)
                     .get()
                     .await()
                 val batch = firestore.batch()
-                childLists.documents.forEach { childDoc ->
-                    val directContributors = childDoc.directContributors()
-                    batch.update(
-                        childDoc.reference,
-                        mapOf(
-                            DIRECT_CONTRIBUTORS to directContributors,
-                            GROUP_ID to null,
-                            GROUP_ORDER to 0,
-                            INHERITED_GROUP_CONTRIBUTORS to emptyList<String>(),
-                            CONTRIBUTORS to effectiveContributors(
-                                ownerId = userId,
-                                directContributors = directContributors,
-                                inheritedGroupContributors = emptyList(),
+                childLists.documents
+                    .filter { childDoc ->
+                        childDoc.getString(GROUP_ID) == listId &&
+                            childDoc.groupOwnerId() == userId
+                    }
+                    .forEach { childDoc ->
+                        val directContributors = childDoc.directContributors()
+                        val childOwnerId = childDoc.ownerId()
+                        batch.update(
+                            childDoc.reference,
+                            mapOf(
+                                DIRECT_CONTRIBUTORS to directContributors,
+                                GROUP_ID to null,
+                                GROUP_OWNER_ID to null,
+                                GROUP_ORDER to 0,
+                                INHERITED_GROUP_CONTRIBUTORS to emptyList<String>(),
+                                CONTRIBUTORS to effectiveContributors(
+                                    ownerId = childOwnerId,
+                                    directContributors = directContributors,
+                                    inheritedGroupContributors = emptyList(),
+                                ),
                             ),
-                        ),
-                    )
-                }
+                        )
+                    }
                 batch.delete(listRef)
                 batch.commit().await()
                 return Result.success(Unit)
@@ -153,28 +161,33 @@ class FirestoreNotesListsRepository(
                 ),
             )
             if (listSnapshot.getBoolean(IS_GROUP) == true) {
-                val childLists = firestore.collection(USERS).document(userId)
-                    .collection(NOTES_LIST)
-                    .whereEqualTo(GROUP_ID, listId)
+                val childLists = firestore.collectionGroup(NOTES_LIST)
+                    .whereArrayContains(CONTRIBUTORS, userId)
                     .get()
                     .await()
-                childLists.documents.forEach { childDoc ->
-                    val childDirectContributors = childDoc.directContributors()
-                    val childInheritedContributors =
-                        (childDoc.inheritedGroupContributors() + friendUserId).distinct()
-                    batch.update(
-                        childDoc.reference,
-                        mapOf(
-                            DIRECT_CONTRIBUTORS to childDirectContributors,
-                            INHERITED_GROUP_CONTRIBUTORS to childInheritedContributors,
-                            CONTRIBUTORS to effectiveContributors(
-                                ownerId = userId,
-                                directContributors = childDirectContributors,
-                                inheritedGroupContributors = childInheritedContributors,
+                childLists.documents
+                    .filter { childDoc ->
+                        childDoc.getString(GROUP_ID) == listId &&
+                            childDoc.groupOwnerId() == userId
+                    }
+                    .forEach { childDoc ->
+                        val childDirectContributors = childDoc.directContributors()
+                        val childInheritedContributors =
+                            (childDoc.inheritedGroupContributors() + friendUserId).distinct()
+                        val childOwnerId = childDoc.ownerId()
+                        batch.update(
+                            childDoc.reference,
+                            mapOf(
+                                DIRECT_CONTRIBUTORS to childDirectContributors,
+                                INHERITED_GROUP_CONTRIBUTORS to childInheritedContributors,
+                                CONTRIBUTORS to effectiveContributors(
+                                    ownerId = childOwnerId,
+                                    directContributors = childDirectContributors,
+                                    inheritedGroupContributors = childInheritedContributors,
+                                ),
                             ),
-                        ),
-                    )
-                }
+                        )
+                    }
             }
             batch.commit().await()
             Result.success(Unit)
@@ -201,30 +214,35 @@ class FirestoreNotesListsRepository(
                 ),
             )
             if (listSnapshot.getBoolean(IS_GROUP) == true) {
-                val childLists = firestore.collection(USERS).document(userId)
-                    .collection(NOTES_LIST)
-                    .whereEqualTo(GROUP_ID, listId)
+                val childLists = firestore.collectionGroup(NOTES_LIST)
+                    .whereArrayContains(CONTRIBUTORS, userId)
                     .get()
                     .await()
-                childLists.documents.forEach { childDoc ->
-                    val childDirectContributors = childDoc.directContributors()
-                    val childInheritedContributors =
-                        childDoc.inheritedGroupContributors().filterNot { contributorId ->
-                            contributorId == friendUserId
-                        }
-                    batch.update(
-                        childDoc.reference,
-                        mapOf(
-                            DIRECT_CONTRIBUTORS to childDirectContributors,
-                            INHERITED_GROUP_CONTRIBUTORS to childInheritedContributors,
-                            CONTRIBUTORS to effectiveContributors(
-                                ownerId = userId,
-                                directContributors = childDirectContributors,
-                                inheritedGroupContributors = childInheritedContributors,
+                childLists.documents
+                    .filter { childDoc ->
+                        childDoc.getString(GROUP_ID) == listId &&
+                            childDoc.groupOwnerId() == userId
+                    }
+                    .forEach { childDoc ->
+                        val childDirectContributors = childDoc.directContributors()
+                        val childInheritedContributors =
+                            childDoc.inheritedGroupContributors().filterNot { contributorId ->
+                                contributorId == friendUserId
+                            }
+                        val childOwnerId = childDoc.ownerId()
+                        batch.update(
+                            childDoc.reference,
+                            mapOf(
+                                DIRECT_CONTRIBUTORS to childDirectContributors,
+                                INHERITED_GROUP_CONTRIBUTORS to childInheritedContributors,
+                                CONTRIBUTORS to effectiveContributors(
+                                    ownerId = childOwnerId,
+                                    directContributors = childDirectContributors,
+                                    inheritedGroupContributors = childInheritedContributors,
+                                ),
                             ),
-                        ),
-                    )
-                }
+                        )
+                    }
             }
             batch.commit().await()
             Result.success(Unit)
@@ -233,38 +251,62 @@ class FirestoreNotesListsRepository(
         }
     }
 
-    override suspend fun setListGroup(listId: String, groupId: String?): Result<Unit> {
+    override suspend fun setListGroup(
+        listOwnerId: String,
+        listId: String,
+        groupOwnerId: String?,
+        groupId: String?,
+    ): Result<Unit> {
         return try {
             val userId = requireUserId()
-            val docRef = listDocument(userId, listId)
+            if ((groupId == null) != (groupOwnerId == null)) {
+                error("Group owner required")
+            }
+            val docRef = listDocument(listOwnerId, listId)
             val listSnapshot = docRef.get().await()
             if (listSnapshot.getBoolean(IS_GROUP) == true) {
                 error("A group cannot be added to another group")
             }
-            val groupSnapshot = groupId?.let { id -> listDocument(userId, id).get().await() }
+            if (userId !in listSnapshot.stringList(CONTRIBUTORS)) {
+                error("List not found")
+            }
+            val currentGroupOwnerId = listSnapshot.groupOwnerId()
+            if (currentGroupOwnerId != null && currentGroupOwnerId != userId) {
+                error("Only the group owner can modify this grouping")
+            }
+            val groupSnapshot = if (groupId == null || groupOwnerId == null) {
+                null
+            } else {
+                if (groupOwnerId != userId) error("Only the group owner can modify this grouping")
+                listDocument(groupOwnerId, groupId).get().await()
+            }
             if (groupSnapshot != null && groupSnapshot.getBoolean(IS_GROUP) != true) {
                 error("Group not found")
             }
             val inheritedContributors = groupSnapshot?.directContributors().orEmpty()
-            val groupOrder = if (groupId == null) {
+            val groupOrder = if (groupId == null || groupOwnerId == null) {
                 0
             } else {
-                firestore.collection(USERS).document(userId)
-                    .collection(NOTES_LIST)
-                    .whereEqualTo(GROUP_ID, groupId)
+                firestore.collectionGroup(NOTES_LIST)
+                    .whereArrayContains(CONTRIBUTORS, userId)
                     .get()
                     .await()
                     .documents
-                    .count { doc -> doc.id != listId }
+                    .count { doc ->
+                        doc.getString(GROUP_ID) == groupId &&
+                            doc.groupOwnerId() == groupOwnerId &&
+                            (doc.ownerId() != listOwnerId || doc.id != listId)
+                    }
             }
             docRef.update(
                 mapOf(
                     DIRECT_CONTRIBUTORS to listSnapshot.directContributors(),
                     GROUP_ID to groupId,
+                    GROUP_OWNER_ID to groupOwnerId,
                     GROUP_ORDER to groupOrder,
                     INHERITED_GROUP_CONTRIBUTORS to inheritedContributors,
                     CONTRIBUTORS to effectiveContributors(
-                        ownerId = userId,
+                        ownerId = listOwnerId,
                         directContributors = listSnapshot.directContributors(),
                         inheritedGroupContributors = inheritedContributors,
                     ),
@@ -277,14 +319,16 @@ class FirestoreNotesListsRepository(
     }
 
     override suspend fun reorderGroupedLists(
+        groupOwnerId: String,
         groupId: String,
-        listIdsInOrder: List<String>,
+        listKeysInOrder: List<NotesListKey>,
     ): Result<Unit> {
         return try {
             val userId = requireUserId()
+            if (groupOwnerId != userId) error("Only the group owner can modify this grouping")
             val batch = firestore.batch()
-            listIdsInOrder.forEachIndexed { index, childListId ->
-                batch.update(listDocument(userId, childListId), GROUP_ORDER, index)
+            listKeysInOrder.forEachIndexed { index, listKey ->
+                batch.update(listDocument(listKey.ownerId, listKey.listId), GROUP_ORDER, index)
             }
             batch.commit().await()
             Result.success(Unit)
@@ -331,29 +375,42 @@ class FirestoreNotesListsRepository(
         private const val INHERITED_GROUP_CONTRIBUTORS = "inheritedGroupContributors"
         private const val IS_GROUP = "isGroup"
         private const val GROUP_ID = "groupId"
+        private const val GROUP_OWNER_ID = "groupOwnerId"
         private const val GROUP_ORDER = "groupOrder"
         private const val ARCHIVED_BY = "archivedBy"
         private const val ARCHIVED_AT_BY = "archivedAtBy"
     }
 }
 
-private fun com.google.firebase.firestore.DocumentSnapshot.stringList(field: String): List<String> =
+private fun DocumentSnapshot.stringList(field: String): List<String> =
     (get(field) as? List<*>)?.mapNotNull { it as? String }.orEmpty().distinct()
 
-private fun com.google.firebase.firestore.DocumentSnapshot.directContributors(): List<String> =
+private fun DocumentSnapshot.directContributors(): List<String> =
     stringList("directContributors").ifEmpty { stringList("contributors") }
 
-private fun com.google.firebase.firestore.DocumentSnapshot.inheritedGroupContributors(): List<String> =
+private fun DocumentSnapshot.inheritedGroupContributors(): List<String> =
     stringList("inheritedGroupContributors")
 
-private fun com.google.firebase.firestore.DocumentSnapshot.toNotesListSummary(
+private fun DocumentSnapshot.ownerId(): String =
+    reference.parent.parent?.id.orEmpty()
+
+private fun DocumentSnapshot.groupOwnerId(): String? {
+    getString("groupId")?.takeIf { it.isNotBlank() } ?: return null
+    return getString("groupOwnerId")?.takeIf { it.isNotBlank() } ?: ownerId()
+}
+
+private fun DocumentSnapshot.toNotesListSummary(
     currentUserId: String,
 ): NotesListSummary {
     val timestamp = getTimestamp("date")
-    val ownerId = reference.parent.parent?.id.orEmpty()
+    val ownerId = ownerId()
     val contributors = stringList("contributors")
     val directContributors = directContributors()
     val inheritedGroupContributors = inheritedGroupContributors()
+    val groupId = getString("groupId")?.takeIf { it.isNotBlank() }
+    val groupOwnerId = groupId?.let {
+        getString("groupOwnerId")?.takeIf { ownerId -> ownerId.isNotBlank() } ?: ownerId
+    }
     val archivedBy = stringList("archivedBy")
     val archivedAtBy = (get("archivedAtBy") as? Map<*, *>)
         ?.mapNotNull { (key, value) ->
@@ -373,7 +430,8 @@ private fun com.google.firebase.firestore.DocumentSnapshot.toNotesListSummary(
         } ?: Instant.fromEpochMilliseconds(0),
         isOrdered = getBoolean("ordered") ?: false,
         isGroup = getBoolean("isGroup") ?: false,
-        groupId = getString("groupId")?.takeIf { it.isNotBlank() },
+        groupId = groupId,
+        groupOwnerId = groupOwnerId,
         groupOrder = getLong("groupOrder")?.toInt() ?: 0,
         isShared = ownerId != currentUserId || contributors.distinct().size > 1,
         contributors = contributors.distinct(),

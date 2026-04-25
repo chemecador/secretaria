@@ -412,6 +412,7 @@ class NotesListsViewModelTest {
 
         val groupedList = viewModel.state.value.items.first { item -> item.id == "list-1" }
         assertEquals("group-1", groupedList.groupId)
+        assertEquals(OWNER_ID, groupedList.groupOwnerId)
         assertEquals(0, groupedList.groupOrder)
         assertTrue("friend-1" in groupedList.inheritedGroupContributors)
         assertTrue("friend-1" in groupedList.contributors)
@@ -450,6 +451,7 @@ class NotesListsViewModelTest {
 
         val ungroupedList = viewModel.state.value.items.first { item -> item.id == "list-1" }
         assertEquals(null, ungroupedList.groupId)
+        assertEquals(null, ungroupedList.groupOwnerId)
         assertTrue(ungroupedList.inheritedGroupContributors.isEmpty())
         assertEquals(listOf("friend-2"), ungroupedList.directSharedWithUserIds)
         assertTrue("friend-1" !in ungroupedList.contributors)
@@ -474,6 +476,16 @@ class NotesListsViewModelTest {
                 inheritedGroupContributors = listOf(OWNER_ID, "friend-1"),
             ),
         )
+        repository.seed(
+            listSummary(
+                id = "shared-list",
+                name = "Tokio",
+                ownerId = SHARED_OWNER_ID,
+                groupId = "group-1",
+                groupOwnerId = OWNER_ID,
+                inheritedGroupContributors = listOf(OWNER_ID, "friend-1"),
+            ),
+        )
         val viewModel = buildViewModel(repository)
 
         viewModel.load()
@@ -483,9 +495,71 @@ class NotesListsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(1, repository.deleteCalls)
-        assertEquals(listOf("list-1"), viewModel.state.value.items.map { item -> item.id })
-        assertEquals(null, viewModel.state.value.items.single().groupId)
-        assertTrue(viewModel.state.value.items.single().inheritedGroupContributors.isEmpty())
+        assertEquals(listOf("list-1", "shared-list"), viewModel.state.value.items.map { item -> item.id }.sorted())
+        viewModel.state.value.items.forEach { item ->
+            assertEquals(null, item.groupId)
+            assertEquals(null, item.groupOwnerId)
+            assertTrue(item.inheritedGroupContributors.isEmpty())
+        }
+    }
+
+    @Test
+    fun setListGroup_canGroupListSharedByAnotherOwnerIntoOwnGroup() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        repository.seed(
+            listSummary(
+                id = "group-1",
+                name = "Viajes",
+                isGroup = true,
+                directContributors = listOf(OWNER_ID, "friend-1"),
+            ),
+        )
+        repository.seed(listSummary(id = "shared-list", name = "Tokio", ownerId = SHARED_OWNER_ID))
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.setListGroup(
+            list = viewModel.state.value.items.first { item -> item.id == "shared-list" },
+            group = viewModel.state.value.items.first { item -> item.id == "group-1" },
+        )
+        advanceUntilIdle()
+
+        val groupedList = viewModel.state.value.items.first { item -> item.id == "shared-list" }
+        assertEquals(SHARED_OWNER_ID, repository.lastGroupedListOwnerId)
+        assertEquals(OWNER_ID, repository.lastGroupedGroupOwnerId)
+        assertEquals("group-1", groupedList.groupId)
+        assertEquals(OWNER_ID, groupedList.groupOwnerId)
+        assertTrue("friend-1" in groupedList.inheritedGroupContributors)
+        assertTrue("friend-1" in groupedList.contributors)
+        assertEquals(listOf(OWNER_ID), groupedList.directSharedWithUserIds)
+    }
+
+    @Test
+    fun createGroupAndAddList_canCreateGroupFromSharedList() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        repository.seed(listSummary(id = "shared-list", name = "Tokio", ownerId = SHARED_OWNER_ID))
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.createGroupAndAddList(
+            list = viewModel.state.value.items.first { item -> item.id == "shared-list" },
+            groupName = "Viajes",
+            ordered = true,
+        )
+        advanceUntilIdle()
+
+        val group = viewModel.state.value.items.first { item -> item.isGroup }
+        val sharedList = viewModel.state.value.items.first { item -> item.id == "shared-list" }
+        assertEquals("Viajes", group.name)
+        assertTrue(group.isOrdered)
+        assertEquals(group.id, sharedList.groupId)
+        assertEquals(OWNER_ID, sharedList.groupOwnerId)
+        assertEquals(SHARED_OWNER_ID, repository.lastGroupedListOwnerId)
+        assertEquals(OWNER_ID, repository.lastGroupedGroupOwnerId)
     }
 
     @Test
@@ -748,6 +822,7 @@ class NotesListsViewModelTest {
         val friend = FriendSummary("friendship-1", "friend-1", "Marina")
         repository.seed(listSummary(id = "group-1", name = "Viajes", isGroup = true))
         repository.seed(listSummary(id = "list-1", name = "Maleta", groupId = "group-1"))
+        repository.seed(listSummary(id = "shared-list", name = "Tokio", ownerId = SHARED_OWNER_ID, groupId = "group-1", groupOwnerId = OWNER_ID))
         val viewModel = buildViewModel(repository)
 
         viewModel.load()
@@ -761,10 +836,14 @@ class NotesListsViewModelTest {
 
         val group = viewModel.state.value.items.first { item -> item.id == "group-1" }
         val child = viewModel.state.value.items.first { item -> item.id == "list-1" }
+        val sharedChild = viewModel.state.value.items.first { item -> item.id == "shared-list" }
         assertEquals(listOf("friend-1"), group.directSharedWithUserIds)
         assertTrue("friend-1" in child.inheritedGroupContributors)
         assertTrue("friend-1" in child.contributors)
         assertTrue(child.directSharedWithUserIds.isEmpty())
+        assertTrue("friend-1" in sharedChild.inheritedGroupContributors)
+        assertTrue("friend-1" in sharedChild.contributors)
+        assertEquals(listOf(OWNER_ID), sharedChild.directSharedWithUserIds)
     }
 
     @Test
@@ -817,7 +896,10 @@ class NotesListsViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        viewModel.reorderGroupedLists(group, listOf("list-b", "list-a"))
+        viewModel.reorderGroupedLists(
+            group,
+            listOf(NotesListKey(OWNER_ID, "list-b"), NotesListKey(OWNER_ID, "list-a")),
+        )
         advanceUntilIdle()
 
         assertEquals(1, viewModel.state.value.items.first { item -> item.id == "list-a" }.groupOrder)
@@ -836,12 +918,52 @@ class NotesListsViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        viewModel.reorderGroupedLists(group, listOf("list-b", "list-a"))
+        viewModel.reorderGroupedLists(
+            group,
+            listOf(NotesListKey(OWNER_ID, "list-b"), NotesListKey(OWNER_ID, "list-a")),
+        )
         advanceUntilIdle()
 
         assertEquals(0, viewModel.state.value.items.first { item -> item.id == "list-a" }.groupOrder)
         assertEquals(1, viewModel.state.value.items.first { item -> item.id == "list-b" }.groupOrder)
         assertEquals("error al reordenar", viewModel.state.value.errorMessage)
+    }
+
+    @Test
+    fun reorderGroupedLists_updatesMixedOwnerChildrenByKey() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val group = listSummary(id = "group-1", name = "Viajes", isGroup = true, isOrdered = true)
+        repository.seed(group)
+        repository.seed(listSummary(id = "same-id", name = "A", groupId = "group-1", groupOrder = 0))
+        repository.seed(
+            listSummary(
+                id = "same-id",
+                name = "B",
+                ownerId = SHARED_OWNER_ID,
+                groupId = "group-1",
+                groupOwnerId = OWNER_ID,
+                groupOrder = 1,
+            ),
+        )
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.reorderGroupedLists(
+            group,
+            listOf(NotesListKey(SHARED_OWNER_ID, "same-id"), NotesListKey(OWNER_ID, "same-id")),
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            1,
+            viewModel.state.value.items.first { item -> item.ownerId == OWNER_ID && item.id == "same-id" }.groupOrder,
+        )
+        assertEquals(
+            0,
+            viewModel.state.value.items.first { item -> item.ownerId == SHARED_OWNER_ID && item.id == "same-id" }.groupOrder,
+        )
     }
 
     private fun buildViewModel(
@@ -866,9 +988,18 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
-        override suspend fun setListGroup(listId: String, groupId: String?): Result<Unit> =
+        override suspend fun setListGroup(
+            listOwnerId: String,
+            listId: String,
+            groupOwnerId: String?,
+            groupId: String?,
+        ): Result<Unit> =
             Result.failure(UnsupportedOperationException())
-        override suspend fun reorderGroupedLists(groupId: String, listIdsInOrder: List<String>): Result<Unit> =
+        override suspend fun reorderGroupedLists(
+            groupOwnerId: String,
+            groupId: String,
+            listKeysInOrder: List<NotesListKey>,
+        ): Result<Unit> =
             Result.failure(UnsupportedOperationException())
         override suspend fun updateList(
             listId: String,
@@ -905,9 +1036,18 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
-        override suspend fun setListGroup(listId: String, groupId: String?): Result<Unit> =
+        override suspend fun setListGroup(
+            listOwnerId: String,
+            listId: String,
+            groupOwnerId: String?,
+            groupId: String?,
+        ): Result<Unit> =
             Result.failure(UnsupportedOperationException())
-        override suspend fun reorderGroupedLists(groupId: String, listIdsInOrder: List<String>): Result<Unit> =
+        override suspend fun reorderGroupedLists(
+            groupOwnerId: String,
+            groupId: String,
+            listKeysInOrder: List<NotesListKey>,
+        ): Result<Unit> =
             Result.failure(UnsupportedOperationException())
         override suspend fun updateList(
             listId: String,
@@ -950,6 +1090,10 @@ class NotesListsViewModelTest {
             private set
         var lastArchiveValue: Boolean? = null
             private set
+        var lastGroupedListOwnerId: String? = null
+            private set
+        var lastGroupedGroupOwnerId: String? = null
+            private set
 
         fun seed(list: NotesListSummary) {
             lists += list
@@ -979,7 +1123,7 @@ class NotesListsViewModelTest {
             val list = lists.firstOrNull { it.id == listId }
             if (list?.isGroup == true) {
                 lists.indices.forEach { index ->
-                    if (lists[index].ownerId == list.ownerId && lists[index].groupId == list.id) {
+                    if (lists[index].groupKey == list.key) {
                         lists[index] = lists[index].withGroup(null, groupOrder = 0)
                     }
                 }
@@ -1018,28 +1162,47 @@ class NotesListsViewModelTest {
             return Result.success(Unit)
         }
 
-        override suspend fun setListGroup(listId: String, groupId: String?): Result<Unit> {
-            val index = lists.indexOfFirst { it.id == listId }
+        override suspend fun setListGroup(
+            listOwnerId: String,
+            listId: String,
+            groupOwnerId: String?,
+            groupId: String?,
+        ): Result<Unit> {
+            if ((groupId == null) != (groupOwnerId == null)) {
+                return Result.failure(IllegalStateException("Group owner required"))
+            }
+            lastGroupedListOwnerId = listOwnerId
+            lastGroupedGroupOwnerId = groupOwnerId
+            val index = lists.indexOfFirst { it.ownerId == listOwnerId && it.id == listId }
             if (index == -1) return Result.failure(IllegalStateException("List not found"))
-            val group = groupId?.let { id -> lists.firstOrNull { it.id == id && it.isGroup } }
-                ?: if (groupId == null) null else return Result.failure(IllegalStateException("Group not found"))
+            val group = if (groupId == null || groupOwnerId == null) {
+                null
+            } else {
+                lists.firstOrNull { it.ownerId == groupOwnerId && it.id == groupId && it.isGroup }
+                    ?: return Result.failure(IllegalStateException("Group not found"))
+            }
             val groupOrder = if (group == null) {
                 0
             } else {
-                lists.count { it.groupId == group.id && it.id != listId }
+                lists.count { it.groupKey == group.key && it.key != NotesListKey(listOwnerId, listId) }
             }
             lists[index] = lists[index].withGroup(group, groupOrder)
             return Result.success(Unit)
         }
 
-        override suspend fun reorderGroupedLists(groupId: String, listIdsInOrder: List<String>): Result<Unit> {
+        override suspend fun reorderGroupedLists(
+            groupOwnerId: String,
+            groupId: String,
+            listKeysInOrder: List<NotesListKey>,
+        ): Result<Unit> {
             if (failReorder) return Result.failure(IllegalStateException("error al reordenar"))
+            val groupKey = NotesListKey(groupOwnerId, groupId)
             val reordered = lists
-                .filter { it.groupId == groupId }
-                .applyGroupOrder(listIdsInOrder)
+                .filter { it.groupKey == groupKey }
+                .applyGroupOrder(listKeysInOrder)
                 ?: return Result.failure(IllegalStateException("Invalid group order"))
             reordered.forEach { reorderedList ->
-                val index = lists.indexOfFirst { it.id == reorderedList.id }
+                val index = lists.indexOfFirst { it.key == reorderedList.key }
                 if (index != -1) {
                     lists[index] = reorderedList
                 }
@@ -1105,9 +1268,18 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
-        override suspend fun setListGroup(listId: String, groupId: String?): Result<Unit> =
+        override suspend fun setListGroup(
+            listOwnerId: String,
+            listId: String,
+            groupOwnerId: String?,
+            groupId: String?,
+        ): Result<Unit> =
             Result.failure(UnsupportedOperationException())
-        override suspend fun reorderGroupedLists(groupId: String, listIdsInOrder: List<String>): Result<Unit> =
+        override suspend fun reorderGroupedLists(
+            groupOwnerId: String,
+            groupId: String,
+            listKeysInOrder: List<NotesListKey>,
+        ): Result<Unit> =
             Result.failure(UnsupportedOperationException())
         override suspend fun updateList(
             listId: String,
@@ -1137,9 +1309,18 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
-        override suspend fun setListGroup(listId: String, groupId: String?): Result<Unit> =
+        override suspend fun setListGroup(
+            listOwnerId: String,
+            listId: String,
+            groupOwnerId: String?,
+            groupId: String?,
+        ): Result<Unit> =
             Result.failure(UnsupportedOperationException())
-        override suspend fun reorderGroupedLists(groupId: String, listIdsInOrder: List<String>): Result<Unit> =
+        override suspend fun reorderGroupedLists(
+            groupOwnerId: String,
+            groupId: String,
+            listKeysInOrder: List<NotesListKey>,
+        ): Result<Unit> =
             Result.failure(UnsupportedOperationException())
         override suspend fun updateList(
             listId: String,
@@ -1169,9 +1350,18 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
-        override suspend fun setListGroup(listId: String, groupId: String?): Result<Unit> =
+        override suspend fun setListGroup(
+            listOwnerId: String,
+            listId: String,
+            groupOwnerId: String?,
+            groupId: String?,
+        ): Result<Unit> =
             Result.failure(UnsupportedOperationException())
-        override suspend fun reorderGroupedLists(groupId: String, listIdsInOrder: List<String>): Result<Unit> =
+        override suspend fun reorderGroupedLists(
+            groupOwnerId: String,
+            groupId: String,
+            listKeysInOrder: List<NotesListKey>,
+        ): Result<Unit> =
             Result.failure(UnsupportedOperationException())
         override suspend fun updateList(
             listId: String,
@@ -1208,10 +1398,19 @@ class NotesListsViewModelTest {
         override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
 
-        override suspend fun setListGroup(listId: String, groupId: String?): Result<Unit> =
+        override suspend fun setListGroup(
+            listOwnerId: String,
+            listId: String,
+            groupOwnerId: String?,
+            groupId: String?,
+        ): Result<Unit> =
             Result.failure(UnsupportedOperationException())
 
-        override suspend fun reorderGroupedLists(groupId: String, listIdsInOrder: List<String>): Result<Unit> =
+        override suspend fun reorderGroupedLists(
+            groupOwnerId: String,
+            groupId: String,
+            listKeysInOrder: List<NotesListKey>,
+        ): Result<Unit> =
             Result.failure(UnsupportedOperationException())
 
         override suspend fun updateList(
@@ -1269,6 +1468,7 @@ class NotesListsViewModelTest {
             isOrdered: Boolean = false,
             isGroup: Boolean = false,
             groupId: String? = null,
+            groupOwnerId: String? = if (groupId == null) null else ownerId,
             groupOrder: Int = 0,
             isShared: Boolean? = null,
             contributors: List<String> = emptyList(),
@@ -1304,6 +1504,7 @@ class NotesListsViewModelTest {
                 isOrdered = isOrdered,
                 isGroup = isGroup,
                 groupId = groupId,
+                groupOwnerId = groupOwnerId,
                 groupOrder = groupOrder,
                 isShared = isShared ?: (ownerId != OWNER_ID || resolvedContributors.distinct().size > 1),
                 contributors = resolvedContributors,
@@ -1349,6 +1550,7 @@ private fun NotesListSummary.withInheritedGroupContributors(
 private fun NotesListSummary.withGroup(group: NotesListSummary?, groupOrder: Int): NotesListSummary =
     copy(
         groupId = group?.id,
+        groupOwnerId = group?.ownerId,
         groupOrder = if (group == null) 0 else groupOrder,
     ).withInheritedGroupContributors(group?.directContributors.orEmpty())
 
@@ -1359,7 +1561,7 @@ private fun MutableList<NotesListSummary>.propagateGroupContributor(
 ) {
     indices.forEach { index ->
         val item = this[index]
-        if (item.ownerId == group.ownerId && item.groupId == group.id) {
+        if (item.groupKey == group.key) {
             val inheritedContributors = if (added) {
                 item.inheritedGroupContributors + friendUserId
             } else {

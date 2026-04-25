@@ -202,6 +202,9 @@ fun NotesListsScreen(
     val currentGroup = state.items.firstOrNull { item ->
         item.ownerId == groupOwnerId && item.id == groupId && item.isGroup
     }
+    val currentGroupKey = groupOwnerId?.let { ownerId ->
+        groupId?.let { id -> NotesListKey(ownerId, id) }
+    }
     val currentGroupName = currentGroup?.name ?: groupName.orEmpty()
     val currentGroupIsOrdered = currentGroup?.isOrdered ?: groupIsOrdered
     val openListOptions: (NotesListSummary) -> Unit = { item ->
@@ -249,11 +252,10 @@ fun NotesListsScreen(
             showArchivedLists = showArchivedLists,
         )
     }
-    val visibleGroupKeys = visibleRootGroups.map { item -> item.ownerId to item.id }.toSet()
+    val visibleGroupKeys = visibleRootGroups.map { item -> item.key }.toSet()
     val visibleItems = if (isGroupScreen) {
         state.items.filter { item ->
-            item.ownerId == groupOwnerId &&
-                item.groupId == groupId &&
+            item.groupKey == currentGroupKey &&
                 !item.isGroup &&
                 (currentUserId == null || currentUserId !in item.archivedBy)
         }
@@ -263,7 +265,7 @@ fun NotesListsScreen(
                 currentUserId = currentUserId,
                 selectedSection = selectedSection,
                 showArchivedLists = showArchivedLists,
-            ) && (item.groupId == null || (item.ownerId to item.groupId) !in visibleGroupKeys)
+            ) && (item.groupKey == null || item.groupKey !in visibleGroupKeys)
         }
     }
     val emptyMessage = if (isGroupScreen) {
@@ -394,12 +396,16 @@ fun NotesListsScreen(
 
         listForOptions?.let { list ->
             val isArchived = currentUserId != null && currentUserId in list.archivedBy
+            val isGroupOwner = list.groupKey?.ownerId == currentUserId
+            val canManageGrouping = !list.isGroup &&
+                currentUserId != null &&
+                (list.groupKey == null || isGroupOwner)
             ListOptionsDialog(
                 listName = list.name,
                 isOwner = list.ownerId == currentUserId,
                 isArchived = isArchived,
-                isGroup = list.isGroup,
                 isGrouped = list.groupId != null,
+                canManageGrouping = canManageGrouping,
                 onArchive = {
                     viewModel.setListArchived(list, archived = !isArchived)
                     listForOptions = null
@@ -570,7 +576,7 @@ fun NotesListsScreen(
                             onListOptionsClick = openListOptions,
                             isGroupOrdered = isGroupScreen && currentGroupIsOrdered,
                             onListsReordered = currentGroup?.let { group ->
-                                { listIdsInOrder -> viewModel.reorderGroupedLists(group, listIdsInOrder) }
+                                { listKeysInOrder -> viewModel.reorderGroupedLists(group, listKeysInOrder) }
                             },
                             archivedUserId = currentUserId.takeIf { showArchivedLists },
                             onUnarchiveClick = if (showArchivedLists) {
@@ -767,7 +773,7 @@ private fun NotesListsContent(
     onListLongClick: (NotesListSummary) -> Unit,
     onListOptionsClick: (NotesListSummary) -> Unit,
     isGroupOrdered: Boolean = false,
-    onListsReordered: ((List<String>) -> Unit)? = null,
+    onListsReordered: ((List<NotesListKey>) -> Unit)? = null,
     archivedUserId: String? = null,
     onUnarchiveClick: ((NotesListSummary) -> Unit)? = null,
 ) {
@@ -818,7 +824,7 @@ private fun OrderedNotesListsContent(
     onListSelected: (id: String, ownerId: String, name: String, isOrdered: Boolean) -> Unit,
     onListLongClick: (NotesListSummary) -> Unit,
     onListOptionsClick: (NotesListSummary) -> Unit,
-    onListsReordered: (List<String>) -> Unit,
+    onListsReordered: (List<NotesListKey>) -> Unit,
 ) {
     val lazyListState = rememberLazyListState()
     var displayItems by remember { mutableStateOf(items) }
@@ -861,7 +867,7 @@ private fun OrderedNotesListsContent(
                             reorderState.dragBy(dragAmount.y)
                         },
                         onDragEnd = {
-                            onListsReordered(displayItems.map(NotesListSummary::id))
+                            onListsReordered(displayItems.map(NotesListSummary::key))
                             reorderState.endDrag()
                         },
                         onDragCancel = {
@@ -1244,8 +1250,8 @@ private fun ListOptionsDialog(
     listName: String,
     isOwner: Boolean,
     isArchived: Boolean,
-    isGroup: Boolean,
     isGrouped: Boolean,
+    canManageGrouping: Boolean,
     onArchive: () -> Unit,
     onShare: () -> Unit,
     onAddToGroup: () -> Unit,
@@ -1275,18 +1281,18 @@ private fun ListOptionsDialog(
                     },
                     onClick = onArchive,
                 )
+                if (canManageGrouping) {
+                    OptionRow(
+                        icon = if (isGrouped) Icons.Outlined.FolderOff else Icons.Outlined.CreateNewFolder,
+                        label = if (isGrouped) {
+                            stringResource(Res.string.remove_list_from_group)
+                        } else {
+                            stringResource(Res.string.add_list_to_group)
+                        },
+                        onClick = if (isGrouped) onRemoveFromGroup else onAddToGroup,
+                    )
+                }
                 if (isOwner) {
-                    if (!isGroup) {
-                        OptionRow(
-                            icon = if (isGrouped) Icons.Outlined.FolderOff else Icons.Outlined.CreateNewFolder,
-                            label = if (isGrouped) {
-                                stringResource(Res.string.remove_list_from_group)
-                            } else {
-                                stringResource(Res.string.add_list_to_group)
-                            },
-                            onClick = if (isGrouped) onRemoveFromGroup else onAddToGroup,
-                        )
-                    }
                     OptionRow(
                         icon = Icons.Outlined.Share,
                         label = stringResource(Res.string.share_list),

@@ -70,7 +70,7 @@ class NotesListsViewModel(
 
     fun createGroupAndAddList(list: NotesListSummary, groupName: String, ordered: Boolean) {
         viewModelScope.launch {
-            requireOwnedList(list)
+            requireAccessibleList(list)
                 .fold(
                     onSuccess = { currentList ->
                         if (currentList.isGroup) {
@@ -78,7 +78,12 @@ class NotesListsViewModel(
                         } else {
                             repository.createList(groupName, ordered, isGroup = true)
                                 .onSuccess { group ->
-                                    repository.setListGroup(currentList.id, group.id)
+                                    repository.setListGroup(
+                                        listOwnerId = currentList.ownerId,
+                                        listId = currentList.id,
+                                        groupOwnerId = group.ownerId,
+                                        groupId = group.id,
+                                    )
                                         .onSuccess { fetchLists() }
                                         .onFailure { throwable ->
                                             fetchLists()
@@ -307,20 +312,29 @@ class NotesListsViewModel(
 
     fun setListGroup(list: NotesListSummary, group: NotesListSummary?) {
         viewModelScope.launch {
-            requireOwnedList(list)
+            requireAccessibleList(list)
                 .fold(
                     onSuccess = { currentList ->
                         if (currentList.isGroup) {
                             Result.failure(IllegalStateException(GROUPING_GROUP_ERROR_MESSAGE))
                         } else {
                             val currentGroup = group?.let(::findCurrentList)
+                            val currentUserId = authRepository.currentUserId
+                            val existingGroupOwnerId = currentList.groupKey?.ownerId
                             when {
+                                currentGroup == null && existingGroupOwnerId != null &&
+                                    existingGroupOwnerId != currentUserId -> {
+                                    Result.failure(IllegalStateException(GROUP_OWNERSHIP_ERROR_MESSAGE))
+                                }
                                 currentGroup == null -> Result.success(currentList to null)
                                 !currentGroup.isGroup -> {
                                     Result.failure(IllegalStateException(GROUPING_TARGET_ERROR_MESSAGE))
                                 }
-                                currentGroup.ownerId != authRepository.currentUserId -> {
-                                    Result.failure(IllegalStateException(OWNERSHIP_ERROR_MESSAGE))
+                                currentGroup.ownerId != currentUserId -> {
+                                    Result.failure(IllegalStateException(GROUP_OWNERSHIP_ERROR_MESSAGE))
+                                }
+                                existingGroupOwnerId != null && existingGroupOwnerId != currentUserId -> {
+                                    Result.failure(IllegalStateException(GROUP_OWNERSHIP_ERROR_MESSAGE))
                                 }
                                 else -> Result.success(currentList to currentGroup)
                             }
@@ -330,13 +344,17 @@ class NotesListsViewModel(
                 )
                 .fold(
                     onSuccess = { (currentList, currentGroup) ->
-                        repository.setListGroup(currentList.id, currentGroup?.id)
+                        repository.setListGroup(
+                            listOwnerId = currentList.ownerId,
+                            listId = currentList.id,
+                            groupOwnerId = currentGroup?.ownerId,
+                            groupId = currentGroup?.id,
+                        )
                             .onSuccess {
                                 val nextOrder = currentGroup?.let { groupList ->
                                     allItems.count { item ->
-                                        item.ownerId == groupList.ownerId &&
-                                            item.groupId == groupList.id &&
-                                            item.id != currentList.id
+                                        item.groupKey == groupList.key &&
+                                            item.key != currentList.key
                                     }
                                 } ?: 0
                                 updateLocalList(currentList.ownerId, currentList.id) { existingList ->
@@ -355,18 +373,18 @@ class NotesListsViewModel(
         }
     }
 
-    fun reorderGroupedLists(group: NotesListSummary, listIdsInOrder: List<String>) {
+    fun reorderGroupedLists(group: NotesListSummary, listKeysInOrder: List<NotesListKey>) {
         val currentGroup = findCurrentList(group)
         if (!currentGroup.isGroup || currentGroup.ownerId != authRepository.currentUserId) {
-            _state.update { it.copy(errorMessage = OWNERSHIP_ERROR_MESSAGE) }
+            _state.update { it.copy(errorMessage = GROUP_OWNERSHIP_ERROR_MESSAGE) }
             return
         }
 
         val currentChildren = allItems
-            .filter { item -> item.ownerId == currentGroup.ownerId && item.groupId == currentGroup.id }
+            .filter { item -> item.groupKey == currentGroup.key }
             .sortedBy { item -> item.groupOrder }
-        val reorderedChildren = currentChildren.applyGroupOrder(listIdsInOrder) ?: return
-        if (currentChildren.map(NotesListSummary::id) == reorderedChildren.map(NotesListSummary::id)) {
+        val reorderedChildren = currentChildren.applyGroupOrder(listKeysInOrder) ?: return
+        if (currentChildren.map(NotesListSummary::key) == reorderedChildren.map(NotesListSummary::key)) {
             return
         }
 
@@ -374,7 +392,7 @@ class NotesListsViewModel(
         publishCurrentItems()
 
         viewModelScope.launch {
-            repository.reorderGroupedLists(currentGroup.id, listIdsInOrder)
+            repository.reorderGroupedLists(currentGroup.ownerId, currentGroup.id, listKeysInOrder)
                 .onFailure { throwable ->
                     replaceLocalLists(currentChildren)
                     _state.update {
@@ -563,6 +581,16 @@ class NotesListsViewModel(
         }
     }
 
+    private fun requireAccessibleList(list: NotesListSummary): Result<NotesListSummary> {
+        val currentList = findCurrentList(list)
+        val currentUserId = authRepository.currentUserId
+        return if (currentUserId != null && currentUserId in currentList.contributors) {
+            Result.success(currentList)
+        } else {
+            Result.failure(IllegalStateException(ACCESS_ERROR_MESSAGE))
+        }
+    }
+
     private fun publishCurrentItems() {
         _state.update {
             it.copy(
@@ -618,6 +646,7 @@ class NotesListsViewModel(
         val inheritedContributors = group?.directContributors.orEmpty()
         return copy(
             groupId = group?.id,
+            groupOwnerId = group?.ownerId,
             groupOrder = if (group == null) 0 else groupOrder,
         ).withInheritedGroupContributors(inheritedContributors)
     }
@@ -628,7 +657,7 @@ class NotesListsViewModel(
         added: Boolean,
     ) {
         allItems = allItems.map { item ->
-            if (item.ownerId == group.ownerId && item.groupId == group.id) {
+            if (item.groupKey == group.key) {
                 val inheritedContributors = if (added) {
                     item.inheritedGroupContributors + friendUserId
                 } else {
@@ -665,6 +694,8 @@ class NotesListsViewModel(
 
     private companion object {
         const val OWNERSHIP_ERROR_MESSAGE = "Solo el propietario puede modificar esta lista"
+        const val GROUP_OWNERSHIP_ERROR_MESSAGE = "Solo el propietario del grupo puede modificar esta agrupación"
+        const val ACCESS_ERROR_MESSAGE = "No tienes acceso a esta lista"
         const val GROUPING_GROUP_ERROR_MESSAGE = "Un grupo no puede agregarse a otro grupo"
         const val GROUPING_TARGET_ERROR_MESSAGE = "Selecciona un grupo de listas"
         const val SEARCH_DEBOUNCE_MS = 250L

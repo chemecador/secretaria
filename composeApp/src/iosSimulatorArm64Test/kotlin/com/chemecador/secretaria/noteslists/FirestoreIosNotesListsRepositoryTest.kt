@@ -54,7 +54,9 @@ class FirestoreIosNotesListsRepositoryTest {
                                 },
                                 "creator": { "stringValue": "user-999" },
                                 "date": { "timestampValue": "2026-04-12T12:00:00Z" },
-                                "ordered": { "booleanValue": false }
+                                "ordered": { "booleanValue": false },
+                                "groupId": { "stringValue": "group-1" },
+                                "groupOwnerId": { "stringValue": "user-123" }
                               }
                             }
                           }
@@ -88,6 +90,8 @@ class FirestoreIosNotesListsRepositoryTest {
         assertEquals("list-2", lists[1].id)
         assertEquals("user-999", lists[1].ownerId)
         assertEquals(true, lists[1].isShared)
+        assertEquals("group-1", lists[1].groupId)
+        assertEquals("user-123", lists[1].groupOwnerId)
         assertEquals(listOf("user-999", "user-123"), lists[1].contributors)
         assertTrue(lists[1].archivedBy.isEmpty())
         assertTrue(lists[1].archivedAtBy.isEmpty())
@@ -288,6 +292,142 @@ class FirestoreIosNotesListsRepositoryTest {
         assertTrue(transport.requests[1].body!!.contains(""""contributors""""))
         assertTrue(transport.requests[1].body!!.contains(""""stringValue":"user-123""""))
         assertTrue(!transport.requests[1].body!!.contains(""""stringValue":"friend-1""""))
+    }
+
+    @Test
+    fun setListGroup_patchesSharedListUnderRealOwner() = kotlinx.coroutines.test.runTest {
+        val transport = RecordingFirestoreTransport(
+            responses = listOf(
+                FirebaseIosFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "name": "projects/project-id/databases/(default)/documents/users/user-999/noteslist/list-1",
+                          "fields": {
+                            "contributors": {
+                              "arrayValue": {
+                                "values": [
+                                  { "stringValue": "user-999" },
+                                  { "stringValue": "user-123" }
+                                ]
+                              }
+                            },
+                            "directContributors": {
+                              "arrayValue": {
+                                "values": [
+                                  { "stringValue": "user-999" },
+                                  { "stringValue": "user-123" }
+                                ]
+                              }
+                            }
+                          },
+                          "updateTime": "2026-04-15T10:00:00Z"
+                        }
+                    """.trimIndent(),
+                ),
+                FirebaseIosFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "name": "projects/project-id/databases/(default)/documents/users/user-123/noteslist/group-1",
+                          "fields": {
+                            "isGroup": { "booleanValue": true },
+                            "directContributors": {
+                              "arrayValue": {
+                                "values": [
+                                  { "stringValue": "user-123" },
+                                  { "stringValue": "friend-1" }
+                                ]
+                              }
+                            }
+                          },
+                          "updateTime": "2026-04-15T11:00:00Z"
+                        }
+                    """.trimIndent(),
+                ),
+                FirebaseIosFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = "[]",
+                ),
+                FirebaseIosFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "name": "projects/project-id/databases/(default)/documents/users/user-999/noteslist/list-1",
+                          "fields": {}
+                        }
+                    """.trimIndent(),
+                ),
+            ),
+        )
+        val repository = FirestoreIosNotesListsRepository(
+            authRepository = LoggedInAuthRepository("user-123"),
+            firestore = FirebaseIosFirestoreRestApi(
+                projectId = "project-id",
+                tokenProvider = StaticTokenProvider("ios-token"),
+                transport = transport,
+            ),
+        )
+
+        val result = repository.setListGroup(
+            listOwnerId = "user-999",
+            listId = "list-1",
+            groupOwnerId = "user-123",
+            groupId = "group-1",
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals(
+            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/user-999/noteslist/list-1",
+            transport.requests[0].url,
+        )
+        assertEquals(
+            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/user-123/noteslist/group-1",
+            transport.requests[1].url,
+        )
+        assertEquals("POST", transport.requests[2].method)
+        assertEquals("PATCH", transport.requests[3].method)
+        assertTrue(transport.requests[3].url.contains("/users/user-999/noteslist/list-1?"))
+        assertTrue(transport.requests[3].url.contains("updateMask.fieldPaths=groupOwnerId"))
+        assertTrue(transport.requests[3].body!!.contains(""""groupOwnerId""""))
+        assertTrue(transport.requests[3].body!!.contains(""""stringValue":"user-999""""))
+        assertTrue(transport.requests[3].body!!.contains(""""stringValue":"user-123""""))
+        assertTrue(transport.requests[3].body!!.contains(""""stringValue":"friend-1""""))
+    }
+
+    @Test
+    fun reorderGroupedLists_commitsOrderToEachListOwnerPath() = kotlinx.coroutines.test.runTest {
+        val transport = RecordingFirestoreTransport(
+            responses = listOf(
+                FirebaseIosFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = "{}",
+                ),
+            ),
+        )
+        val repository = FirestoreIosNotesListsRepository(
+            authRepository = LoggedInAuthRepository("user-123"),
+            firestore = FirebaseIosFirestoreRestApi(
+                projectId = "project-id",
+                tokenProvider = StaticTokenProvider("ios-token"),
+                transport = transport,
+            ),
+        )
+
+        val result = repository.reorderGroupedLists(
+            groupOwnerId = "user-123",
+            groupId = "group-1",
+            listKeysInOrder = listOf(
+                NotesListKey("user-999", "list-b"),
+                NotesListKey("user-123", "list-a"),
+            ),
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals("POST", transport.requests.single().method)
+        assertTrue(transport.requests.single().body!!.contains("/documents/users/user-999/noteslist/list-b"))
+        assertTrue(transport.requests.single().body!!.contains("/documents/users/user-123/noteslist/list-a"))
+        assertTrue(transport.requests.single().body!!.contains(""""groupOrder""""))
     }
 
     @Test

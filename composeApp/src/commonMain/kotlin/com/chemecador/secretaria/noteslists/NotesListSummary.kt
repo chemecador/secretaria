@@ -11,6 +11,7 @@ data class NotesListSummary(
     val isOrdered: Boolean,
     val isGroup: Boolean = false,
     val groupId: String? = null,
+    val groupOwnerId: String? = null,
     val groupOrder: Int = 0,
     val isShared: Boolean = false,
     val contributors: List<String> = emptyList(),
@@ -19,6 +20,22 @@ data class NotesListSummary(
     val archivedBy: List<String> = emptyList(),
     val archivedAtBy: Map<String, Instant> = emptyMap(),
 )
+
+data class NotesListKey(
+    val ownerId: String,
+    val listId: String,
+)
+
+val NotesListSummary.key: NotesListKey
+    get() = NotesListKey(ownerId, id)
+
+val NotesListSummary.groupKey: NotesListKey?
+    get() = groupId?.let { listId ->
+        NotesListKey(
+            ownerId = groupOwnerId ?: ownerId,
+            listId = listId,
+        )
+    }
 
 val NotesListSummary.directSharedWithUserIds: List<String>
     get() = directContributors

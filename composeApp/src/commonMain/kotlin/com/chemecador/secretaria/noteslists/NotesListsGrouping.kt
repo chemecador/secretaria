@@ -11,18 +11,18 @@ internal fun List<NotesListSummary>.moveList(fromIndex: Int, toIndex: Int): List
     return mutableLists.normalizeGroupOrder()
 }
 
-internal fun List<NotesListSummary>.applyGroupOrder(listIdsInOrder: List<String>): List<NotesListSummary>? {
-    if (size != listIdsInOrder.size || listIdsInOrder.distinct().size != size) {
+internal fun List<NotesListSummary>.applyGroupOrder(listKeysInOrder: List<NotesListKey>): List<NotesListSummary>? {
+    if (size != listKeysInOrder.size || listKeysInOrder.distinct().size != size) {
         return null
     }
 
-    val listsById = associateBy(NotesListSummary::id)
-    if (listsById.size != size || listIdsInOrder.any { it !in listsById }) {
+    val listsByKey = associateBy(NotesListSummary::key)
+    if (listsByKey.size != size || listKeysInOrder.any { it !in listsByKey }) {
         return null
     }
 
-    return listIdsInOrder.mapIndexed { index, listId ->
-        val list = listsById.getValue(listId)
+    return listKeysInOrder.mapIndexed { index, listKey ->
+        val list = listsByKey.getValue(listKey)
         if (list.groupOrder == index) {
             list
         } else {

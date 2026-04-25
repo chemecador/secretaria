@@ -32,6 +32,7 @@ class FakeNotesListsRepository(
             isOrdered = ordered,
             isGroup = isGroup,
             groupId = null,
+            groupOwnerId = null,
             groupOrder = 0,
             isShared = false,
             contributors = listOf("Alex"),
@@ -49,7 +50,7 @@ class FakeNotesListsRepository(
         if (list?.isGroup == true) {
             val directContributors = list.directContributors
             for (index in lists.indices) {
-                if (lists[index].groupId == listId) {
+                if (lists[index].groupKey == list.key) {
                     lists[index] = lists[index].withGroup(null, groupOrder = 0)
                         .withInheritedGroupContributors(
                             lists[index].inheritedGroupContributors.filterNot { contributorId ->
@@ -97,27 +98,44 @@ class FakeNotesListsRepository(
         return Result.success(updated)
     }
 
-    override suspend fun setListGroup(listId: String, groupId: String?): Result<Unit> {
-        val index = lists.indexOfFirst { it.id == listId }
+    override suspend fun setListGroup(
+        listOwnerId: String,
+        listId: String,
+        groupOwnerId: String?,
+        groupId: String?,
+    ): Result<Unit> {
+        if ((groupId == null) != (groupOwnerId == null)) {
+            return Result.failure(IllegalStateException("Group owner required"))
+        }
+        val index = lists.indexOfFirst { it.ownerId == listOwnerId && it.id == listId }
         if (index == -1) return Result.failure(IllegalStateException("List not found"))
-        val group = groupId?.let { id -> lists.firstOrNull { it.id == id && it.isGroup } }
-            ?: if (groupId == null) null else return Result.failure(IllegalStateException("Group not found"))
+        val group = if (groupId == null || groupOwnerId == null) {
+            null
+        } else {
+            lists.firstOrNull { it.ownerId == groupOwnerId && it.id == groupId && it.isGroup }
+                ?: return Result.failure(IllegalStateException("Group not found"))
+        }
         val groupOrder = if (group == null) {
             0
         } else {
-            lists.count { it.groupId == group.id && it.id != listId }
+            lists.count { it.groupKey == group.key && it.key != NotesListKey(listOwnerId, listId) }
         }
         lists[index] = lists[index].withGroup(group, groupOrder)
         return Result.success(Unit)
     }
 
-    override suspend fun reorderGroupedLists(groupId: String, listIdsInOrder: List<String>): Result<Unit> {
+    override suspend fun reorderGroupedLists(
+        groupOwnerId: String,
+        groupId: String,
+        listKeysInOrder: List<NotesListKey>,
+    ): Result<Unit> {
+        val groupKey = NotesListKey(groupOwnerId, groupId)
         val reordered = lists
-            .filter { it.groupId == groupId }
-            .applyGroupOrder(listIdsInOrder)
+            .filter { it.groupKey == groupKey }
+            .applyGroupOrder(listKeysInOrder)
             ?: return Result.failure(IllegalStateException("Invalid group order"))
         reordered.forEach { reorderedList ->
-            val index = lists.indexOfFirst { it.id == reorderedList.id }
+            val index = lists.indexOfFirst { it.key == reorderedList.key }
             if (index != -1) {
                 lists[index] = reorderedList
             }
@@ -242,6 +260,7 @@ private fun NotesListSummary.withGroup(
     val inheritedContributors = group?.directContributors.orEmpty()
     return copy(
         groupId = group?.id,
+        groupOwnerId = group?.ownerId,
         groupOrder = if (group == null) 0 else groupOrder,
     ).withInheritedGroupContributors(inheritedContributors)
 }
@@ -253,7 +272,7 @@ private fun MutableList<NotesListSummary>.propagateGroupContributor(
 ) {
     for (index in indices) {
         val item = this[index]
-        if (item.groupId == group.id) {
+        if (item.groupKey == group.key) {
             val inheritedContributors = if (added) {
                 item.inheritedGroupContributors + friendUserId
             } else {
