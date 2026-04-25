@@ -20,18 +20,8 @@ data class NotesListSummary(
     val archivedAtBy: Map<String, Instant> = emptyMap(),
 )
 
-val NotesListSummary.sharedWithUserIds: List<String>
-    get() = contributors
-        .distinct()
-        .filterNot { contributorId -> contributorId == ownerId }
-
 val NotesListSummary.directSharedWithUserIds: List<String>
     get() = directContributors
-        .distinct()
-        .filterNot { contributorId -> contributorId == ownerId }
-
-val NotesListSummary.inheritedSharedWithUserIds: List<String>
-    get() = inheritedGroupContributors
         .distinct()
         .filterNot { contributorId -> contributorId == ownerId }
 

@@ -68,6 +68,33 @@ class NotesListsViewModel(
         }
     }
 
+    fun createGroupAndAddList(list: NotesListSummary, groupName: String, ordered: Boolean) {
+        viewModelScope.launch {
+            requireOwnedList(list)
+                .fold(
+                    onSuccess = { currentList ->
+                        if (currentList.isGroup) {
+                            Result.failure(IllegalStateException(GROUPING_GROUP_ERROR_MESSAGE))
+                        } else {
+                            repository.createList(groupName, ordered, isGroup = true)
+                                .onSuccess { group ->
+                                    repository.setListGroup(currentList.id, group.id)
+                                        .onSuccess { fetchLists() }
+                                        .onFailure { throwable ->
+                                            fetchLists()
+                                            _state.update { it.copy(errorMessage = throwable.message) }
+                                        }
+                                }
+                        }
+                    },
+                    onFailure = { Result.failure(it) },
+                )
+                .onFailure { throwable ->
+                    _state.update { it.copy(errorMessage = throwable.message) }
+                }
+        }
+    }
+
     fun loadShareableFriends(list: NotesListSummary) {
         viewModelScope.launch {
             requireOwnedList(list)

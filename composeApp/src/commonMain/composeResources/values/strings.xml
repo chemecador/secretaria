@@ -62,6 +62,8 @@
     <string name="remove_list_from_group">Quitar del grupo</string>
     <string name="select_group_title">Agregar a grupo</string>
     <string name="select_group_empty">No tienes grupos disponibles.</string>
+    <string name="create_group_inline_title">Nuevo grupo</string>
+    <string name="create_group_button">Crear grupo</string>
     <string name="group_lists_empty">Este grupo todavia no tiene listas.</string>
     <string name="reorder_list_handle">Manten pulsado para reordenar la lista</string>
     <string name="share_list">Compartir</string>

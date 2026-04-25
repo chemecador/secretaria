@@ -110,6 +110,8 @@ import secretaria.composeapp.generated.resources.archive_list_success
 import secretaria.composeapp.generated.resources.archived_lists_title
 import secretaria.composeapp.generated.resources.cancel
 import secretaria.composeapp.generated.resources.add_list_to_group
+import secretaria.composeapp.generated.resources.create_group_button
+import secretaria.composeapp.generated.resources.create_group_inline_title
 import secretaria.composeapp.generated.resources.create_list_group
 import secretaria.composeapp.generated.resources.create_list_button
 import secretaria.composeapp.generated.resources.create_list_name_hint
@@ -439,6 +441,11 @@ fun NotesListsScreen(
                     .sortedBy { item -> item.name.lowercase() },
                 onGroupSelected = { group ->
                     viewModel.setListGroup(list, group)
+                    listToGroup = null
+                },
+                onCreateGroup = { name, ordered ->
+                    selectedSection = NotesListsSection.MINE
+                    viewModel.createGroupAndAddList(list, name, ordered)
                     listToGroup = null
                 },
                 onDismiss = { listToGroup = null },
@@ -1340,8 +1347,13 @@ private fun GroupSelectionDialog(
     listName: String,
     groups: List<NotesListSummary>,
     onGroupSelected: (NotesListSummary) -> Unit,
+    onCreateGroup: (name: String, ordered: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    var showCreateGroup by remember(groups.isEmpty()) { mutableStateOf(groups.isEmpty()) }
+    var newGroupName by remember { mutableStateOf("") }
+    var newGroupOrdered by remember { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
@@ -1358,16 +1370,11 @@ private fun GroupSelectionDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (groups.isEmpty()) {
-                    Text(
-                        text = stringResource(Res.string.select_group_empty),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                } else {
+                if (groups.isNotEmpty()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 320.dp)
+                            .heightIn(max = 240.dp)
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
@@ -1379,6 +1386,64 @@ private fun GroupSelectionDialog(
                             )
                         }
                     }
+                } else {
+                    Text(
+                        text = stringResource(Res.string.select_group_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                )
+
+                if (showCreateGroup) {
+                    Text(
+                        text = stringResource(Res.string.create_group_inline_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    OutlinedTextField(
+                        value = newGroupName,
+                        onValueChange = { newGroupName = it },
+                        label = { Text(stringResource(Res.string.create_list_name_hint)) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            cursorColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(stringResource(Res.string.create_list_ordered))
+                        Switch(
+                            checked = newGroupOrdered,
+                            onCheckedChange = { newGroupOrdered = it },
+                        )
+                    }
+                    FilledTonalButton(
+                        onClick = { onCreateGroup(newGroupName.trim(), newGroupOrdered) },
+                        enabled = newGroupName.isNotBlank(),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.CreateNewFolder,
+                            contentDescription = null,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(Res.string.create_group_button))
+                    }
+                } else {
+                    OptionRow(
+                        icon = Icons.Outlined.CreateNewFolder,
+                        label = stringResource(Res.string.create_group_button),
+                        onClick = { showCreateGroup = true },
+                    )
                 }
             }
         },
