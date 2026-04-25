@@ -2,6 +2,8 @@ package com.chemecador.secretaria.notes
 
 import androidx.compose.ui.graphics.Color
 
+internal const val DEFAULT_NOTE_COLOR = 0xFFFFFFFFL
+
 internal fun noteColor(value: Long): Color = Color(value.toInt())
 
 internal fun noteColorNeedsDarkForeground(value: Long): Boolean {
@@ -13,7 +15,7 @@ internal fun noteColorNeedsDarkForeground(value: Long): Boolean {
 }
 
 internal val noteColorPalette = listOf(
-    0xFFFFFFFFL,
+    DEFAULT_NOTE_COLOR,
     0xFFE0E0E0L,
     0xFFBDBDBDL,
     0xFF9E9E9EL,

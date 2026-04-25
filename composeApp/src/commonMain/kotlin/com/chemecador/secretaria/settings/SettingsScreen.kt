@@ -1,22 +1,33 @@
 package com.chemecador.secretaria.settings
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AlternateEmail
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material3.AlertDialog
@@ -33,13 +44,17 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.tooling.preview.Preview
@@ -52,6 +67,11 @@ import com.chemecador.secretaria.SecretariaTopBarContentColor
 import com.chemecador.secretaria.config.AppBuildInfo
 import com.chemecador.secretaria.friends.FriendsRepository
 import com.chemecador.secretaria.login.AuthRepository
+import com.chemecador.secretaria.notes.DEFAULT_NOTE_COLOR
+import com.chemecador.secretaria.notes.noteColor
+import com.chemecador.secretaria.notes.noteColorNeedsDarkForeground
+import com.chemecador.secretaria.notes.noteColorPalette
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import secretaria.composeapp.generated.resources.Res
@@ -65,6 +85,8 @@ import secretaria.composeapp.generated.resources.settings_contact_dialog_message
 import secretaria.composeapp.generated.resources.settings_contact_dialog_title
 import secretaria.composeapp.generated.resources.settings_contact_email
 import secretaria.composeapp.generated.resources.settings_data_not_provided
+import secretaria.composeapp.generated.resources.settings_default_note_color
+import secretaria.composeapp.generated.resources.settings_default_note_color_dialog_title
 import secretaria.composeapp.generated.resources.settings_developer
 import secretaria.composeapp.generated.resources.settings_project_label
 import secretaria.composeapp.generated.resources.settings_project_summary
@@ -85,16 +107,31 @@ fun SettingsScreen(
 ) {
     val authRepository = koinInject<AuthRepository>()
     val friendsRepository = koinInject<FriendsRepository>()
+    val accountSettingsRepository = koinInject<AccountSettingsRepository>()
     val accountEmail = authRepository.currentUserEmail
         ?: stringResource(Res.string.settings_data_not_provided)
     val accountUserCode by produceState<String?>(initialValue = null, authRepository.currentUserId, friendsRepository) {
         value = authRepository.currentUserId
             ?.let { friendsRepository.getMyFriendCode().getOrNull() }
     }
+    var defaultNoteColor by remember { mutableStateOf(DEFAULT_NOTE_COLOR) }
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(accountSettingsRepository, authRepository.currentUserId) {
+        defaultNoteColor = accountSettingsRepository.getDefaultNoteColor()
+            .getOrDefault(DEFAULT_NOTE_COLOR)
+    }
 
     SettingsScreenContent(
         accountEmail = accountEmail,
         accountUserCode = accountUserCode ?: " ",
+        defaultNoteColor = defaultNoteColor,
+        onDefaultNoteColorSelected = { color ->
+            coroutineScope.launch {
+                accountSettingsRepository.setDefaultNoteColor(color)
+                    .onSuccess { defaultNoteColor = color }
+            }
+        },
         onOpenSupportCreator = onOpenSupportCreator,
         onBack = onBack,
         onOpenFriends = onOpenFriends,
@@ -109,6 +146,8 @@ fun SettingsScreen(
 private fun SettingsScreenContent(
     accountEmail: String,
     accountUserCode: String,
+    defaultNoteColor: Long,
+    onDefaultNoteColorSelected: (Long) -> Unit,
     onOpenSupportCreator: () -> Unit,
     onBack: () -> Unit,
     onOpenFriends: () -> Unit,
@@ -118,9 +157,10 @@ private fun SettingsScreenContent(
 ) {
     val uriHandler = LocalUriHandler.current
     var showSendMailDialog by remember { mutableStateOf(false) }
+    var showDefaultNoteColorDialog by remember { mutableStateOf(false) }
 
     PlatformBackHandler(
-        enabled = !showSendMailDialog,
+        enabled = !showSendMailDialog && !showDefaultNoteColorDialog,
         onBack = onBack,
     )
 
@@ -151,6 +191,17 @@ private fun SettingsScreenContent(
                     Text(stringResource(Res.string.cancel))
                 }
             },
+        )
+    }
+
+    if (showDefaultNoteColorDialog) {
+        DefaultNoteColorDialog(
+            selectedColor = defaultNoteColor,
+            onColorSelected = { color ->
+                showDefaultNoteColorDialog = false
+                onDefaultNoteColorSelected(color)
+            },
+            onDismiss = { showDefaultNoteColorDialog = false },
         )
     }
 
@@ -203,6 +254,11 @@ private fun SettingsScreenContent(
                     icon = Icons.Default.Person,
                     label = stringResource(Res.string.settings_account_user_code),
                     value = accountUserCode,
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                DefaultNoteColorRow(
+                    color = defaultNoteColor,
+                    onClick = { showDefaultNoteColorDialog = true },
                 )
             }
 
@@ -347,6 +403,127 @@ private fun SupportCreatorNavigationRow(
 }
 
 @Composable
+private fun DefaultNoteColorRow(
+    color: Long,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Default.Palette,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = stringResource(Res.string.settings_default_note_color),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        ColorSwatch(color = color)
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            modifier = Modifier.padding(start = 8.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun DefaultNoteColorDialog(
+    selectedColor: Long,
+    onColorSelected: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        title = { Text(stringResource(Res.string.settings_default_note_color_dialog_title)) },
+        text = {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(6),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 320.dp),
+            ) {
+                items(noteColorPalette) { color ->
+                    DefaultNoteColorOption(
+                        color = color,
+                        isSelected = color == selectedColor,
+                        onClick = { onColorSelected(color) },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun DefaultNoteColorOption(
+    color: Long,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .padding(6.dp)
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(noteColor(color))
+            .border(
+                width = if (isSelected) 3.dp else 1.dp,
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outline
+                },
+                shape = CircleShape,
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (isSelected) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = null,
+                tint = if (noteColorNeedsDarkForeground(color)) Color.Black else Color.White,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ColorSwatch(
+    color: Long,
+) {
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(CircleShape)
+            .background(noteColor(color))
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline,
+                shape = CircleShape,
+            ),
+    )
+}
+
+@Composable
 private fun SettingsRow(
     icon: ImageVector,
     label: String,
@@ -408,6 +585,8 @@ private fun SettingsScreenPreview() {
         SettingsScreenContent(
             accountEmail = "user@example.com",
             accountUserCode = "261051",
+            defaultNoteColor = 0xFFFFF9C4L,
+            onDefaultNoteColorSelected = {},
             onOpenSupportCreator = {},
             onBack = {},
             onOpenFriends = {},

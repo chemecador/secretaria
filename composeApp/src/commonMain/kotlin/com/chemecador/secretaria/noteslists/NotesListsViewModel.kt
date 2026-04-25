@@ -476,7 +476,7 @@ class NotesListsViewModel(
 
     private companion object {
         const val OWNERSHIP_ERROR_MESSAGE = "Solo el propietario puede modificar esta lista"
-        const val SEARCH_DEBOUNCE_MS = 300L
+        const val SEARCH_DEBOUNCE_MS = 250L
     }
 }
 

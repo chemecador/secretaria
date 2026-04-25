@@ -2,6 +2,7 @@ package com.chemecador.secretaria.notes
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chemecador.secretaria.settings.AccountSettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -10,6 +11,7 @@ import kotlinx.coroutines.launch
 
 class NotesViewModel(
     private val repository: NotesRepository,
+    private val accountSettingsRepository: AccountSettingsRepository,
     private val ownerId: String,
     private val listId: String,
 ) : ViewModel() {
@@ -30,7 +32,9 @@ class NotesViewModel(
 
     fun createNote(title: String, content: String) {
         viewModelScope.launch {
-            repository.createNote(ownerId, listId, title, content)
+            val color = accountSettingsRepository.getDefaultNoteColor()
+                .getOrDefault(DEFAULT_NOTE_COLOR)
+            repository.createNote(ownerId, listId, title, content, color)
                 .onSuccess { fetchNotes() }
                 .onFailure { throwable ->
                     _state.update { it.copy(errorMessage = throwable.message) }

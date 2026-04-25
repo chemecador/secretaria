@@ -103,6 +103,8 @@
     <string name="settings_account_section">Cuenta</string>
     <string name="settings_account_email">Email de la cuenta</string>
     <string name="settings_account_user_code">Código de usuario</string>
+    <string name="settings_default_note_color">Color de tus notas</string>
+    <string name="settings_default_note_color_dialog_title">Color por defecto</string>
     <string name="settings_app_section">Aplicación</string>
     <string name="settings_version">Versión</string>
     <string name="settings_developer">Desarrollador</string>

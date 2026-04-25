@@ -1,5 +1,7 @@
 package com.chemecador.secretaria.notes
 
+import com.chemecador.secretaria.settings.AccountSettingsRepository
+import com.chemecador.secretaria.settings.FakeAccountSettingsRepository
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -164,6 +166,27 @@ class NotesViewModelTest {
     }
 
     @Test
+    fun createNote_usesAccountDefaultNoteColor() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val accountSettingsRepository = FakeAccountSettingsRepository(
+            initialDefaultNoteColor = 0xFFC8E6C9L,
+        )
+        val viewModel = buildViewModel(
+            repository = repository,
+            accountSettingsRepository = accountSettingsRepository,
+            listId = "test-list",
+        )
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.createNote("Titulo", "Contenido")
+        advanceUntilIdle()
+
+        assertEquals(0xFFC8E6C9L, viewModel.state.value.notes.first().color)
+    }
+
+    @Test
     fun createNote_errorSetsErrorMessage() = runTest(dispatcher) {
         val repository = FailingCreateRepository()
         val viewModel = buildViewModel(repository, listId = "test-list")
@@ -314,10 +337,12 @@ class NotesViewModelTest {
 
     private fun buildViewModel(
         repository: NotesRepository,
+        accountSettingsRepository: AccountSettingsRepository = FakeAccountSettingsRepository(),
         ownerId: String = DEFAULT_OWNER_ID,
         listId: String,
     ): NotesViewModel = NotesViewModel(
         repository = repository,
+        accountSettingsRepository = accountSettingsRepository,
         ownerId = ownerId,
         listId = listId,
     )
@@ -337,6 +362,7 @@ class NotesViewModelTest {
             listId: String,
             title: String,
             content: String,
+            color: Long,
         ): Result<Note> = throw UnsupportedOperationException()
 
         override suspend fun deleteNote(
@@ -377,6 +403,7 @@ class NotesViewModelTest {
             listId: String,
             title: String,
             content: String,
+            color: Long,
         ): Result<Note> = throw UnsupportedOperationException()
 
         override suspend fun deleteNote(
@@ -415,6 +442,7 @@ class NotesViewModelTest {
             listId: String,
             title: String,
             content: String,
+            color: Long,
         ): Result<Note> = throw UnsupportedOperationException()
 
         override suspend fun deleteNote(
@@ -451,6 +479,7 @@ class NotesViewModelTest {
             listId: String,
             title: String,
             content: String,
+            color: Long,
         ): Result<Note> {
             val list = notes.getOrPut(notesKey(ownerId, listId)) { mutableListOf() }
             val note = Note(
@@ -460,6 +489,7 @@ class NotesViewModelTest {
                 createdAt = Instant.parse("2026-04-01T10:00:00Z"),
                 order = list.size,
                 creator = "Test",
+                color = color,
             )
             list.add(note)
             return Result.success(note)
@@ -535,6 +565,7 @@ class NotesViewModelTest {
             listId: String,
             title: String,
             content: String,
+            color: Long,
         ): Result<Note> = throw UnsupportedOperationException()
 
         override suspend fun deleteNote(
@@ -569,6 +600,7 @@ class NotesViewModelTest {
             listId: String,
             title: String,
             content: String,
+            color: Long,
         ): Result<Note> = Result.failure(IllegalStateException("fallo al crear"))
 
         override suspend fun deleteNote(
@@ -603,6 +635,7 @@ class NotesViewModelTest {
             listId: String,
             title: String,
             content: String,
+            color: Long,
         ): Result<Note> = throw UnsupportedOperationException()
 
         override suspend fun deleteNote(
@@ -637,6 +670,7 @@ class NotesViewModelTest {
             listId: String,
             title: String,
             content: String,
+            color: Long,
         ): Result<Note> = throw UnsupportedOperationException()
 
         override suspend fun deleteNote(

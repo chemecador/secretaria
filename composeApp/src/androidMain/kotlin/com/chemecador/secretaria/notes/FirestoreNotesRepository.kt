@@ -39,6 +39,7 @@ class FirestoreNotesRepository(
         listId: String,
         title: String,
         content: String,
+        color: Long,
     ): Result<Note> {
         return try {
             val userId = requireUserId()
@@ -55,7 +56,7 @@ class FirestoreNotesRepository(
                 "order" to nextOrder,
                 "creator" to creator,
                 "creatorId" to userId,
-                "color" to COLOR_DEFAULT,
+                "color" to color,
             )
             docRef.set(data).await()
             val created = docRef.get().await()
@@ -121,13 +122,12 @@ class FirestoreNotesRepository(
         private const val USERS = "users"
         private const val NOTES_LIST = "noteslist"
         private const val NOTES = "notes"
-        private const val COLOR_DEFAULT = 0xFFFFFFFFL
     }
 }
 
 private fun com.google.firebase.firestore.DocumentSnapshot.toNote(): Note {
     val timestamp = getTimestamp("date")
-    val rawColor = getLong("color") ?: 0xFFFFFFFFL
+    val rawColor = getLong("color") ?: DEFAULT_NOTE_COLOR
     return Note(
         id = id,
         title = getString("title").orEmpty(),

@@ -23,6 +23,7 @@ class FakeNotesRepository : NotesRepository {
         listId: String,
         title: String,
         content: String,
+        color: Long,
     ): Result<Note> {
         val list = notes.getOrPut(notesKey(ownerId, listId)) { mutableListOf() }
         val newNote = Note(
@@ -32,6 +33,7 @@ class FakeNotesRepository : NotesRepository {
             createdAt = Clock.System.now(),
             order = list.size,
             creator = "Alex",
+            color = color,
         )
         list.add(newNote)
         return Result.success(newNote)

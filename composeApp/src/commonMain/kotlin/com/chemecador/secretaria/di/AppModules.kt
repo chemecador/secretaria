@@ -14,6 +14,8 @@ import com.chemecador.secretaria.notes.NotesViewModel
 import com.chemecador.secretaria.noteslists.FakeNotesListsRepository
 import com.chemecador.secretaria.noteslists.NotesListsRepository
 import com.chemecador.secretaria.noteslists.NotesListsViewModel
+import com.chemecador.secretaria.settings.AccountSettingsRepository
+import com.chemecador.secretaria.settings.FakeAccountSettingsRepository
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -25,6 +27,7 @@ private val sharedAppModule = module {
     viewModel { params ->
         NotesViewModel(
             repository = get(),
+            accountSettingsRepository = get(),
             ownerId = params.get(),
             listId = params.get(),
         )
@@ -42,5 +45,6 @@ private fun previewPlatformModule(): Module = module {
     single<NotesListsRepository> { FakeNotesListsRepository() }
     single<NotesRepository> { FakeNotesRepository() }
     single<FriendsRepository> { FakeFriendsRepository() }
+    single<AccountSettingsRepository> { FakeAccountSettingsRepository() }
     single<FcmTokenRegister> { NoopFcmTokenRegister() }
 }

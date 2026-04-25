@@ -35,7 +35,7 @@ internal class FirestoreJsNotesRepository(
                     completed = fields.firestoreBoolean("completed") ?: false,
                     order = fields.firestoreInt("order") ?: 0,
                     creator = fields.firestoreString("creator").orEmpty(),
-                    color = fields.firestoreLong("color") ?: COLOR_DEFAULT,
+                    color = fields.firestoreLong("color") ?: DEFAULT_NOTE_COLOR,
                 )
             }
         }
@@ -45,6 +45,7 @@ internal class FirestoreJsNotesRepository(
         listId: String,
         title: String,
         content: String,
+        color: Long,
     ): Result<Note> =
         runCatching {
             val userId = requireUserId()
@@ -62,7 +63,7 @@ internal class FirestoreJsNotesRepository(
                     put("order", firestoreInteger(nextOrder))
                     put("creator", firestoreString(creator))
                     put("creatorId", firestoreString(userId))
-                    put("color", firestoreLong(COLOR_DEFAULT))
+                    put("color", firestoreLong(color))
                 },
             )
             val fields = created.fields
@@ -74,7 +75,7 @@ internal class FirestoreJsNotesRepository(
                 completed = fields.firestoreBoolean("completed") ?: false,
                 order = fields.firestoreInt("order") ?: nextOrder,
                 creator = fields.firestoreString("creator").orEmpty(),
-                color = fields.firestoreLong("color") ?: COLOR_DEFAULT,
+                color = fields.firestoreLong("color") ?: DEFAULT_NOTE_COLOR,
             )
         }
 
@@ -131,7 +132,7 @@ internal class FirestoreJsNotesRepository(
                 completed = fields.firestoreBoolean("completed") ?: false,
                 order = fields.firestoreInt("order") ?: 0,
                 creator = fields.firestoreString("creator").orEmpty(),
-                color = fields.firestoreLong("color") ?: COLOR_DEFAULT,
+                color = fields.firestoreLong("color") ?: DEFAULT_NOTE_COLOR,
             )
         }
 
@@ -154,6 +155,5 @@ internal class FirestoreJsNotesRepository(
         const val USERS = "users"
         const val NOTES_LIST = "noteslist"
         const val NOTES = "notes"
-        const val COLOR_DEFAULT = 0xFFFFFFFFL
     }
 }

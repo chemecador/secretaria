@@ -32,7 +32,7 @@ class FirestoreRestNotesRepositoryTest {
                             "completed": { "booleanValue": false },
                             "order": { "integerValue": "0" },
                             "creator": { "stringValue": "user-123" },
-                            "color": { "integerValue": "4294967295" }
+                            "color": { "integerValue": "4291356361" }
                           }
                         }
                     """.trimIndent(),
@@ -53,6 +53,7 @@ class FirestoreRestNotesRepositoryTest {
             listId = "list-1",
             title = "Nueva nota",
             content = "Contenido",
+            color = 0xFFC8E6C9L,
         )
 
         assertTrue(result.isSuccess)
@@ -75,6 +76,7 @@ class FirestoreRestNotesRepositoryTest {
         assertTrue(transport.requests[1].body!!.contains(""""order":{"integerValue":"0"}"""))
         assertTrue(transport.requests[1].body!!.contains(""""creator":{"stringValue":"user-123"}"""))
         assertTrue(transport.requests[1].body!!.contains(""""creatorId":{"stringValue":"user-123"}"""))
+        assertTrue(transport.requests[1].body!!.contains(""""color":{"integerValue":"4291356361"}"""))
     }
 
     @Test

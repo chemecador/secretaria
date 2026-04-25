@@ -211,7 +211,7 @@ class NotesListsViewModelTest {
         assertEquals("tra", viewModel.state.value.searchQuery)
         assertEquals(listOf("Viaje", "Trabajo", "Compra semanal"), viewModel.state.value.items.map { it.name })
 
-        advanceTimeBy(299)
+        advanceTimeBy(249)
         runCurrent()
 
         assertEquals(listOf("Viaje", "Trabajo", "Compra semanal"), viewModel.state.value.items.map { it.name })
@@ -253,7 +253,7 @@ class NotesListsViewModelTest {
 
         viewModel.setSearchQuery("comp")
         runCurrent()
-        advanceTimeBy(299)
+        advanceTimeBy(249)
         runCurrent()
 
         assertEquals("comp", viewModel.state.value.searchQuery)
