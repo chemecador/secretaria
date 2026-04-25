@@ -94,7 +94,7 @@ fun SettingsScreen(
 
     SettingsScreenContent(
         accountEmail = accountEmail,
-        accountUserCode = accountUserCode ?: stringResource(Res.string.settings_data_not_provided),
+        accountUserCode = accountUserCode ?: " ",
         onOpenSupportCreator = onOpenSupportCreator,
         onBack = onBack,
         onOpenFriends = onOpenFriends,
