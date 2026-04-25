@@ -9,6 +9,7 @@ import com.chemecador.secretaria.login.FirebaseIosIdTokenProvider
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 class FirestoreIosNotesListsRepositoryTest {
 
@@ -80,12 +81,16 @@ class FirestoreIosNotesListsRepositoryTest {
         assertEquals("user-123", lists[0].ownerId)
         assertEquals(false, lists[0].isShared)
         assertEquals(listOf("user-123"), lists[0].contributors)
+        assertTrue(lists[0].archivedBy.isEmpty())
+        assertTrue(lists[0].archivedAtBy.isEmpty())
         assertEquals("Trabajo", lists[0].name)
         assertTrue(lists[0].isOrdered)
         assertEquals("list-2", lists[1].id)
         assertEquals("user-999", lists[1].ownerId)
         assertEquals(true, lists[1].isShared)
         assertEquals(listOf("user-999", "user-123"), lists[1].contributors)
+        assertTrue(lists[1].archivedBy.isEmpty())
+        assertTrue(lists[1].archivedAtBy.isEmpty())
         assertEquals(
             "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents:runQuery",
             transport.requests.single().url,
@@ -279,6 +284,157 @@ class FirestoreIosNotesListsRepositoryTest {
         assertTrue(transport.requests[1].body!!.contains(""""contributors""""))
         assertTrue(transport.requests[1].body!!.contains(""""stringValue":"user-123""""))
         assertTrue(!transport.requests[1].body!!.contains(""""stringValue":"friend-1""""))
+    }
+
+    @Test
+    fun setListArchived_addsCurrentUserWithPrecondition() = kotlinx.coroutines.test.runTest {
+        val transport = RecordingFirestoreTransport(
+            responses = listOf(
+                FirebaseIosFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "name": "projects/project-id/databases/(default)/documents/users/user-999/noteslist/list-1",
+                          "fields": {
+                            "archivedBy": {
+                              "arrayValue": {
+                                "values": [
+                                  { "stringValue": "other-user" }
+                                ]
+                              }
+                            },
+                            "archivedAtBy": {
+                              "mapValue": {
+                                "fields": {
+                                  "other-user": { "timestampValue": "2026-04-14T09:00:00Z" }
+                                }
+                              }
+                            }
+                          },
+                          "updateTime": "2026-04-15T10:00:00Z"
+                        }
+                    """.trimIndent(),
+                ),
+                FirebaseIosFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "name": "projects/project-id/databases/(default)/documents/users/user-999/noteslist/list-1",
+                          "fields": {
+                            "archivedBy": {
+                              "arrayValue": {
+                                "values": [
+                                  { "stringValue": "other-user" },
+                                  { "stringValue": "user-123" }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                    """.trimIndent(),
+                ),
+            ),
+        )
+        val repository = FirestoreIosNotesListsRepository(
+            authRepository = LoggedInAuthRepository("user-123"),
+            firestore = FirebaseIosFirestoreRestApi(
+                projectId = "project-id",
+                tokenProvider = StaticTokenProvider("ios-token"),
+                transport = transport,
+            ),
+            nowProvider = { Instant.parse("2026-04-20T10:00:00Z") },
+        )
+
+        val result = repository.setListArchived("user-999", "list-1", archived = true)
+
+        assertTrue(result.isSuccess)
+        assertEquals("GET", transport.requests[0].method)
+        assertEquals("PATCH", transport.requests[1].method)
+        assertEquals(
+            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/user-999/noteslist/list-1",
+            transport.requests[0].url,
+        )
+        assertEquals(
+            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/user-999/noteslist/list-1?updateMask.fieldPaths=archivedBy&updateMask.fieldPaths=archivedAtBy&currentDocument.updateTime=2026-04-15T10%3A00%3A00Z",
+            transport.requests[1].url,
+        )
+        assertTrue(transport.requests[1].body!!.contains(""""archivedBy""""))
+        assertTrue(transport.requests[1].body!!.contains(""""archivedAtBy""""))
+        assertTrue(transport.requests[1].body!!.contains(""""stringValue":"other-user""""))
+        assertTrue(transport.requests[1].body!!.contains(""""stringValue":"user-123""""))
+        assertTrue(transport.requests[1].body!!.contains(""""timestampValue":"2026-04-14T09:00:00Z""""))
+        assertTrue(transport.requests[1].body!!.contains(""""timestampValue":"2026-04-20T10:00:00Z""""))
+    }
+
+    @Test
+    fun setListArchived_removesOnlyCurrentUserWithPrecondition() = kotlinx.coroutines.test.runTest {
+        val transport = RecordingFirestoreTransport(
+            responses = listOf(
+                FirebaseIosFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "name": "projects/project-id/databases/(default)/documents/users/user-999/noteslist/list-1",
+                          "fields": {
+                            "archivedBy": {
+                              "arrayValue": {
+                                "values": [
+                                  { "stringValue": "other-user" },
+                                  { "stringValue": "user-123" }
+                                ]
+                              }
+                            },
+                            "archivedAtBy": {
+                              "mapValue": {
+                                "fields": {
+                                  "other-user": { "timestampValue": "2026-04-14T09:00:00Z" },
+                                  "user-123": { "timestampValue": "2026-04-13T09:00:00Z" }
+                                }
+                              }
+                            }
+                          },
+                          "updateTime": "2026-04-15T10:00:00Z"
+                        }
+                    """.trimIndent(),
+                ),
+                FirebaseIosFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "name": "projects/project-id/databases/(default)/documents/users/user-999/noteslist/list-1",
+                          "fields": {
+                            "archivedBy": {
+                              "arrayValue": {
+                                "values": [
+                                  { "stringValue": "other-user" }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                    """.trimIndent(),
+                ),
+            ),
+        )
+        val repository = FirestoreIosNotesListsRepository(
+            authRepository = LoggedInAuthRepository("user-123"),
+            firestore = FirebaseIosFirestoreRestApi(
+                projectId = "project-id",
+                tokenProvider = StaticTokenProvider("ios-token"),
+                transport = transport,
+            ),
+        )
+
+        val result = repository.setListArchived("user-999", "list-1", archived = false)
+
+        assertTrue(result.isSuccess)
+        assertEquals("PATCH", transport.requests[1].method)
+        assertTrue(transport.requests[1].body!!.contains(""""archivedBy""""))
+        assertTrue(transport.requests[1].body!!.contains(""""archivedAtBy""""))
+        assertTrue(transport.requests[1].body!!.contains(""""stringValue":"other-user""""))
+        assertTrue(!transport.requests[1].body!!.contains(""""stringValue":"user-123""""))
+        assertTrue(transport.requests[1].body!!.contains(""""timestampValue":"2026-04-14T09:00:00Z""""))
+        assertTrue(!transport.requests[1].body!!.contains(""""user-123""""))
     }
 
     private class RecordingFirestoreTransport(

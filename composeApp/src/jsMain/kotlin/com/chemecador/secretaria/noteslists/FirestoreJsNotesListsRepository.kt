@@ -7,6 +7,7 @@ import com.chemecador.secretaria.firestore.collectionQuery
 import com.chemecador.secretaria.firestore.firestoreArray
 import com.chemecador.secretaria.firestore.firestoreBoolean
 import com.chemecador.secretaria.firestore.firestoreInstant
+import com.chemecador.secretaria.firestore.firestoreInstantMap
 import com.chemecador.secretaria.firestore.firestoreStringList
 import com.chemecador.secretaria.firestore.firestoreString
 import com.chemecador.secretaria.firestore.firestoreTimestamp
@@ -48,6 +49,8 @@ internal class FirestoreJsNotesListsRepository(
                     put("creator", firestoreString(creator))
                     put("date", firestoreTimestamp(nowProvider()))
                     put("ordered", firestoreBoolean(ordered))
+                    put(ARCHIVED_BY, firestoreArray())
+                    put(ARCHIVED_AT_BY, firestoreInstantMap(emptyMap()))
                 },
             )
             val fields = created.fields
@@ -60,6 +63,8 @@ internal class FirestoreJsNotesListsRepository(
                 isOrdered = fields.firestoreBoolean("ordered") ?: false,
                 isShared = false,
                 contributors = fields.firestoreStringList(CONTRIBUTORS).ifEmpty { listOf(userId) },
+                archivedBy = fields.firestoreStringList(ARCHIVED_BY).distinct(),
+                archivedAtBy = fields.firestoreInstantMap(ARCHIVED_AT_BY),
             )
         }
 
@@ -135,6 +140,43 @@ internal class FirestoreJsNotesListsRepository(
                 isShared = ownerIdFromDocumentName(updated.name) != userId ||
                     fields.firestoreStringList("contributors").distinct().size > 1,
                 contributors = fields.firestoreStringList(CONTRIBUTORS).distinct(),
+                archivedBy = fields.firestoreStringList(ARCHIVED_BY).distinct(),
+                archivedAtBy = fields.firestoreInstantMap(ARCHIVED_AT_BY),
+            )
+        }
+
+    override suspend fun setListArchived(
+        ownerId: String,
+        listId: String,
+        archived: Boolean,
+    ): Result<Unit> =
+        runCatching {
+            val userId = requireUserId()
+            val documentPath = listDocumentPath(ownerId, listId)
+            val document = firestore.getDocumentOrNull(documentPath)
+                ?: error("List not found")
+            val archivedBy = if (archived) {
+                (document.fields.firestoreStringList(ARCHIVED_BY) + userId).distinct()
+            } else {
+                document.fields.firestoreStringList(ARCHIVED_BY)
+                    .filterNot { archivedUserId -> archivedUserId == userId }
+            }
+            val archivedAtBy = if (archived) {
+                document.fields.firestoreInstantMap(ARCHIVED_AT_BY) + (userId to nowProvider())
+            } else {
+                document.fields.firestoreInstantMap(ARCHIVED_AT_BY) - userId
+            }
+            firestore.patchDocument(
+                documentPath = documentPath,
+                fields = buildJsonObject {
+                    put(
+                        ARCHIVED_BY,
+                        firestoreArray(*archivedBy.map(::firestoreString).toTypedArray()),
+                    )
+                    put(ARCHIVED_AT_BY, firestoreInstantMap(archivedAtBy))
+                },
+                updateMask = listOf(ARCHIVED_BY, ARCHIVED_AT_BY),
+                currentDocument = document.toPrecondition(),
             )
         }
 
@@ -150,6 +192,9 @@ internal class FirestoreJsNotesListsRepository(
     private fun listDocumentPath(listId: String): String =
         "${listsCollectionPath()}/$listId"
 
+    private fun listDocumentPath(ownerId: String, listId: String): String =
+        "$USERS/$ownerId/$NOTES_LIST/$listId"
+
     private fun notesCollectionPath(listId: String): String =
         "${listDocumentPath(listId)}/$NOTES"
 
@@ -158,6 +203,8 @@ internal class FirestoreJsNotesListsRepository(
         const val NOTES_LIST = "noteslist"
         const val NOTES = "notes"
         const val CONTRIBUTORS = "contributors"
+        const val ARCHIVED_BY = "archivedBy"
+        const val ARCHIVED_AT_BY = "archivedAtBy"
     }
 }
 
@@ -167,6 +214,8 @@ private fun com.chemecador.secretaria.firestore.FirestoreJsDocument.toNotesListS
     val documentFields = fields
     val ownerId = ownerIdFromDocumentName(name)
     val contributors = documentFields.firestoreStringList("contributors")
+    val archivedBy = documentFields.firestoreStringList("archivedBy")
+    val archivedAtBy = documentFields.firestoreInstantMap("archivedAtBy")
     return NotesListSummary(
         id = id,
         ownerId = ownerId,
@@ -176,6 +225,8 @@ private fun com.chemecador.secretaria.firestore.FirestoreJsDocument.toNotesListS
         isOrdered = documentFields.firestoreBoolean("ordered") ?: false,
         isShared = ownerId != currentUserId || contributors.distinct().size > 1,
         contributors = contributors.distinct(),
+        archivedBy = archivedBy.distinct(),
+        archivedAtBy = archivedAtBy,
     )
 }
 

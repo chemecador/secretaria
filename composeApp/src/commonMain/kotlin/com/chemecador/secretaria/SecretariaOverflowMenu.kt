@@ -23,6 +23,7 @@ import secretaria.composeapp.generated.resources.cancel
 import secretaria.composeapp.generated.resources.logout_confirm
 import secretaria.composeapp.generated.resources.logout_message
 import secretaria.composeapp.generated.resources.logout_title
+import secretaria.composeapp.generated.resources.menu_archived_lists
 import secretaria.composeapp.generated.resources.menu_friends
 import secretaria.composeapp.generated.resources.menu_logout
 import secretaria.composeapp.generated.resources.menu_settings
@@ -32,6 +33,7 @@ fun SecretariaOverflowMenu(
     onOpenFriends: () -> Unit,
     onOpenSettings: () -> Unit,
     onLogout: () -> Unit,
+    onOpenArchivedLists: (() -> Unit)? = null,
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var showLogoutConfirmation by remember { mutableStateOf(false) }
@@ -54,6 +56,15 @@ fun SecretariaOverflowMenu(
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false },
             ) {
+                onOpenArchivedLists?.let { openArchivedLists ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(Res.string.menu_archived_lists)) },
+                        onClick = {
+                            showMenu = false
+                            openArchivedLists()
+                        },
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text(stringResource(Res.string.menu_settings)) },
                     onClick = {

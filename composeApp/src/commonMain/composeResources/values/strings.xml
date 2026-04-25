@@ -10,8 +10,13 @@
     <string name="notes_lists_shared_tab">Compartidas</string>
     <string name="notes_lists_empty_mine">No tienes listas propias todavía.</string>
     <string name="notes_lists_empty_shared">No tienes listas compartidas todavía.</string>
+    <string name="notes_lists_empty_active_mine">No tienes listas propias activas.</string>
+    <string name="notes_lists_empty_active_shared">No tienes listas compartidas activas.</string>
+    <string name="notes_lists_empty_archived">No tienes listas archivadas.</string>
     <string name="notes_lists_error_generic">No se han podido cargar las listas.</string>
     <string name="list_created_by">Creada por %1$s</string>
+    <string name="list_archived_on">Archivada el %1$s</string>
+    <string name="list_archived_on_unknown">Fecha de archivo no disponible</string>
     <string name="list_ordered_badge">Lista ordenada</string>
     <string name="list_options">Opciones de la lista</string>
     <string name="create_list_title">Nueva lista</string>
@@ -61,6 +66,13 @@
     <string name="share_list_success">Lista compartida con %1$s.</string>
     <string name="unshare_list">Dejar de compartir</string>
     <string name="unshare_list_success">La lista ya no está compartida con %1$s.</string>
+    <string name="archived_lists_title">Archivadas</string>
+    <string name="archive_list">Archivar</string>
+    <string name="unarchive_list">Desarchivar</string>
+    <string name="archive_list_success">Lista archivada.</string>
+    <string name="unarchive_list_success">Lista desarchivada.</string>
+    <string name="archive_list_error">No se ha podido archivar la lista.</string>
+    <string name="unarchive_list_error">No se ha podido desarchivar la lista.</string>
 
     <!-- Login -->
     <string name="label_email">Email</string>
@@ -73,6 +85,7 @@
 
     <!-- Menu -->
     <string name="menu_friends">Amigos</string>
+    <string name="menu_archived_lists">Archivadas</string>
     <string name="menu_logout">Cerrar sesión</string>
     <string name="menu_settings">Configuración</string>
 

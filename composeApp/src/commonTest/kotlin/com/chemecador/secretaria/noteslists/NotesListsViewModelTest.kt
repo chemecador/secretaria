@@ -286,6 +286,105 @@ class NotesListsViewModelTest {
     }
 
     @Test
+    fun setListArchived_archivesListLocallyAndKeepsCurrentSort() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        repository.seed(listSummary(id = "z", name = "Zeta"))
+        repository.seed(listSummary(id = "a", name = "Alfa"))
+        val viewModel = buildViewModel(repository)
+
+        viewModel.setSort(SortOption.NAME_ASC)
+        viewModel.load()
+        advanceUntilIdle()
+
+        val list = viewModel.state.value.items.last()
+        viewModel.setListArchived(list, archived = true)
+        advanceUntilIdle()
+
+        assertEquals(listOf("Alfa", "Zeta"), viewModel.state.value.items.map { it.name })
+        assertEquals(listOf(OWNER_ID), viewModel.state.value.items.last().archivedBy)
+        assertTrue(viewModel.state.value.items.last().archivedAtBy[OWNER_ID] != null)
+        assertEquals(1, repository.archiveCalls)
+        assertEquals(OWNER_ID, repository.lastArchiveOwnerId)
+        assertEquals("z", repository.lastArchiveListId)
+        assertEquals(true, repository.lastArchiveValue)
+        assertEquals(ListArchiveAction.ARCHIVED, viewModel.state.value.archiveFeedback?.action)
+        assertTrue(viewModel.state.value.archiveFeedback?.isSuccess == true)
+    }
+
+    @Test
+    fun setListArchived_unarchivesOnlyCurrentUser() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        repository.seed(
+            listSummary(
+                id = "archived",
+                name = "Archivada",
+                archivedBy = listOf(OWNER_ID, "other-user"),
+                archivedAtBy = mapOf(
+                    OWNER_ID to ARCHIVED_AT,
+                    "other-user" to OTHER_ARCHIVED_AT,
+                ),
+            ),
+        )
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+        val list = viewModel.state.value.items.single()
+
+        viewModel.setListArchived(list, archived = false)
+        advanceUntilIdle()
+
+        assertEquals(listOf("other-user"), viewModel.state.value.items.single().archivedBy)
+        assertEquals(mapOf("other-user" to OTHER_ARCHIVED_AT), viewModel.state.value.items.single().archivedAtBy)
+        assertEquals(ListArchiveAction.UNARCHIVED, viewModel.state.value.archiveFeedback?.action)
+        assertTrue(viewModel.state.value.archiveFeedback?.isSuccess == true)
+    }
+
+    @Test
+    fun setListArchived_allowsSharedList() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        repository.seed(
+            listSummary(
+                id = "shared",
+                name = "Compartida",
+                ownerId = SHARED_OWNER_ID,
+            ),
+        )
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+        val list = viewModel.state.value.items.single()
+
+        viewModel.setListArchived(list, archived = true)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.archiveCalls)
+        assertEquals(SHARED_OWNER_ID, repository.lastArchiveOwnerId)
+        assertEquals(listOf(OWNER_ID), viewModel.state.value.items.single().archivedBy)
+        assertTrue(viewModel.state.value.items.single().archivedAtBy[OWNER_ID] != null)
+        assertTrue(viewModel.state.value.archiveFeedback?.isSuccess == true)
+    }
+
+    @Test
+    fun setListArchived_errorKeepsPreviousStateAndPublishesFailure() = runTest(dispatcher) {
+        val list = listSummary(id = "list-1", name = "Trabajo")
+        val repository = FailingArchiveRepository(list)
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.setListArchived(list, archived = true)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.items.single().archivedBy.isEmpty())
+        assertTrue(viewModel.state.value.items.single().archivedAtBy.isEmpty())
+        assertEquals(ListArchiveAction.ARCHIVED, viewModel.state.value.archiveFeedback?.action)
+        assertFalse(viewModel.state.value.archiveFeedback?.isSuccess == true)
+    }
+
+    @Test
     fun loadShareableFriends_loadsFriendsIntoState() = runTest(dispatcher) {
         val repository = ImmediateRepository(Result.success(emptyList()))
         val friendsRepository = FakeFriendsRepository(
@@ -463,6 +562,12 @@ class NotesListsViewModelTest {
             name: String,
             ordered: Boolean,
         ): Result<NotesListSummary> = Result.failure(UnsupportedOperationException())
+
+        override suspend fun setListArchived(
+            ownerId: String,
+            listId: String,
+            archived: Boolean,
+        ): Result<Unit> = Result.failure(UnsupportedOperationException())
     }
 
     private class ControlledRepository(
@@ -489,6 +594,12 @@ class NotesListsViewModelTest {
             ordered: Boolean,
         ): Result<NotesListSummary> = Result.failure(UnsupportedOperationException())
 
+        override suspend fun setListArchived(
+            ownerId: String,
+            listId: String,
+            archived: Boolean,
+        ): Result<Unit> = Result.failure(UnsupportedOperationException())
+
         fun release() {
             gate.complete(Unit)
         }
@@ -504,9 +615,17 @@ class NotesListsViewModelTest {
             private set
         var unshareCalls = 0
             private set
+        var archiveCalls = 0
+            private set
         var lastSharedFriendId: String? = null
             private set
         var lastUnsharedFriendId: String? = null
+            private set
+        var lastArchiveOwnerId: String? = null
+            private set
+        var lastArchiveListId: String? = null
+            private set
+        var lastArchiveValue: Boolean? = null
             private set
 
         fun seed(list: NotesListSummary) {
@@ -575,6 +694,34 @@ class NotesListsViewModelTest {
             lists[index] = updated
             return Result.success(updated)
         }
+
+        override suspend fun setListArchived(
+            ownerId: String,
+            listId: String,
+            archived: Boolean,
+        ): Result<Unit> {
+            archiveCalls += 1
+            lastArchiveOwnerId = ownerId
+            lastArchiveListId = listId
+            lastArchiveValue = archived
+            val index = lists.indexOfFirst { it.ownerId == ownerId && it.id == listId }
+            if (index == -1) return Result.failure(IllegalStateException("List not found"))
+            val archivedBy = if (archived) {
+                (lists[index].archivedBy + OWNER_ID).distinct()
+            } else {
+                lists[index].archivedBy.filterNot { userId -> userId == OWNER_ID }
+            }
+            val archivedAtBy = if (archived) {
+                lists[index].archivedAtBy + (OWNER_ID to ARCHIVED_AT)
+            } else {
+                lists[index].archivedAtBy - OWNER_ID
+            }
+            lists[index] = lists[index].copy(
+                archivedBy = archivedBy,
+                archivedAtBy = archivedAtBy,
+            )
+            return Result.success(Unit)
+        }
     }
 
     private class FailingCreateRepository : NotesListsRepository {
@@ -594,6 +741,12 @@ class NotesListsViewModelTest {
             name: String,
             ordered: Boolean,
         ): Result<NotesListSummary> = Result.failure(UnsupportedOperationException())
+
+        override suspend fun setListArchived(
+            ownerId: String,
+            listId: String,
+            archived: Boolean,
+        ): Result<Unit> = Result.failure(UnsupportedOperationException())
     }
 
     private class FailingDeleteRepository : NotesListsRepository {
@@ -612,6 +765,12 @@ class NotesListsViewModelTest {
             name: String,
             ordered: Boolean,
         ): Result<NotesListSummary> = Result.failure(UnsupportedOperationException())
+
+        override suspend fun setListArchived(
+            ownerId: String,
+            listId: String,
+            archived: Boolean,
+        ): Result<Unit> = Result.failure(UnsupportedOperationException())
     }
 
     private class FailingUpdateRepository : NotesListsRepository {
@@ -630,6 +789,43 @@ class NotesListsViewModelTest {
             name: String,
             ordered: Boolean,
         ): Result<NotesListSummary> = Result.failure(IllegalStateException("error al actualizar"))
+
+        override suspend fun setListArchived(
+            ownerId: String,
+            listId: String,
+            archived: Boolean,
+        ): Result<Unit> = Result.failure(UnsupportedOperationException())
+    }
+
+    private class FailingArchiveRepository(
+        private val list: NotesListSummary,
+    ) : NotesListsRepository {
+        override suspend fun getLists(): Result<List<NotesListSummary>> =
+            Result.success(listOf(list))
+
+        override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> =
+            Result.failure(UnsupportedOperationException())
+
+        override suspend fun deleteList(listId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
+
+        override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
+
+        override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
+
+        override suspend fun updateList(
+            listId: String,
+            name: String,
+            ordered: Boolean,
+        ): Result<NotesListSummary> = Result.failure(UnsupportedOperationException())
+
+        override suspend fun setListArchived(
+            ownerId: String,
+            listId: String,
+            archived: Boolean,
+        ): Result<Unit> = Result.failure(IllegalStateException("error al archivar"))
     }
 
     private class LoggedInAuthRepository(
@@ -663,6 +859,8 @@ class NotesListsViewModelTest {
     private companion object {
         const val OWNER_ID = "Alex"
         const val SHARED_OWNER_ID = "Marta"
+        val ARCHIVED_AT = Instant.parse("2026-04-10T12:00:00Z")
+        val OTHER_ARCHIVED_AT = Instant.parse("2026-04-11T12:00:00Z")
 
         fun listSummary(
             id: String,
@@ -672,6 +870,8 @@ class NotesListsViewModelTest {
             isOrdered: Boolean = false,
             isShared: Boolean? = null,
             contributors: List<String> = emptyList(),
+            archivedBy: List<String> = emptyList(),
+            archivedAtBy: Map<String, Instant> = emptyMap(),
         ): NotesListSummary = NotesListSummary(
             id = id,
             ownerId = ownerId,
@@ -700,6 +900,8 @@ class NotesListsViewModelTest {
             } else {
                 contributors
             },
+            archivedBy = archivedBy,
+            archivedAtBy = archivedAtBy,
         )
     }
 }

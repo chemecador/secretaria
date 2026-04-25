@@ -28,6 +28,8 @@ class FakeNotesListsRepository(
             isOrdered = ordered,
             isShared = false,
             contributors = listOf("Alex"),
+            archivedBy = emptyList(),
+            archivedAtBy = emptyMap(),
         )
         lists.add(newList)
         return Result.success(newList)
@@ -72,6 +74,30 @@ class FakeNotesListsRepository(
         return Result.success(updated)
     }
 
+    override suspend fun setListArchived(
+        ownerId: String,
+        listId: String,
+        archived: Boolean,
+    ): Result<Unit> {
+        val index = lists.indexOfFirst { it.ownerId == ownerId && it.id == listId }
+        if (index == -1) return Result.failure(IllegalStateException("List not found"))
+        val archivedBy = if (archived) {
+            (lists[index].archivedBy + "Alex").distinct()
+        } else {
+            lists[index].archivedBy.filterNot { userId -> userId == "Alex" }
+        }
+        val archivedAtBy = if (archived) {
+            lists[index].archivedAtBy + ("Alex" to Clock.System.now())
+        } else {
+            lists[index].archivedAtBy - "Alex"
+        }
+        lists[index] = lists[index].copy(
+            archivedBy = archivedBy,
+            archivedAtBy = archivedAtBy,
+        )
+        return Result.success(Unit)
+    }
+
     companion object {
         val seedLists = listOf(
             NotesListSummary(
@@ -83,6 +109,8 @@ class FakeNotesListsRepository(
                 isOrdered = false,
                 isShared = false,
                 contributors = listOf("Alex"),
+                archivedBy = emptyList(),
+                archivedAtBy = emptyMap(),
             ),
             NotesListSummary(
                 id = "work",
@@ -93,6 +121,8 @@ class FakeNotesListsRepository(
                 isOrdered = true,
                 isShared = false,
                 contributors = listOf("Alex"),
+                archivedBy = emptyList(),
+                archivedAtBy = emptyMap(),
             ),
             NotesListSummary(
                 id = "travel",
@@ -103,6 +133,8 @@ class FakeNotesListsRepository(
                 isOrdered = false,
                 isShared = false,
                 contributors = listOf("Alex"),
+                archivedBy = emptyList(),
+                archivedAtBy = emptyMap(),
             ),
             NotesListSummary(
                 id = "books",
@@ -113,6 +145,8 @@ class FakeNotesListsRepository(
                 isOrdered = true,
                 isShared = true,
                 contributors = listOf("Marta", "Alex"),
+                archivedBy = emptyList(),
+                archivedAtBy = emptyMap(),
             ),
         )
     }

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
 
 class NotesListsViewModel(
     private val repository: NotesListsRepository,
@@ -122,7 +123,7 @@ class NotesListsViewModel(
                         }
                         repository.shareList(currentList.id, friend.userId)
                             .onSuccess {
-                                val updatedList = updateLocalList(currentList.id) { existingList ->
+                                val updatedList = updateLocalList(currentList.ownerId, currentList.id) { existingList ->
                                     existingList.withContributors(existingList.contributors + friend.userId)
                                 } ?: currentList.withContributors(currentList.contributors + friend.userId)
                                 _state.update {
@@ -174,7 +175,7 @@ class NotesListsViewModel(
                         }
                         repository.unshareList(currentList.id, collaborator.userId)
                             .onSuccess {
-                                val updatedList = updateLocalList(currentList.id) { existingList ->
+                                val updatedList = updateLocalList(currentList.ownerId, currentList.id) { existingList ->
                                     existingList.withContributors(
                                         existingList.contributors.filterNot { contributorId ->
                                             contributorId == collaborator.userId
@@ -220,6 +221,43 @@ class NotesListsViewModel(
         }
     }
 
+    fun setListArchived(list: NotesListSummary, archived: Boolean) {
+        viewModelScope.launch {
+            val currentUserId = authRepository.currentUserId
+            val action = if (archived) {
+                ListArchiveAction.ARCHIVED
+            } else {
+                ListArchiveAction.UNARCHIVED
+            }
+
+            if (currentUserId == null) {
+                _state.update {
+                    it.copy(archiveFeedback = ListArchiveFeedback(action = action, isSuccess = false))
+                }
+                return@launch
+            }
+
+            val currentList = findCurrentList(list)
+            repository.setListArchived(currentList.ownerId, currentList.id, archived)
+                .onSuccess {
+                    updateLocalList(currentList.ownerId, currentList.id) { existingList ->
+                        existingList.withArchivedBy(currentUserId, archived)
+                    }
+                    _state.update {
+                        it.copy(
+                            items = allItems.sortedByOption(it.sortOption),
+                            archiveFeedback = ListArchiveFeedback(action = action, isSuccess = true),
+                        )
+                    }
+                }
+                .onFailure {
+                    _state.update {
+                        it.copy(archiveFeedback = ListArchiveFeedback(action = action, isSuccess = false))
+                    }
+                }
+        }
+    }
+
     fun deleteList(list: NotesListSummary) {
         viewModelScope.launch {
             requireOwnedList(list)
@@ -261,6 +299,10 @@ class NotesListsViewModel(
 
     fun consumeShareFeedback() {
         _state.update { it.copy(shareFeedback = null) }
+    }
+
+    fun consumeArchiveFeedback() {
+        _state.update { it.copy(archiveFeedback = null) }
     }
 
     private suspend fun fetchLists(isRefresh: Boolean = false) {
@@ -329,7 +371,7 @@ class NotesListsViewModel(
     }
 
     private fun requireOwnedList(list: NotesListSummary): Result<NotesListSummary> {
-        val currentList = allItems.firstOrNull { item -> item.id == list.id } ?: list
+        val currentList = findCurrentList(list)
         val currentUserId = authRepository.currentUserId
         return if (currentList.ownerId == currentUserId) {
             Result.success(currentList)
@@ -337,6 +379,9 @@ class NotesListsViewModel(
             Result.failure(IllegalStateException(OWNERSHIP_ERROR_MESSAGE))
         }
     }
+
+    private fun findCurrentList(list: NotesListSummary): NotesListSummary =
+        allItems.firstOrNull { item -> item.id == list.id && item.ownerId == list.ownerId } ?: list
 
     private fun cacheFriends(friends: List<FriendSummary>) {
         knownFriendsByUserId = friends.associateBy { friend -> friend.userId }
@@ -357,12 +402,13 @@ class NotesListsViewModel(
         .sortedBy { collaborator -> collaborator.name.lowercase() }
 
     private fun updateLocalList(
+        ownerId: String,
         listId: String,
         update: (NotesListSummary) -> NotesListSummary,
     ): NotesListSummary? {
         var updatedList: NotesListSummary? = null
         allItems = allItems.map { currentList ->
-            if (currentList.id == listId) {
+            if (currentList.id == listId && currentList.ownerId == ownerId) {
                 update(currentList).also { candidate -> updatedList = candidate }
             } else {
                 currentList
@@ -381,6 +427,26 @@ class NotesListsViewModel(
             } else {
                 ownerId != currentUserId || contributors.size > 1
             },
+        )
+    }
+
+    private fun NotesListSummary.withArchivedBy(
+        currentUserId: String,
+        archived: Boolean,
+    ): NotesListSummary {
+        val updatedArchivedBy = if (archived) {
+            (archivedBy + currentUserId).distinct()
+        } else {
+            archivedBy.filterNot { userId -> userId == currentUserId }
+        }
+        val updatedArchivedAtBy = if (archived) {
+            archivedAtBy + (currentUserId to Clock.System.now())
+        } else {
+            archivedAtBy - currentUserId
+        }
+        return copy(
+            archivedBy = updatedArchivedBy,
+            archivedAtBy = updatedArchivedAtBy,
         )
     }
 

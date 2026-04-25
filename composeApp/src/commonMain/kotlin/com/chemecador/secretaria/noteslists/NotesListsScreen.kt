@@ -22,11 +22,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -34,6 +37,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -67,6 +71,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import com.chemecador.secretaria.PlatformBackHandler
 import com.chemecador.secretaria.SecretariaOverflowMenu
 import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
@@ -76,6 +81,10 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import secretaria.composeapp.generated.resources.Res
 import secretaria.composeapp.generated.resources.app_name
+import secretaria.composeapp.generated.resources.archive_list
+import secretaria.composeapp.generated.resources.archive_list_error
+import secretaria.composeapp.generated.resources.archive_list_success
+import secretaria.composeapp.generated.resources.archived_lists_title
 import secretaria.composeapp.generated.resources.cancel
 import secretaria.composeapp.generated.resources.create_list_button
 import secretaria.composeapp.generated.resources.create_list_name_hint
@@ -88,11 +97,14 @@ import secretaria.composeapp.generated.resources.edit_list
 import secretaria.composeapp.generated.resources.edit_list_button
 import secretaria.composeapp.generated.resources.edit_list_title
 import secretaria.composeapp.generated.resources.list_created_by
+import secretaria.composeapp.generated.resources.list_archived_on
+import secretaria.composeapp.generated.resources.list_archived_on_unknown
 import secretaria.composeapp.generated.resources.list_options
 import secretaria.composeapp.generated.resources.list_ordered_badge
 import secretaria.composeapp.generated.resources.notes_lists_empty
-import secretaria.composeapp.generated.resources.notes_lists_empty_mine
-import secretaria.composeapp.generated.resources.notes_lists_empty_shared
+import secretaria.composeapp.generated.resources.notes_lists_empty_active_mine
+import secretaria.composeapp.generated.resources.notes_lists_empty_active_shared
+import secretaria.composeapp.generated.resources.notes_lists_empty_archived
 import secretaria.composeapp.generated.resources.notes_lists_error_generic
 import secretaria.composeapp.generated.resources.notes_lists_mine_tab
 import secretaria.composeapp.generated.resources.notes_lists_shared_tab
@@ -114,6 +126,10 @@ import secretaria.composeapp.generated.resources.sort_name_asc
 import secretaria.composeapp.generated.resources.sort_name_desc
 import secretaria.composeapp.generated.resources.unshare_list
 import secretaria.composeapp.generated.resources.unshare_list_success
+import secretaria.composeapp.generated.resources.unarchive_list
+import secretaria.composeapp.generated.resources.unarchive_list_error
+import secretaria.composeapp.generated.resources.unarchive_list_success
+import kotlin.time.Instant
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -135,8 +151,9 @@ fun NotesListsScreen(
     var listToDelete by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToShare by remember { mutableStateOf<NotesListSummary?>(null) }
     var selectedSection by remember { mutableStateOf(NotesListsSection.MINE) }
+    var showArchivedLists by remember { mutableStateOf(false) }
     val openListOptions: (NotesListSummary) -> Unit = { item ->
-        if (item.ownerId == currentUserId) {
+        if (currentUserId != null) {
             listForOptions = item
         }
     }
@@ -158,15 +175,40 @@ fun NotesListsScreen(
             )
         }
     }
-    val visibleItems = state.items.filter { item ->
-        when (selectedSection) {
-            NotesListsSection.MINE -> !item.isShared
-            NotesListsSection.SHARED -> item.isShared
+    val archiveFeedback = state.archiveFeedback
+    val archiveFeedbackMessage = archiveFeedback?.let { feedback ->
+        when (feedback.action) {
+            ListArchiveAction.ARCHIVED -> if (feedback.isSuccess) {
+                stringResource(Res.string.archive_list_success)
+            } else {
+                stringResource(Res.string.archive_list_error)
+            }
+
+            ListArchiveAction.UNARCHIVED -> if (feedback.isSuccess) {
+                stringResource(Res.string.unarchive_list_success)
+            } else {
+                stringResource(Res.string.unarchive_list_error)
+            }
         }
     }
-    val emptyMessage = when (selectedSection) {
-        NotesListsSection.MINE -> stringResource(Res.string.notes_lists_empty_mine)
-        NotesListsSection.SHARED -> stringResource(Res.string.notes_lists_empty_shared)
+    val visibleItems = state.items.filter { item ->
+        val isArchived = currentUserId != null && currentUserId in item.archivedBy
+        if (showArchivedLists) {
+            isArchived
+        } else {
+            when (selectedSection) {
+                NotesListsSection.MINE -> !item.isShared && !isArchived
+                NotesListsSection.SHARED -> item.isShared && !isArchived
+            }
+        }
+    }
+    val emptyMessage = if (showArchivedLists) {
+        stringResource(Res.string.notes_lists_empty_archived)
+    } else {
+        when (selectedSection) {
+            NotesListsSection.MINE -> stringResource(Res.string.notes_lists_empty_active_mine)
+            NotesListsSection.SHARED -> stringResource(Res.string.notes_lists_empty_active_shared)
+        }
     }
 
     LaunchedEffect(listToShare?.id) {
@@ -180,34 +222,77 @@ fun NotesListsScreen(
         viewModel.consumeShareFeedback()
     }
 
+    LaunchedEffect(archiveFeedback) {
+        val feedback = archiveFeedback ?: return@LaunchedEffect
+        val message = archiveFeedbackMessage ?: return@LaunchedEffect
+        if (feedback.action == ListArchiveAction.ARCHIVED && feedback.isSuccess) {
+            showArchivedLists = true
+        }
+        snackbarHostState.showSnackbar(message)
+        viewModel.consumeArchiveFeedback()
+    }
+
+    PlatformBackHandler(
+        enabled = showArchivedLists &&
+            !showCreateDialog &&
+            listForOptions == null &&
+            listToEdit == null &&
+            listToDelete == null &&
+            listToShare == null,
+        onBack = { showArchivedLists = false },
+    )
+
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(Res.string.app_name)) },
+                title = {
+                    Text(
+                        if (showArchivedLists) {
+                            stringResource(Res.string.archived_lists_title)
+                        } else {
+                            stringResource(Res.string.app_name)
+                        },
+                    )
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = SecretariaTopBarColor,
                     titleContentColor = SecretariaTopBarContentColor,
+                    navigationIconContentColor = SecretariaTopBarContentColor,
                     actionIconContentColor = SecretariaTopBarContentColor,
                 ),
+                navigationIcon = {
+                    if (showArchivedLists) {
+                        IconButton(onClick = { showArchivedLists = false }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        }
+                    }
+                },
                 actions = {
                     SecretariaOverflowMenu(
                         onOpenFriends = onOpenFriends,
                         onOpenSettings = onOpenSettings,
                         onLogout = onLogout,
+                        onOpenArchivedLists = if (showArchivedLists) {
+                            null
+                        } else {
+                            { showArchivedLists = true }
+                        },
                     )
                 },
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showCreateDialog = true },
-                containerColor = SecretariaTopBarColor,
-                contentColor = SecretariaTopBarContentColor,
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null)
+            if (!showArchivedLists) {
+                FloatingActionButton(
+                    onClick = { showCreateDialog = true },
+                    containerColor = SecretariaTopBarColor,
+                    contentColor = SecretariaTopBarContentColor,
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                }
             }
         },
     ) { innerPadding ->
@@ -224,9 +309,15 @@ fun NotesListsScreen(
         }
 
         listForOptions?.let { list ->
+            val isArchived = currentUserId != null && currentUserId in list.archivedBy
             ListOptionsDialog(
                 listName = list.name,
                 isOwner = list.ownerId == currentUserId,
+                isArchived = isArchived,
+                onArchive = {
+                    viewModel.setListArchived(list, archived = !isArchived)
+                    listForOptions = null
+                },
                 onShare = {
                     listToShare = list
                     listForOptions = null
@@ -291,10 +382,12 @@ fun NotesListsScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            ListsSectionTabs(
-                selectedSection = selectedSection,
-                onSectionSelected = { selectedSection = it },
-            )
+            if (!showArchivedLists) {
+                ListsSectionTabs(
+                    selectedSection = selectedSection,
+                    onSectionSelected = { selectedSection = it },
+                )
+            }
 
             SortSelector(
                 selected = state.sortOption,
@@ -325,7 +418,7 @@ fun NotesListsScreen(
 
                         visibleItems.isEmpty() -> ScrollableCenteredMessage {
                             Text(
-                                text = if (state.items.isEmpty()) {
+                                text = if (!showArchivedLists && state.items.isEmpty()) {
                                     stringResource(Res.string.notes_lists_empty)
                                 } else {
                                     emptyMessage
@@ -342,6 +435,12 @@ fun NotesListsScreen(
                             currentUserId = currentUserId,
                             onListLongClick = openListOptions,
                             onListOptionsClick = openListOptions,
+                            archivedUserId = currentUserId.takeIf { showArchivedLists },
+                            onUnarchiveClick = if (showArchivedLists) {
+                                { list -> viewModel.setListArchived(list, archived = false) }
+                            } else {
+                                null
+                            },
                         )
                     }
                 }
@@ -432,28 +531,24 @@ private fun NotesListsContent(
     currentUserId: String?,
     onListLongClick: (NotesListSummary) -> Unit,
     onListOptionsClick: (NotesListSummary) -> Unit,
+    archivedUserId: String? = null,
+    onUnarchiveClick: ((NotesListSummary) -> Unit)? = null,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        items(items, key = { it.id }) { item ->
+        items(items, key = { "${it.ownerId}/${it.id}" }) { item ->
             NotesListCard(
                 item = item,
                 collaborators = collaboratorsByListId[item.id].orEmpty(),
                 currentUserId = currentUserId,
                 onClick = { onListSelected(item.id, item.ownerId, item.name, item.isOrdered) },
-                onLongClick = if (item.ownerId == currentUserId) {
-                    { onListLongClick(item) }
-                } else {
-                    null
-                },
-                onOptionsClick = if (item.ownerId == currentUserId) {
-                    { onListOptionsClick(item) }
-                } else {
-                    null
-                },
+                onLongClick = { onListLongClick(item) },
+                onOptionsClick = { onListOptionsClick(item) },
+                archivedAt = archivedUserId?.let { userId -> item.archivedAtBy[userId] },
+                onUnarchiveClick = onUnarchiveClick?.let { unarchive -> { unarchive(item) } },
             )
         }
     }
@@ -468,6 +563,8 @@ private fun NotesListCard(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
     onOptionsClick: (() -> Unit)?,
+    archivedAt: Instant? = null,
+    onUnarchiveClick: (() -> Unit)? = null,
 ) {
     val sharingSummary = sharingSummaryText(
         item = item,
@@ -480,10 +577,18 @@ private fun NotesListCard(
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = if (onUnarchiveClick == null) {
+                MaterialTheme.colorScheme.surface
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            },
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = if (onUnarchiveClick == null) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        } else {
+            null
+        },
     ) {
         Column(
             modifier = Modifier
@@ -538,6 +643,41 @@ private fun NotesListCard(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
+                }
+            }
+            if (archivedAt != null || onUnarchiveClick != null) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = archivedAt?.let { instant ->
+                            stringResource(
+                                Res.string.list_archived_on,
+                                formatNotesListDate(instant),
+                            )
+                        } ?: stringResource(Res.string.list_archived_on_unknown),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp),
+                    )
+
+                    onUnarchiveClick?.let { onUnarchive ->
+                        FilledTonalButton(onClick = onUnarchive) {
+                            Icon(
+                                imageVector = Icons.Outlined.Unarchive,
+                                contentDescription = null,
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(Res.string.unarchive_list))
+                        }
+                    }
                 }
             }
         }
@@ -696,6 +836,8 @@ private fun DeleteListDialog(
 private fun ListOptionsDialog(
     listName: String,
     isOwner: Boolean,
+    isArchived: Boolean,
+    onArchive: () -> Unit,
     onShare: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -712,6 +854,15 @@ private fun ListOptionsDialog(
                 HorizontalDivider(
                     modifier = Modifier.padding(bottom = 4.dp),
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                )
+                OptionRow(
+                    icon = if (isArchived) Icons.Outlined.Unarchive else Icons.Outlined.Archive,
+                    label = if (isArchived) {
+                        stringResource(Res.string.unarchive_list)
+                    } else {
+                        stringResource(Res.string.archive_list)
+                    },
+                    onClick = onArchive,
                 )
                 if (isOwner) {
                     OptionRow(
