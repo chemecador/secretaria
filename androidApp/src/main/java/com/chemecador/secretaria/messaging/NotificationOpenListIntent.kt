@@ -6,6 +6,7 @@ import com.chemecador.secretaria.OpenListRequest
 object NotificationOpenListIntent {
     const val ACTION_OPEN_LIST = "com.chemecador.secretaria.OPEN_LIST"
     const val EXTRA_LIST_ID = "openListId"
+    const val EXTRA_LIST_GROUP = "openListGroup"
     const val EXTRA_LIST_NAME = "openListName"
     const val EXTRA_LIST_ORDERED = "openListOrdered"
     const val EXTRA_OWNER_ID = "openListOwnerId"
@@ -20,6 +21,7 @@ object NotificationOpenListIntent {
             listId = listId,
             listName = listName,
             isOrdered = getBooleanExtra(EXTRA_LIST_ORDERED, false),
+            isGroup = getBooleanExtra(EXTRA_LIST_GROUP, false),
         )
     }
 }

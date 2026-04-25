@@ -35,8 +35,8 @@ export const onListShared = onDocumentUpdated(
     const after = event.data?.after.data();
     if (!before || !after) return;
 
-    const oldContributors: string[] = before.contributors ?? [];
-    const newContributors: string[] = after.contributors ?? [];
+    const oldContributors: string[] = directContributorsForNotification(before);
+    const newContributors: string[] = directContributorsForNotification(after);
     const ownerId = event.params.userId;
     const added = newContributors.filter(
       (uid) => !oldContributors.includes(uid) && uid !== ownerId,
@@ -60,6 +60,7 @@ export const onListShared = onDocumentUpdated(
             event.params.listId,
             listName,
             Boolean(after.ordered),
+            Boolean(after.isGroup),
           ),
         });
       }),
@@ -146,6 +147,7 @@ export const onSharedListNoteCreated = onDocumentCreatedWithAuthContext(
             event.params.listId,
             listName,
             Boolean(listData.ordered),
+            Boolean(listData.isGroup),
           ),
         });
       }),
@@ -253,6 +255,19 @@ function asStringList(value: unknown): string[] {
 }
 
 /**
+ * Returns direct contributors for list-share notifications, falling back to
+ * legacy contributors when the newer field does not exist yet.
+ * @param {FirebaseFirestore.DocumentData} list List document data.
+ * @return {string[]} Direct contributor uid list.
+ */
+function directContributorsForNotification(
+  list: FirebaseFirestore.DocumentData,
+): string[] {
+  const directContributors = asStringList(list.directContributors);
+  return directContributors.length > 0 ? directContributors : asStringList(list.contributors);
+}
+
+/**
  * Resolves the actor uid from persisted note data or Firestore auth context.
  * @param {string | null} creatorId Persisted creator uid.
  * @param {string | null} authId Event auth identifier.
@@ -298,6 +313,7 @@ function ifUserIdResolved(
  * @param {string} listId List id.
  * @param {string} listName List display name.
  * @param {boolean} isOrdered Whether the list is ordered.
+ * @param {boolean} isGroup Whether the list is a group.
  * @return {Record<string, string>} FCM data payload fields.
  */
 function openListData(
@@ -305,11 +321,13 @@ function openListData(
   listId: string,
   listName: string,
   isOrdered: boolean,
+  isGroup: boolean,
 ): Record<string, string> {
   return {
     openListOwnerId: ownerId,
     openListId: listId,
     openListName: listName,
     openListOrdered: String(isOrdered),
+    openListGroup: String(isGroup),
   };
 }

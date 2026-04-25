@@ -1,13 +1,18 @@
 package com.chemecador.secretaria.noteslists
 
 import com.chemecador.secretaria.firestore.FirebaseJsFirestoreRestApi
+import com.chemecador.secretaria.firestore.FirestoreJsDocument
+import com.chemecador.secretaria.firestore.FirestoreJsDocumentPatch
 import com.chemecador.secretaria.firestore.FirestorePrecondition
 import com.chemecador.secretaria.firestore.arrayContainsFilter
 import com.chemecador.secretaria.firestore.collectionQuery
 import com.chemecador.secretaria.firestore.firestoreArray
 import com.chemecador.secretaria.firestore.firestoreBoolean
+import com.chemecador.secretaria.firestore.firestoreInt
+import com.chemecador.secretaria.firestore.firestoreInteger
 import com.chemecador.secretaria.firestore.firestoreInstant
 import com.chemecador.secretaria.firestore.firestoreInstantMap
+import com.chemecador.secretaria.firestore.firestoreNull
 import com.chemecador.secretaria.firestore.firestoreStringList
 import com.chemecador.secretaria.firestore.firestoreString
 import com.chemecador.secretaria.firestore.firestoreTimestamp
@@ -36,7 +41,11 @@ internal class FirestoreJsNotesListsRepository(
             }
         }
 
-    override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> =
+    override suspend fun createList(
+        name: String,
+        ordered: Boolean,
+        isGroup: Boolean,
+    ): Result<NotesListSummary> =
         runCatching {
             val userId = requireUserId()
             val creator = authRepository.currentUserEmail ?: userId
@@ -49,27 +58,37 @@ internal class FirestoreJsNotesListsRepository(
                     put("creator", firestoreString(creator))
                     put("date", firestoreTimestamp(nowProvider()))
                     put("ordered", firestoreBoolean(ordered))
+                    put(IS_GROUP, firestoreBoolean(isGroup))
+                    put(GROUP_ID, firestoreNull())
+                    put(GROUP_ORDER, firestoreInteger(0))
+                    put(DIRECT_CONTRIBUTORS, firestoreArray(firestoreString(userId)))
+                    put(INHERITED_GROUP_CONTRIBUTORS, firestoreArray())
                     put(ARCHIVED_BY, firestoreArray())
                     put(ARCHIVED_AT_BY, firestoreInstantMap(emptyMap()))
                 },
             )
-            val fields = created.fields
-            NotesListSummary(
-                id = created.id,
-                ownerId = ownerIdFromDocumentName(created.name),
-                name = fields.firestoreString("name").orEmpty(),
-                creator = fields.firestoreString("creator").orEmpty(),
-                createdAt = fields.firestoreInstant("date") ?: nowProvider(),
-                isOrdered = fields.firestoreBoolean("ordered") ?: false,
-                isShared = false,
-                contributors = fields.firestoreStringList(CONTRIBUTORS).ifEmpty { listOf(userId) },
-                archivedBy = fields.firestoreStringList(ARCHIVED_BY).distinct(),
-                archivedAtBy = fields.firestoreInstantMap(ARCHIVED_AT_BY),
-            )
+            created.toNotesListSummary(userId)
         }
 
     override suspend fun deleteList(listId: String): Result<Unit> =
         runCatching {
+            val userId = requireUserId()
+            val document = firestore.getDocumentOrNull(listDocumentPath(listId))
+                ?: error("List not found")
+            if (document.isGroup) {
+                val groupDirectContributors = document.fields.directContributors()
+                val childPatches = listDocumentsForCurrentUser()
+                    .filter { child -> child.fields.firestoreString(GROUP_ID) == listId }
+                    .map { child ->
+                        child.withClearedGroupPatch(
+                            ownerId = userId,
+                            inheritedContributorsToRemove = groupDirectContributors,
+                        )
+                    }
+                firestore.commitPatches(childPatches)
+                firestore.commitDeletes(listOf(listDocumentPath(listId)))
+                return@runCatching
+            }
             val notes = firestore.listDocuments(collectionPath = notesCollectionPath(listId))
             firestore.commitDeletes(
                 notes.map { note -> "${notesCollectionPath(listId)}/${note.id}" } + listDocumentPath(listId),
@@ -78,40 +97,57 @@ internal class FirestoreJsNotesListsRepository(
 
     override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> =
         runCatching {
+            val userId = requireUserId()
             val document = firestore.getDocumentOrNull(listDocumentPath(listId))
                 ?: error("List not found")
-            val contributors = (document.fields.firestoreStringList(CONTRIBUTORS) + friendUserId)
-                .distinct()
-            firestore.patchDocument(
-                documentPath = listDocumentPath(listId),
-                fields = buildJsonObject {
-                    put(
-                        CONTRIBUTORS,
-                        firestoreArray(*contributors.map(::firestoreString).toTypedArray()),
-                    )
-                },
-                updateMask = listOf(CONTRIBUTORS),
-                currentDocument = document.toPrecondition(),
+            val directContributors = (document.fields.directContributors() + friendUserId).distinct()
+            val patches = mutableListOf(
+                document.withDirectContributorsPatch(userId, directContributors),
             )
+            if (document.isGroup) {
+                patches += listDocumentsForCurrentUser()
+                    .filter { child -> child.fields.firestoreString(GROUP_ID) == listId }
+                    .map { child ->
+                        child.withInheritedContributorPatch(userId, friendUserId, added = true)
+                    }
+                firestore.commitPatches(patches)
+            } else {
+                val patch = patches.single()
+                firestore.patchDocument(
+                    documentPath = listDocumentPath(listId),
+                    fields = patch.fields,
+                    updateMask = patch.updateMask,
+                    currentDocument = document.toPrecondition(),
+                )
+            }
         }
 
     override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
         runCatching {
+            val userId = requireUserId()
             val document = firestore.getDocumentOrNull(listDocumentPath(listId))
                 ?: error("List not found")
-            val contributors = document.fields.firestoreStringList(CONTRIBUTORS)
+            val directContributors = document.fields.directContributors()
                 .filterNot { contributorId -> contributorId == friendUserId }
-            firestore.patchDocument(
-                documentPath = listDocumentPath(listId),
-                fields = buildJsonObject {
-                    put(
-                        CONTRIBUTORS,
-                        firestoreArray(*contributors.map(::firestoreString).toTypedArray()),
-                    )
-                },
-                updateMask = listOf(CONTRIBUTORS),
-                currentDocument = document.toPrecondition(),
+            val patches = mutableListOf(
+                document.withDirectContributorsPatch(userId, directContributors),
             )
+            if (document.isGroup) {
+                patches += listDocumentsForCurrentUser()
+                    .filter { child -> child.fields.firestoreString(GROUP_ID) == listId }
+                    .map { child ->
+                        child.withInheritedContributorPatch(userId, friendUserId, added = false)
+                    }
+                firestore.commitPatches(patches)
+            } else {
+                val patch = patches.single()
+                firestore.patchDocument(
+                    documentPath = listDocumentPath(listId),
+                    fields = patch.fields,
+                    updateMask = patch.updateMask,
+                    currentDocument = document.toPrecondition(),
+                )
+            }
         }
 
     override suspend fun updateList(
@@ -129,19 +165,78 @@ internal class FirestoreJsNotesListsRepository(
                 },
                 updateMask = listOf("name", "ordered"),
             )
-            val fields = updated.fields
-            NotesListSummary(
-                id = updated.id,
-                ownerId = ownerIdFromDocumentName(updated.name),
-                name = fields.firestoreString("name").orEmpty(),
-                creator = fields.firestoreString("creator").orEmpty(),
-                createdAt = fields.firestoreInstant("date") ?: Instant.fromEpochMilliseconds(0),
-                isOrdered = fields.firestoreBoolean("ordered") ?: false,
-                isShared = ownerIdFromDocumentName(updated.name) != userId ||
-                    fields.firestoreStringList("contributors").distinct().size > 1,
-                contributors = fields.firestoreStringList(CONTRIBUTORS).distinct(),
-                archivedBy = fields.firestoreStringList(ARCHIVED_BY).distinct(),
-                archivedAtBy = fields.firestoreInstantMap(ARCHIVED_AT_BY),
+            updated.toNotesListSummary(userId)
+        }
+
+    override suspend fun setListGroup(listId: String, groupId: String?): Result<Unit> =
+        runCatching {
+            val userId = requireUserId()
+            val document = firestore.getDocumentOrNull(listDocumentPath(listId))
+                ?: error("List not found")
+            if (document.isGroup) error("A group cannot be added to another group")
+            val group = groupId?.let { id ->
+                firestore.getDocumentOrNull(listDocumentPath(id))
+                    ?.takeIf { candidate -> candidate.isGroup }
+                    ?: error("Group not found")
+            }
+            val inheritedContributors = group?.fields?.directContributors().orEmpty()
+            val groupOrder = if (groupId == null) {
+                0
+            } else {
+                listDocumentsForCurrentUser().count { child ->
+                    child.fields.firestoreString(GROUP_ID) == groupId && child.id != listId
+                }
+            }
+            firestore.patchDocument(
+                documentPath = listDocumentPath(listId),
+                fields = buildJsonObject {
+                    put(
+                        DIRECT_CONTRIBUTORS,
+                        firestoreArray(*document.fields.directContributors().map(::firestoreString).toTypedArray()),
+                    )
+                    put(GROUP_ID, groupId?.let(::firestoreString) ?: firestoreNull())
+                    put(GROUP_ORDER, firestoreInteger(groupOrder))
+                    put(
+                        INHERITED_GROUP_CONTRIBUTORS,
+                        firestoreArray(*inheritedContributors.map(::firestoreString).toTypedArray()),
+                    )
+                    put(
+                        CONTRIBUTORS,
+                        firestoreArray(
+                            *effectiveContributors(
+                                ownerId = userId,
+                                directContributors = document.fields.directContributors(),
+                                inheritedGroupContributors = inheritedContributors,
+                            ).map(::firestoreString).toTypedArray(),
+                        ),
+                    )
+                },
+                updateMask = listOf(
+                    DIRECT_CONTRIBUTORS,
+                    GROUP_ID,
+                    GROUP_ORDER,
+                    INHERITED_GROUP_CONTRIBUTORS,
+                    CONTRIBUTORS,
+                ),
+                currentDocument = document.toPrecondition(),
+            )
+        }
+
+    override suspend fun reorderGroupedLists(
+        groupId: String,
+        listIdsInOrder: List<String>,
+    ): Result<Unit> =
+        runCatching {
+            firestore.commitPatches(
+                listIdsInOrder.mapIndexed { index, listId ->
+                    FirestoreJsDocumentPatch(
+                        documentPath = listDocumentPath(listId),
+                        fields = buildJsonObject {
+                            put(GROUP_ORDER, firestoreInteger(index))
+                        },
+                        updateMask = listOf(GROUP_ORDER),
+                    )
+                },
             )
         }
 
@@ -189,6 +284,9 @@ internal class FirestoreJsNotesListsRepository(
     private fun listsCollectionPath(): String =
         "${userDocumentPath()}/$NOTES_LIST"
 
+    private suspend fun listDocumentsForCurrentUser(): List<FirestoreJsDocument> =
+        firestore.listDocuments(collectionPath = listsCollectionPath())
+
     private fun listDocumentPath(listId: String): String =
         "${listsCollectionPath()}/$listId"
 
@@ -203,17 +301,24 @@ internal class FirestoreJsNotesListsRepository(
         const val NOTES_LIST = "noteslist"
         const val NOTES = "notes"
         const val CONTRIBUTORS = "contributors"
+        const val DIRECT_CONTRIBUTORS = "directContributors"
+        const val INHERITED_GROUP_CONTRIBUTORS = "inheritedGroupContributors"
+        const val IS_GROUP = "isGroup"
+        const val GROUP_ID = "groupId"
+        const val GROUP_ORDER = "groupOrder"
         const val ARCHIVED_BY = "archivedBy"
         const val ARCHIVED_AT_BY = "archivedAtBy"
     }
 }
 
-private fun com.chemecador.secretaria.firestore.FirestoreJsDocument.toNotesListSummary(
+private fun FirestoreJsDocument.toNotesListSummary(
     currentUserId: String,
 ): NotesListSummary {
     val documentFields = fields
     val ownerId = ownerIdFromDocumentName(name)
     val contributors = documentFields.firestoreStringList("contributors")
+    val directContributors = documentFields.directContributors()
+    val inheritedGroupContributors = documentFields.inheritedGroupContributors()
     val archivedBy = documentFields.firestoreStringList("archivedBy")
     val archivedAtBy = documentFields.firestoreInstantMap("archivedAtBy")
     return NotesListSummary(
@@ -223,12 +328,129 @@ private fun com.chemecador.secretaria.firestore.FirestoreJsDocument.toNotesListS
         creator = documentFields.firestoreString("creator").orEmpty(),
         createdAt = documentFields.firestoreInstant("date") ?: Instant.fromEpochMilliseconds(0),
         isOrdered = documentFields.firestoreBoolean("ordered") ?: false,
+        isGroup = documentFields.firestoreBoolean("isGroup") ?: false,
+        groupId = documentFields.firestoreString("groupId")?.takeIf { it.isNotBlank() },
+        groupOrder = documentFields.firestoreInt("groupOrder") ?: 0,
         isShared = ownerId != currentUserId || contributors.distinct().size > 1,
         contributors = contributors.distinct(),
+        directContributors = directContributors,
+        inheritedGroupContributors = inheritedGroupContributors,
         archivedBy = archivedBy.distinct(),
         archivedAtBy = archivedAtBy,
     )
 }
 
-private fun com.chemecador.secretaria.firestore.FirestoreJsDocument.toPrecondition(): FirestorePrecondition =
+private fun FirestoreJsDocument.toPrecondition(): FirestorePrecondition =
     FirestorePrecondition(updateTime = updateTime ?: error("Missing update time for $name"))
+
+private val FirestoreJsDocument.isGroup: Boolean
+    get() = fields.firestoreBoolean("isGroup") == true
+
+private fun kotlinx.serialization.json.JsonObject.directContributors(): List<String> =
+    firestoreStringList("directContributors").ifEmpty { firestoreStringList("contributors") }.distinct()
+
+private fun kotlinx.serialization.json.JsonObject.inheritedGroupContributors(): List<String> =
+    firestoreStringList("inheritedGroupContributors").distinct()
+
+private fun FirestoreJsDocument.withDirectContributorsPatch(
+    ownerId: String,
+    directContributors: List<String>,
+): FirestoreJsDocumentPatch {
+    val inheritedContributors = fields.inheritedGroupContributors()
+    val contributors = effectiveContributors(ownerId, directContributors, inheritedContributors)
+    return FirestoreJsDocumentPatch(
+        documentPath = relativeDocumentPath(),
+        fields = buildJsonObject {
+            put(
+                "directContributors",
+                firestoreArray(*directContributors.map(::firestoreString).toTypedArray()),
+            )
+            put(
+                "contributors",
+                firestoreArray(*contributors.map(::firestoreString).toTypedArray()),
+            )
+        },
+        updateMask = listOf("directContributors", "contributors"),
+    )
+}
+
+private fun FirestoreJsDocument.withInheritedContributorPatch(
+    ownerId: String,
+    friendUserId: String,
+    added: Boolean,
+): FirestoreJsDocumentPatch {
+    val inheritedContributors = if (added) {
+        (fields.inheritedGroupContributors() + friendUserId).distinct()
+    } else {
+        fields.inheritedGroupContributors().filterNot { contributorId ->
+            contributorId == friendUserId
+        }
+    }
+    return withInheritedContributorsPatch(ownerId, inheritedContributors)
+}
+
+private fun FirestoreJsDocument.withClearedGroupPatch(
+    ownerId: String,
+    inheritedContributorsToRemove: List<String>,
+): FirestoreJsDocumentPatch {
+    val inheritedContributors = fields.inheritedGroupContributors().filterNot { contributorId ->
+        contributorId in inheritedContributorsToRemove
+    }
+    val directContributors = fields.directContributors()
+    val contributors = effectiveContributors(ownerId, directContributors, inheritedContributors)
+    return FirestoreJsDocumentPatch(
+        documentPath = relativeDocumentPath(),
+        fields = buildJsonObject {
+            put(
+                "directContributors",
+                firestoreArray(*directContributors.map(::firestoreString).toTypedArray()),
+            )
+            put("groupId", firestoreNull())
+            put("groupOrder", firestoreInteger(0))
+            put(
+                "inheritedGroupContributors",
+                firestoreArray(*inheritedContributors.map(::firestoreString).toTypedArray()),
+            )
+            put(
+                "contributors",
+                firestoreArray(*contributors.map(::firestoreString).toTypedArray()),
+            )
+        },
+        updateMask = listOf(
+            "directContributors",
+            "groupId",
+            "groupOrder",
+            "inheritedGroupContributors",
+            "contributors",
+        ),
+    )
+}
+
+private fun FirestoreJsDocument.withInheritedContributorsPatch(
+    ownerId: String,
+    inheritedContributors: List<String>,
+): FirestoreJsDocumentPatch {
+    val directContributors = fields.directContributors()
+    val contributors = effectiveContributors(ownerId, directContributors, inheritedContributors)
+    return FirestoreJsDocumentPatch(
+        documentPath = relativeDocumentPath(),
+        fields = buildJsonObject {
+            put(
+                "directContributors",
+                firestoreArray(*directContributors.map(::firestoreString).toTypedArray()),
+            )
+            put(
+                "inheritedGroupContributors",
+                firestoreArray(*inheritedContributors.map(::firestoreString).toTypedArray()),
+            )
+            put(
+                "contributors",
+                firestoreArray(*contributors.map(::firestoreString).toTypedArray()),
+            )
+        },
+        updateMask = listOf("directContributors", "inheritedGroupContributors", "contributors"),
+    )
+}
+
+private fun FirestoreJsDocument.relativeDocumentPath(): String =
+    name.substringAfter("/documents/")

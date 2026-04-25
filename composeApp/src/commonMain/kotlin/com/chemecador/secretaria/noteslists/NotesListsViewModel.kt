@@ -58,9 +58,9 @@ class NotesListsViewModel(
         }
     }
 
-    fun createList(name: String, ordered: Boolean) {
+    fun createList(name: String, ordered: Boolean, isGroup: Boolean) {
         viewModelScope.launch {
-            repository.createList(name, ordered)
+            repository.createList(name, ordered, isGroup)
                 .onSuccess { fetchLists() }
                 .onFailure { throwable ->
                     _state.update { it.copy(errorMessage = throwable.message) }
@@ -88,7 +88,7 @@ class NotesListsViewModel(
                                     it.copy(
                                         isLoadingShareableFriends = false,
                                         shareableFriends = friends
-                                            .filterNot { friend -> friend.userId in currentList.sharedWithUserIds }
+                                            .filterNot { friend -> friend.userId in currentList.directSharedWithUserIds }
                                             .sortedByName(),
                                         collaboratorsByListId = it.collaboratorsByListId.updated(
                                             listId = currentList.id,
@@ -138,8 +138,11 @@ class NotesListsViewModel(
                         repository.shareList(currentList.id, friend.userId)
                             .onSuccess {
                                 val updatedList = updateLocalList(currentList.ownerId, currentList.id) { existingList ->
-                                    existingList.withContributors(existingList.contributors + friend.userId)
-                                } ?: currentList.withContributors(currentList.contributors + friend.userId)
+                                    existingList.withDirectContributors(existingList.directContributors + friend.userId)
+                                } ?: currentList.withDirectContributors(currentList.directContributors + friend.userId)
+                                if (updatedList.isGroup) {
+                                    propagateGroupContributor(updatedList, friend.userId, added = true)
+                                }
                                 _state.update {
                                     it.copy(
                                         isUpdatingSharing = false,
@@ -190,16 +193,19 @@ class NotesListsViewModel(
                         repository.unshareList(currentList.id, collaborator.userId)
                             .onSuccess {
                                 val updatedList = updateLocalList(currentList.ownerId, currentList.id) { existingList ->
-                                    existingList.withContributors(
-                                        existingList.contributors.filterNot { contributorId ->
+                                    existingList.withDirectContributors(
+                                        existingList.directContributors.filterNot { contributorId ->
                                             contributorId == collaborator.userId
                                         },
                                     )
-                                } ?: currentList.withContributors(
-                                    currentList.contributors.filterNot { contributorId ->
+                                } ?: currentList.withDirectContributors(
+                                    currentList.directContributors.filterNot { contributorId ->
                                         contributorId == collaborator.userId
                                     },
                                 )
+                                if (updatedList.isGroup) {
+                                    propagateGroupContributor(updatedList, collaborator.userId, added = false)
+                                }
                                 _state.update {
                                     it.copy(
                                         isUpdatingSharing = false,
@@ -267,6 +273,88 @@ class NotesListsViewModel(
                 .onFailure {
                     _state.update {
                         it.copy(archiveFeedback = ListArchiveFeedback(action = action, isSuccess = false))
+                    }
+                }
+        }
+    }
+
+    fun setListGroup(list: NotesListSummary, group: NotesListSummary?) {
+        viewModelScope.launch {
+            requireOwnedList(list)
+                .fold(
+                    onSuccess = { currentList ->
+                        if (currentList.isGroup) {
+                            Result.failure(IllegalStateException(GROUPING_GROUP_ERROR_MESSAGE))
+                        } else {
+                            val currentGroup = group?.let(::findCurrentList)
+                            when {
+                                currentGroup == null -> Result.success(currentList to null)
+                                !currentGroup.isGroup -> {
+                                    Result.failure(IllegalStateException(GROUPING_TARGET_ERROR_MESSAGE))
+                                }
+                                currentGroup.ownerId != authRepository.currentUserId -> {
+                                    Result.failure(IllegalStateException(OWNERSHIP_ERROR_MESSAGE))
+                                }
+                                else -> Result.success(currentList to currentGroup)
+                            }
+                        }
+                    },
+                    onFailure = { Result.failure(it) },
+                )
+                .fold(
+                    onSuccess = { (currentList, currentGroup) ->
+                        repository.setListGroup(currentList.id, currentGroup?.id)
+                            .onSuccess {
+                                val nextOrder = currentGroup?.let { groupList ->
+                                    allItems.count { item ->
+                                        item.ownerId == groupList.ownerId &&
+                                            item.groupId == groupList.id &&
+                                            item.id != currentList.id
+                                    }
+                                } ?: 0
+                                updateLocalList(currentList.ownerId, currentList.id) { existingList ->
+                                    existingList.withGroup(currentGroup, nextOrder)
+                                }
+                                publishCurrentItems()
+                            }
+                            .onFailure { throwable ->
+                                _state.update { it.copy(errorMessage = throwable.message) }
+                            }
+                    },
+                    onFailure = { throwable ->
+                        _state.update { it.copy(errorMessage = throwable.message) }
+                    },
+                )
+        }
+    }
+
+    fun reorderGroupedLists(group: NotesListSummary, listIdsInOrder: List<String>) {
+        val currentGroup = findCurrentList(group)
+        if (!currentGroup.isGroup || currentGroup.ownerId != authRepository.currentUserId) {
+            _state.update { it.copy(errorMessage = OWNERSHIP_ERROR_MESSAGE) }
+            return
+        }
+
+        val currentChildren = allItems
+            .filter { item -> item.ownerId == currentGroup.ownerId && item.groupId == currentGroup.id }
+            .sortedBy { item -> item.groupOrder }
+        val reorderedChildren = currentChildren.applyGroupOrder(listIdsInOrder) ?: return
+        if (currentChildren.map(NotesListSummary::id) == reorderedChildren.map(NotesListSummary::id)) {
+            return
+        }
+
+        replaceLocalLists(reorderedChildren)
+        publishCurrentItems()
+
+        viewModelScope.launch {
+            repository.reorderGroupedLists(currentGroup.id, listIdsInOrder)
+                .onFailure { throwable ->
+                    replaceLocalLists(currentChildren)
+                    _state.update {
+                        it.copy(
+                            items = allItems.filteredBySearch(it.searchQuery).sortedByOption(it.sortOption),
+                            errorMessage = throwable.message,
+                        )
                     }
                 }
         }
@@ -363,7 +451,7 @@ class NotesListsViewModel(
     private suspend fun refreshCollaborators(items: List<NotesListSummary>) {
         val currentUserId = authRepository.currentUserId ?: return
         val ownedSharedLists = items.filter { list ->
-            list.ownerId == currentUserId && list.sharedWithUserIds.isNotEmpty()
+            list.ownerId == currentUserId && list.directSharedWithUserIds.isNotEmpty()
         }
         if (ownedSharedLists.isEmpty()) {
             _state.update { it.copy(collaboratorsByListId = emptyMap()) }
@@ -414,7 +502,7 @@ class NotesListsViewModel(
     private fun buildCollaborators(
         list: NotesListSummary,
         friendsByUserId: Map<String, FriendSummary> = knownFriendsByUserId,
-    ): List<ListCollaborator> = list.sharedWithUserIds
+    ): List<ListCollaborator> = list.directSharedWithUserIds
         .map { userId ->
             val friend = friendsByUserId[userId]
             ListCollaborator(
@@ -441,17 +529,91 @@ class NotesListsViewModel(
         return updatedList
     }
 
-    private fun NotesListSummary.withContributors(updatedContributors: List<String>): NotesListSummary {
-        val contributors = updatedContributors.distinct()
+    private fun replaceLocalLists(lists: List<NotesListSummary>) {
+        val replacementsByKey = lists.associateBy { list -> list.ownerId to list.id }
+        allItems = allItems.map { currentList ->
+            replacementsByKey[currentList.ownerId to currentList.id] ?: currentList
+        }
+    }
+
+    private fun publishCurrentItems() {
+        _state.update {
+            it.copy(
+                items = allItems.filteredBySearch(it.searchQuery).sortedByOption(it.sortOption),
+            )
+        }
+    }
+
+    private fun NotesListSummary.withDirectContributors(updatedContributors: List<String>): NotesListSummary {
+        val directContributors = updatedContributors.distinct()
+        val contributors = effectiveContributors(
+            ownerId = ownerId,
+            directContributors = directContributors,
+            inheritedGroupContributors = inheritedGroupContributors,
+        )
         val currentUserId = authRepository.currentUserId
         return copy(
             contributors = contributors,
+            directContributors = directContributors,
             isShared = if (currentUserId == null) {
                 contributors.size > 1
             } else {
                 ownerId != currentUserId || contributors.size > 1
             },
         )
+    }
+
+    private fun NotesListSummary.withInheritedGroupContributors(
+        updatedInheritedGroupContributors: List<String>,
+    ): NotesListSummary {
+        val inheritedGroupContributors = updatedInheritedGroupContributors.distinct()
+        val contributors = effectiveContributors(
+            ownerId = ownerId,
+            directContributors = directContributors,
+            inheritedGroupContributors = inheritedGroupContributors,
+        )
+        val currentUserId = authRepository.currentUserId
+        return copy(
+            contributors = contributors,
+            inheritedGroupContributors = inheritedGroupContributors,
+            isShared = if (currentUserId == null) {
+                contributors.size > 1
+            } else {
+                ownerId != currentUserId || contributors.size > 1
+            },
+        )
+    }
+
+    private fun NotesListSummary.withGroup(
+        group: NotesListSummary?,
+        groupOrder: Int,
+    ): NotesListSummary {
+        val inheritedContributors = group?.directContributors.orEmpty()
+        return copy(
+            groupId = group?.id,
+            groupOrder = if (group == null) 0 else groupOrder,
+        ).withInheritedGroupContributors(inheritedContributors)
+    }
+
+    private fun propagateGroupContributor(
+        group: NotesListSummary,
+        friendUserId: String,
+        added: Boolean,
+    ) {
+        allItems = allItems.map { item ->
+            if (item.ownerId == group.ownerId && item.groupId == group.id) {
+                val inheritedContributors = if (added) {
+                    item.inheritedGroupContributors + friendUserId
+                } else {
+                    item.inheritedGroupContributors.filterNot { contributorId ->
+                        contributorId == friendUserId
+                    }
+                }
+                item.withInheritedGroupContributors(inheritedContributors)
+            } else {
+                item
+            }
+        }
     }
 
     private fun NotesListSummary.withArchivedBy(
@@ -476,6 +638,8 @@ class NotesListsViewModel(
 
     private companion object {
         const val OWNERSHIP_ERROR_MESSAGE = "Solo el propietario puede modificar esta lista"
+        const val GROUPING_GROUP_ERROR_MESSAGE = "Un grupo no puede agregarse a otro grupo"
+        const val GROUPING_TARGET_ERROR_MESSAGE = "Selecciona un grupo de listas"
         const val SEARCH_DEBOUNCE_MS = 250L
     }
 }

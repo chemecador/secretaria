@@ -53,6 +53,14 @@ private sealed class Screen {
         val listId: String,
         val listName: String,
         val isOrdered: Boolean,
+        val backTarget: Screen = Lists,
+    ) : Screen()
+
+    data class ListGroup(
+        val ownerId: String,
+        val groupId: String,
+        val groupName: String,
+        val isOrdered: Boolean,
     ) : Screen()
 
     data class NoteDetail(
@@ -61,6 +69,7 @@ private sealed class Screen {
         val listName: String,
         val isOrdered: Boolean,
         val note: Note,
+        val backTarget: Screen = Lists,
     ) : Screen()
 }
 
@@ -95,12 +104,21 @@ fun App(
 
         fun openRequestedList(request: OpenListRequest) {
             utilityBackStack = emptyList()
-            screen = Screen.Notes(
-                ownerId = request.ownerId,
-                listId = request.listId,
-                listName = request.listName,
-                isOrdered = request.isOrdered,
-            )
+            screen = if (request.isGroup) {
+                Screen.ListGroup(
+                    ownerId = request.ownerId,
+                    groupId = request.listId,
+                    groupName = request.listName,
+                    isOrdered = request.isOrdered,
+                )
+            } else {
+                Screen.Notes(
+                    ownerId = request.ownerId,
+                    listId = request.listId,
+                    listName = request.listName,
+                    isOrdered = request.isOrdered,
+                )
+            }
             onOpenListRequestConsumed()
         }
 
@@ -209,6 +227,9 @@ fun App(
                                 onListSelected = { id, ownerId, name, isOrdered ->
                                     screen = Screen.Notes(ownerId, id, name, isOrdered)
                                 },
+                                onGroupSelected = { id, ownerId, name, isOrdered ->
+                                    screen = Screen.ListGroup(ownerId, id, name, isOrdered)
+                                },
                                 onOpenFriends = openFriends,
                                 onOpenSettings = openSettings,
                                 onLogout = logout,
@@ -260,8 +281,33 @@ fun App(
                                         current.listName,
                                         current.isOrdered,
                                         note,
+                                        current.backTarget,
                                     )
                                 },
+                                onBack = { screen = current.backTarget },
+                                onOpenFriends = openFriends,
+                                onOpenSettings = openSettings,
+                                onLogout = logout,
+                            )
+                        }
+
+                        is Screen.ListGroup -> {
+                            NotesListsScreen(
+                                viewModel = listsViewModel,
+                                groupOwnerId = current.ownerId,
+                                groupId = current.groupId,
+                                groupName = current.groupName,
+                                groupIsOrdered = current.isOrdered,
+                                onListSelected = { id, ownerId, name, isOrdered ->
+                                    screen = Screen.Notes(
+                                        ownerId = ownerId,
+                                        listId = id,
+                                        listName = name,
+                                        isOrdered = isOrdered,
+                                        backTarget = current,
+                                    )
+                                },
+                                onGroupSelected = { _, _, _, _ -> },
                                 onBack = { screen = Screen.Lists },
                                 onOpenFriends = openFriends,
                                 onOpenSettings = openSettings,
@@ -279,6 +325,7 @@ fun App(
                                 current.listId,
                                 current.listName,
                                 current.isOrdered,
+                                current.backTarget,
                             )
                             NoteDetailScreen(
                                 note = current.note,

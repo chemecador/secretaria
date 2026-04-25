@@ -18,7 +18,11 @@ class FakeNotesListsRepository(
         return Result.success(lists.toList())
     }
 
-    override suspend fun createList(name: String, ordered: Boolean): Result<NotesListSummary> {
+    override suspend fun createList(
+        name: String,
+        ordered: Boolean,
+        isGroup: Boolean,
+    ): Result<NotesListSummary> {
         val newList = NotesListSummary(
             id = "list-${lists.size + 1}",
             ownerId = "Alex",
@@ -26,8 +30,13 @@ class FakeNotesListsRepository(
             creator = "Alex",
             createdAt = Clock.System.now(),
             isOrdered = ordered,
+            isGroup = isGroup,
+            groupId = null,
+            groupOrder = 0,
             isShared = false,
             contributors = listOf("Alex"),
+            directContributors = listOf("Alex"),
+            inheritedGroupContributors = emptyList(),
             archivedBy = emptyList(),
             archivedAtBy = emptyMap(),
         )
@@ -36,6 +45,20 @@ class FakeNotesListsRepository(
     }
 
     override suspend fun deleteList(listId: String): Result<Unit> {
+        val list = lists.firstOrNull { it.id == listId }
+        if (list?.isGroup == true) {
+            val directContributors = list.directContributors
+            for (index in lists.indices) {
+                if (lists[index].groupId == listId) {
+                    lists[index] = lists[index].withGroup(null, groupOrder = 0)
+                        .withInheritedGroupContributors(
+                            lists[index].inheritedGroupContributors.filterNot { contributorId ->
+                                contributorId in directContributors
+                            },
+                        )
+                }
+            }
+        }
         lists.removeAll { it.id == listId }
         return Result.success(Unit)
     }
@@ -43,11 +66,11 @@ class FakeNotesListsRepository(
     override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> {
         val index = lists.indexOfFirst { it.id == listId }
         if (index != -1) {
-            val updatedContributors = (lists[index].contributors + friendUserId).distinct()
-            lists[index] = lists[index].copy(
-                isShared = updatedContributors.size > 1,
-                contributors = updatedContributors,
-            )
+            val updatedDirectContributors = (lists[index].directContributors + friendUserId).distinct()
+            lists[index] = lists[index].withDirectContributors(updatedDirectContributors)
+            if (lists[index].isGroup) {
+                lists.propagateGroupContributor(lists[index], friendUserId, added = true)
+            }
         }
         return Result.success(Unit)
     }
@@ -55,13 +78,13 @@ class FakeNotesListsRepository(
     override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> {
         val index = lists.indexOfFirst { it.id == listId }
         if (index != -1) {
-            val updatedContributors = lists[index].contributors.filterNot { contributorId ->
+            val updatedDirectContributors = lists[index].directContributors.filterNot { contributorId ->
                 contributorId == friendUserId
             }
-            lists[index] = lists[index].copy(
-                isShared = updatedContributors.distinct().size > 1,
-                contributors = updatedContributors,
-            )
+            lists[index] = lists[index].withDirectContributors(updatedDirectContributors)
+            if (lists[index].isGroup) {
+                lists.propagateGroupContributor(lists[index], friendUserId, added = false)
+            }
         }
         return Result.success(Unit)
     }
@@ -72,6 +95,34 @@ class FakeNotesListsRepository(
         val updated = lists[index].copy(name = name, isOrdered = ordered)
         lists[index] = updated
         return Result.success(updated)
+    }
+
+    override suspend fun setListGroup(listId: String, groupId: String?): Result<Unit> {
+        val index = lists.indexOfFirst { it.id == listId }
+        if (index == -1) return Result.failure(IllegalStateException("List not found"))
+        val group = groupId?.let { id -> lists.firstOrNull { it.id == id && it.isGroup } }
+            ?: if (groupId == null) null else return Result.failure(IllegalStateException("Group not found"))
+        val groupOrder = if (group == null) {
+            0
+        } else {
+            lists.count { it.groupId == group.id && it.id != listId }
+        }
+        lists[index] = lists[index].withGroup(group, groupOrder)
+        return Result.success(Unit)
+    }
+
+    override suspend fun reorderGroupedLists(groupId: String, listIdsInOrder: List<String>): Result<Unit> {
+        val reordered = lists
+            .filter { it.groupId == groupId }
+            .applyGroupOrder(listIdsInOrder)
+            ?: return Result.failure(IllegalStateException("Invalid group order"))
+        reordered.forEach { reorderedList ->
+            val index = lists.indexOfFirst { it.id == reorderedList.id }
+            if (index != -1) {
+                lists[index] = reorderedList
+            }
+        }
+        return Result.success(Unit)
     }
 
     override suspend fun setListArchived(
@@ -109,6 +160,8 @@ class FakeNotesListsRepository(
                 isOrdered = false,
                 isShared = false,
                 contributors = listOf("Alex"),
+                directContributors = listOf("Alex"),
+                inheritedGroupContributors = emptyList(),
                 archivedBy = emptyList(),
                 archivedAtBy = emptyMap(),
             ),
@@ -121,6 +174,8 @@ class FakeNotesListsRepository(
                 isOrdered = true,
                 isShared = false,
                 contributors = listOf("Alex"),
+                directContributors = listOf("Alex"),
+                inheritedGroupContributors = emptyList(),
                 archivedBy = emptyList(),
                 archivedAtBy = emptyMap(),
             ),
@@ -133,6 +188,8 @@ class FakeNotesListsRepository(
                 isOrdered = false,
                 isShared = false,
                 contributors = listOf("Alex"),
+                directContributors = listOf("Alex"),
+                inheritedGroupContributors = emptyList(),
                 archivedBy = emptyList(),
                 archivedAtBy = emptyMap(),
             ),
@@ -145,9 +202,66 @@ class FakeNotesListsRepository(
                 isOrdered = true,
                 isShared = true,
                 contributors = listOf("Marta", "Alex"),
+                directContributors = listOf("Marta", "Alex"),
+                inheritedGroupContributors = emptyList(),
                 archivedBy = emptyList(),
                 archivedAtBy = emptyMap(),
             ),
         )
+    }
+}
+
+private fun NotesListSummary.withDirectContributors(
+    updatedDirectContributors: List<String>,
+): NotesListSummary {
+    val directContributors = updatedDirectContributors.distinct()
+    val contributors = effectiveContributors(ownerId, directContributors, inheritedGroupContributors)
+    return copy(
+        contributors = contributors,
+        directContributors = directContributors,
+        isShared = contributors.size > 1,
+    )
+}
+
+private fun NotesListSummary.withInheritedGroupContributors(
+    updatedInheritedGroupContributors: List<String>,
+): NotesListSummary {
+    val inheritedGroupContributors = updatedInheritedGroupContributors.distinct()
+    val contributors = effectiveContributors(ownerId, directContributors, inheritedGroupContributors)
+    return copy(
+        contributors = contributors,
+        inheritedGroupContributors = inheritedGroupContributors,
+        isShared = contributors.size > 1,
+    )
+}
+
+private fun NotesListSummary.withGroup(
+    group: NotesListSummary?,
+    groupOrder: Int,
+): NotesListSummary {
+    val inheritedContributors = group?.directContributors.orEmpty()
+    return copy(
+        groupId = group?.id,
+        groupOrder = if (group == null) 0 else groupOrder,
+    ).withInheritedGroupContributors(inheritedContributors)
+}
+
+private fun MutableList<NotesListSummary>.propagateGroupContributor(
+    group: NotesListSummary,
+    friendUserId: String,
+    added: Boolean,
+) {
+    for (index in indices) {
+        val item = this[index]
+        if (item.groupId == group.id) {
+            val inheritedContributors = if (added) {
+                item.inheritedGroupContributors + friendUserId
+            } else {
+                item.inheritedGroupContributors.filterNot { contributorId ->
+                    contributorId == friendUserId
+                }
+            }
+            this[index] = item.withInheritedGroupContributors(inheritedContributors)
+        }
     }
 }

@@ -216,10 +216,11 @@ class FirestoreIosNotesListsRepositoryTest {
             transport.requests[0].url,
         )
         assertEquals(
-            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/user-123/noteslist/list-1?updateMask.fieldPaths=contributors&currentDocument.updateTime=2026-04-15T10%3A00%3A00Z",
+            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/user-123/noteslist/list-1?updateMask.fieldPaths=directContributors&updateMask.fieldPaths=contributors&currentDocument.updateTime=2026-04-15T10%3A00%3A00Z",
             transport.requests[1].url,
         )
         assertEquals("Bearer ios-token", transport.requests[1].headers["Authorization"])
+        assertTrue(transport.requests[1].body!!.contains(""""directContributors""""))
         assertTrue(transport.requests[1].body!!.contains(""""contributors""""))
         assertTrue(transport.requests[1].body!!.contains(""""stringValue":"user-123""""))
         assertTrue(transport.requests[1].body!!.contains(""""stringValue":"friend-1""""))
@@ -281,6 +282,9 @@ class FirestoreIosNotesListsRepositoryTest {
         assertTrue(result.isSuccess)
         assertEquals("GET", transport.requests[0].method)
         assertEquals("PATCH", transport.requests[1].method)
+        assertTrue(transport.requests[1].url.contains("updateMask.fieldPaths=directContributors"))
+        assertTrue(transport.requests[1].url.contains("updateMask.fieldPaths=contributors"))
+        assertTrue(transport.requests[1].body!!.contains(""""directContributors""""))
         assertTrue(transport.requests[1].body!!.contains(""""contributors""""))
         assertTrue(transport.requests[1].body!!.contains(""""stringValue":"user-123""""))
         assertTrue(!transport.requests[1].body!!.contains(""""stringValue":"friend-1""""))

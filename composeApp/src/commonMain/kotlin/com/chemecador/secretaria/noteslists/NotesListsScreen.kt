@@ -5,6 +5,10 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +24,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -27,11 +33,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FormatListNumbered
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.FolderOff
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Unarchive
@@ -67,23 +78,28 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.zIndex
 import com.chemecador.secretaria.PlatformBackHandler
 import com.chemecador.secretaria.SecretariaOverflowMenu
 import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
 import com.chemecador.secretaria.friends.FriendSummary
 import com.chemecador.secretaria.login.AuthRepository
+import com.chemecador.secretaria.notes.NotesReorderState
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import secretaria.composeapp.generated.resources.Res
@@ -93,6 +109,8 @@ import secretaria.composeapp.generated.resources.archive_list_error
 import secretaria.composeapp.generated.resources.archive_list_success
 import secretaria.composeapp.generated.resources.archived_lists_title
 import secretaria.composeapp.generated.resources.cancel
+import secretaria.composeapp.generated.resources.add_list_to_group
+import secretaria.composeapp.generated.resources.create_list_group
 import secretaria.composeapp.generated.resources.create_list_button
 import secretaria.composeapp.generated.resources.create_list_name_hint
 import secretaria.composeapp.generated.resources.create_list_ordered
@@ -106,8 +124,10 @@ import secretaria.composeapp.generated.resources.edit_list_title
 import secretaria.composeapp.generated.resources.list_created_by
 import secretaria.composeapp.generated.resources.list_archived_on
 import secretaria.composeapp.generated.resources.list_archived_on_unknown
+import secretaria.composeapp.generated.resources.list_group_badge
 import secretaria.composeapp.generated.resources.list_options
 import secretaria.composeapp.generated.resources.list_ordered_badge
+import secretaria.composeapp.generated.resources.group_lists_empty
 import secretaria.composeapp.generated.resources.notes_lists_empty
 import secretaria.composeapp.generated.resources.notes_lists_empty_active_mine
 import secretaria.composeapp.generated.resources.notes_lists_empty_active_shared
@@ -131,6 +151,10 @@ import secretaria.composeapp.generated.resources.share_list_shared_with_count_on
 import secretaria.composeapp.generated.resources.share_list_shared_with_many
 import secretaria.composeapp.generated.resources.share_list_shared_with_one
 import secretaria.composeapp.generated.resources.share_list_success
+import secretaria.composeapp.generated.resources.remove_list_from_group
+import secretaria.composeapp.generated.resources.reorder_list_handle
+import secretaria.composeapp.generated.resources.select_group_empty
+import secretaria.composeapp.generated.resources.select_group_title
 import secretaria.composeapp.generated.resources.sort_date_asc
 import secretaria.composeapp.generated.resources.sort_date_desc
 import secretaria.composeapp.generated.resources.sort_name_asc
@@ -147,10 +171,16 @@ import kotlin.time.Instant
 fun NotesListsScreen(
     viewModel: NotesListsViewModel,
     onListSelected: (id: String, ownerId: String, name: String, isOrdered: Boolean) -> Unit,
+    onGroupSelected: (id: String, ownerId: String, name: String, isOrdered: Boolean) -> Unit,
     onOpenFriends: () -> Unit,
     onOpenSettings: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
+    groupOwnerId: String? = null,
+    groupId: String? = null,
+    groupName: String? = null,
+    groupIsOrdered: Boolean = false,
+    onBack: (() -> Unit)? = null,
 ) {
     val authRepository = koinInject<AuthRepository>()
     val currentUserId = authRepository.currentUserId
@@ -161,10 +191,17 @@ fun NotesListsScreen(
     var listToEdit by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToDelete by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToShare by remember { mutableStateOf<NotesListSummary?>(null) }
+    var listToGroup by remember { mutableStateOf<NotesListSummary?>(null) }
     var selectedSection by remember { mutableStateOf(NotesListsSection.MINE) }
     var showArchivedLists by remember { mutableStateOf(false) }
     var showSearchInput by remember { mutableStateOf(false) }
     val isSearchInputVisible = showSearchInput || state.searchQuery.isNotBlank()
+    val isGroupScreen = groupId != null
+    val currentGroup = state.items.firstOrNull { item ->
+        item.ownerId == groupOwnerId && item.id == groupId && item.isGroup
+    }
+    val currentGroupName = currentGroup?.name ?: groupName.orEmpty()
+    val currentGroupIsOrdered = currentGroup?.isOrdered ?: groupIsOrdered
     val openListOptions: (NotesListSummary) -> Unit = { item ->
         if (currentUserId != null) {
             listForOptions = item
@@ -204,18 +241,32 @@ fun NotesListsScreen(
             }
         }
     }
-    val visibleItems = state.items.filter { item ->
-        val isArchived = currentUserId != null && currentUserId in item.archivedBy
-        if (showArchivedLists) {
-            isArchived
-        } else {
-            when (selectedSection) {
-                NotesListsSection.MINE -> !item.isShared && !isArchived
-                NotesListsSection.SHARED -> item.isShared && !isArchived
-            }
+    val visibleRootGroups = state.items.filter { item ->
+        item.isGroup && item.isVisibleRootGroup(
+            currentUserId = currentUserId,
+            showArchivedLists = showArchivedLists,
+        )
+    }
+    val visibleGroupKeys = visibleRootGroups.map { item -> item.ownerId to item.id }.toSet()
+    val visibleItems = if (isGroupScreen) {
+        state.items.filter { item ->
+            item.ownerId == groupOwnerId &&
+                item.groupId == groupId &&
+                !item.isGroup &&
+                (currentUserId == null || currentUserId !in item.archivedBy)
+        }
+    } else {
+        state.items.filter { item ->
+            item.isVisibleInRoot(
+                currentUserId = currentUserId,
+                selectedSection = selectedSection,
+                showArchivedLists = showArchivedLists,
+            ) && (item.groupId == null || (item.ownerId to item.groupId) !in visibleGroupKeys)
         }
     }
-    val emptyMessage = if (showArchivedLists) {
+    val emptyMessage = if (isGroupScreen) {
+        stringResource(Res.string.group_lists_empty)
+    } else if (showArchivedLists) {
         stringResource(Res.string.notes_lists_empty_archived)
     } else {
         when (selectedSection) {
@@ -251,8 +302,20 @@ fun NotesListsScreen(
             listForOptions == null &&
             listToEdit == null &&
             listToDelete == null &&
-            listToShare == null,
+            listToShare == null &&
+            listToGroup == null,
         onBack = { showArchivedLists = false },
+    )
+    PlatformBackHandler(
+        enabled = isGroupScreen &&
+            !showCreateDialog &&
+            listForOptions == null &&
+            listToEdit == null &&
+            listToDelete == null &&
+            listToShare == null &&
+            listToGroup == null &&
+            onBack != null,
+        onBack = { onBack?.invoke() },
     )
 
     Scaffold(
@@ -263,7 +326,9 @@ fun NotesListsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        if (showArchivedLists) {
+                        if (isGroupScreen) {
+                            currentGroupName
+                        } else if (showArchivedLists) {
                             stringResource(Res.string.archived_lists_title)
                         } else {
                             stringResource(Res.string.app_name)
@@ -277,7 +342,11 @@ fun NotesListsScreen(
                     actionIconContentColor = SecretariaTopBarContentColor,
                 ),
                 navigationIcon = {
-                    if (showArchivedLists) {
+                    if (isGroupScreen) {
+                        IconButton(onClick = { onBack?.invoke() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        }
+                    } else if (showArchivedLists) {
                         IconButton(onClick = { showArchivedLists = false }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                         }
@@ -288,7 +357,7 @@ fun NotesListsScreen(
                         onOpenFriends = onOpenFriends,
                         onOpenSettings = onOpenSettings,
                         onLogout = onLogout,
-                        onOpenArchivedLists = if (showArchivedLists) {
+                        onOpenArchivedLists = if (showArchivedLists || isGroupScreen) {
                             null
                         } else {
                             { showArchivedLists = true }
@@ -298,7 +367,7 @@ fun NotesListsScreen(
             )
         },
         floatingActionButton = {
-            if (!showArchivedLists) {
+            if (!showArchivedLists && !isGroupScreen) {
                 FloatingActionButton(
                     onClick = { showCreateDialog = true },
                     containerColor = SecretariaTopBarColor,
@@ -313,9 +382,9 @@ fun NotesListsScreen(
         if (showCreateDialog) {
             CreateListDialog(
                 onDismiss = { showCreateDialog = false },
-                onCreate = { name, ordered ->
+                onCreate = { name, ordered, isGroup ->
                     selectedSection = NotesListsSection.MINE
-                    viewModel.createList(name, ordered)
+                    viewModel.createList(name, ordered, isGroup)
                     showCreateDialog = false
                 },
             )
@@ -327,12 +396,22 @@ fun NotesListsScreen(
                 listName = list.name,
                 isOwner = list.ownerId == currentUserId,
                 isArchived = isArchived,
+                isGroup = list.isGroup,
+                isGrouped = list.groupId != null,
                 onArchive = {
                     viewModel.setListArchived(list, archived = !isArchived)
                     listForOptions = null
                 },
                 onShare = {
                     listToShare = list
+                    listForOptions = null
+                },
+                onAddToGroup = {
+                    listToGroup = list
+                    listForOptions = null
+                },
+                onRemoveFromGroup = {
+                    viewModel.setListGroup(list, group = null)
                     listForOptions = null
                 },
                 onEdit = {
@@ -344,6 +423,25 @@ fun NotesListsScreen(
                     listForOptions = null
                 },
                 onDismiss = { listForOptions = null },
+            )
+        }
+
+        listToGroup?.let { list ->
+            GroupSelectionDialog(
+                listName = list.name,
+                groups = state.items
+                    .filter { item ->
+                        item.isGroup &&
+                            item.ownerId == currentUserId &&
+                            item.id != list.id &&
+                            currentUserId !in item.archivedBy
+                    }
+                    .sortedBy { item -> item.name.lowercase() },
+                onGroupSelected = { group ->
+                    viewModel.setListGroup(list, group)
+                    listToGroup = null
+                },
+                onDismiss = { listToGroup = null },
             )
         }
 
@@ -395,7 +493,7 @@ fun NotesListsScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            if (!showArchivedLists) {
+            if (!showArchivedLists && !isGroupScreen) {
                 ListsSectionTabs(
                     selectedSection = selectedSection,
                     onSectionSelected = { selectedSection = it },
@@ -444,7 +542,7 @@ fun NotesListsScreen(
                                         stringResource(Res.string.notes_lists_search_empty)
                                     }
 
-                                    !showArchivedLists && state.items.isEmpty() -> {
+                                    !isGroupScreen && !showArchivedLists && state.items.isEmpty() -> {
                                         stringResource(Res.string.notes_lists_empty)
                                     }
 
@@ -459,9 +557,14 @@ fun NotesListsScreen(
                             items = visibleItems,
                             collaboratorsByListId = state.collaboratorsByListId,
                             onListSelected = onListSelected,
+                            onGroupSelected = onGroupSelected,
                             currentUserId = currentUserId,
                             onListLongClick = openListOptions,
                             onListOptionsClick = openListOptions,
+                            isGroupOrdered = isGroupScreen && currentGroupIsOrdered,
+                            onListsReordered = currentGroup?.let { group ->
+                                { listIdsInOrder -> viewModel.reorderGroupedLists(group, listIdsInOrder) }
+                            },
                             archivedUserId = currentUserId.takeIf { showArchivedLists },
                             onUnarchiveClick = if (showArchivedLists) {
                                 { list -> viewModel.setListArchived(list, archived = false) }
@@ -652,12 +755,28 @@ private fun NotesListsContent(
     items: List<NotesListSummary>,
     collaboratorsByListId: Map<String, List<ListCollaborator>>,
     onListSelected: (id: String, ownerId: String, name: String, isOrdered: Boolean) -> Unit,
+    onGroupSelected: (id: String, ownerId: String, name: String, isOrdered: Boolean) -> Unit,
     currentUserId: String?,
     onListLongClick: (NotesListSummary) -> Unit,
     onListOptionsClick: (NotesListSummary) -> Unit,
+    isGroupOrdered: Boolean = false,
+    onListsReordered: ((List<String>) -> Unit)? = null,
     archivedUserId: String? = null,
     onUnarchiveClick: ((NotesListSummary) -> Unit)? = null,
 ) {
+    if (isGroupOrdered && onListsReordered != null) {
+        OrderedNotesListsContent(
+            items = items.sortedBy { item -> item.groupOrder },
+            collaboratorsByListId = collaboratorsByListId,
+            currentUserId = currentUserId,
+            onListSelected = onListSelected,
+            onListLongClick = onListLongClick,
+            onListOptionsClick = onListOptionsClick,
+            onListsReordered = onListsReordered,
+        )
+        return
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -668,11 +787,112 @@ private fun NotesListsContent(
                 item = item,
                 collaborators = collaboratorsByListId[item.id].orEmpty(),
                 currentUserId = currentUserId,
-                onClick = { onListSelected(item.id, item.ownerId, item.name, item.isOrdered) },
+                onClick = {
+                    if (item.isGroup) {
+                        onGroupSelected(item.id, item.ownerId, item.name, item.isOrdered)
+                    } else {
+                        onListSelected(item.id, item.ownerId, item.name, item.isOrdered)
+                    }
+                },
                 onLongClick = { onListLongClick(item) },
                 onOptionsClick = { onListOptionsClick(item) },
                 archivedAt = archivedUserId?.let { userId -> item.archivedAtBy[userId] },
                 onUnarchiveClick = onUnarchiveClick?.let { unarchive -> { unarchive(item) } },
+            )
+        }
+    }
+}
+
+@Composable
+private fun OrderedNotesListsContent(
+    items: List<NotesListSummary>,
+    collaboratorsByListId: Map<String, List<ListCollaborator>>,
+    currentUserId: String?,
+    onListSelected: (id: String, ownerId: String, name: String, isOrdered: Boolean) -> Unit,
+    onListLongClick: (NotesListSummary) -> Unit,
+    onListOptionsClick: (NotesListSummary) -> Unit,
+    onListsReordered: (List<String>) -> Unit,
+) {
+    val lazyListState = rememberLazyListState()
+    var displayItems by remember { mutableStateOf(items) }
+    var pressedDragHandleListId by remember { mutableStateOf<String?>(null) }
+    val reorderState = remember(lazyListState) {
+        NotesReorderState(lazyListState) { fromIndex, toIndex ->
+            displayItems = displayItems.moveList(fromIndex, toIndex)
+        }
+    }
+
+    LaunchedEffect(items) {
+        if (!reorderState.isDragging) {
+            displayItems = items
+        }
+    }
+
+    LazyColumn(
+        state = lazyListState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        itemsIndexed(displayItems, key = { _, item -> "${item.ownerId}/${item.id}" }) { index, item ->
+            val currentIndex by rememberUpdatedState(index)
+            val dragHandleModifier = Modifier
+                .size(40.dp)
+                .pointerInput(item.id) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        pressedDragHandleListId = item.id
+                        waitForUpOrCancellation()
+                        pressedDragHandleListId = null
+                    }
+                }
+                .pointerInput(item.id) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { reorderState.startDrag(currentIndex) },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            reorderState.dragBy(dragAmount.y)
+                        },
+                        onDragEnd = {
+                            onListsReordered(displayItems.map(NotesListSummary::id))
+                            reorderState.endDrag()
+                        },
+                        onDragCancel = {
+                            displayItems = items
+                            reorderState.endDrag()
+                        },
+                    )
+                }
+
+            NotesListCard(
+                item = item,
+                collaborators = collaboratorsByListId[item.id].orEmpty(),
+                currentUserId = currentUserId,
+                onClick = { onListSelected(item.id, item.ownerId, item.name, item.isOrdered) },
+                onLongClick = {
+                    if (pressedDragHandleListId != item.id) {
+                        onListLongClick(item)
+                    }
+                },
+                onOptionsClick = { onListOptionsClick(item) },
+                orderIndex = index + 1,
+                modifier = Modifier
+                    .graphicsLayer {
+                        translationY = reorderState.translationFor(index)
+                    }
+                    .zIndex(if (reorderState.draggingItemIndex == index) 1f else 0f),
+                dragHandle = {
+                    Box(
+                        modifier = dragHandleModifier,
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.DragIndicator,
+                            contentDescription = stringResource(Res.string.reorder_list_handle),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
             )
         }
     }
@@ -687,6 +907,9 @@ private fun NotesListCard(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
     onOptionsClick: (() -> Unit)?,
+    orderIndex: Int? = null,
+    modifier: Modifier = Modifier,
+    dragHandle: (@Composable () -> Unit)? = null,
     archivedAt: Instant? = null,
     onUnarchiveClick: (() -> Unit)? = null,
 ) {
@@ -697,7 +920,7 @@ private fun NotesListCard(
     )
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         colors = CardDefaults.cardColors(
@@ -726,10 +949,11 @@ private fun NotesListCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = item.name,
+                    text = orderIndex?.let { index -> "$index. ${item.name}" } ?: item.name,
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
+                dragHandle?.invoke()
                 onOptionsClick?.let { onOptions ->
                     IconButton(onClick = onOptions) {
                         Icon(
@@ -760,13 +984,29 @@ private fun NotesListCard(
                     text = formatNotesListDate(item.createdAt),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
                 )
-                if (item.isOrdered) {
-                    Text(
-                        text = stringResource(Res.string.list_ordered_badge),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (item.isGroup) {
+                        ListTypeBadge(
+                            icon = Icons.Outlined.Folder,
+                            label = stringResource(Res.string.list_group_badge),
+                        )
+                    }
+                    if (item.isOrdered) {
+                        ListTypeBadge(
+                            icon = Icons.Outlined.FormatListNumbered,
+                            contentDescription = stringResource(Res.string.list_ordered_badge),
+                            label = if (item.isGroup) {
+                                null
+                            } else {
+                                stringResource(Res.string.list_ordered_badge)
+                            },
+                        )
+                    }
                 }
             }
             if (archivedAt != null || onUnarchiveClick != null) {
@@ -809,6 +1049,32 @@ private fun NotesListCard(
 }
 
 @Composable
+private fun ListTypeBadge(
+    icon: ImageVector,
+    label: String?,
+    contentDescription: String? = label,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        label?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+@Composable
 private fun sharingSummaryText(
     item: NotesListSummary,
     collaborators: List<ListCollaborator>,
@@ -816,7 +1082,7 @@ private fun sharingSummaryText(
 ): String? {
     if (item.ownerId != currentUserId) return null
 
-    val sharedCount = item.sharedWithUserIds.size
+    val sharedCount = item.directSharedWithUserIds.size
     if (sharedCount == 0) return null
 
     return if (collaborators.isNotEmpty()) {
@@ -873,10 +1139,11 @@ private fun ScrollableCenteredMessage(
 @Composable
 private fun CreateListDialog(
     onDismiss: () -> Unit,
-    onCreate: (name: String, ordered: Boolean) -> Unit,
+    onCreate: (name: String, ordered: Boolean, isGroup: Boolean) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
     var ordered by remember { mutableStateOf(false) }
+    var isGroup by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = {},
@@ -912,11 +1179,20 @@ private fun CreateListDialog(
                     Text(stringResource(Res.string.create_list_ordered))
                     Switch(checked = ordered, onCheckedChange = { ordered = it })
                 }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(stringResource(Res.string.create_list_group))
+                    Switch(checked = isGroup, onCheckedChange = { isGroup = it })
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onCreate(name.trim(), ordered) },
+                onClick = { onCreate(name.trim(), ordered, isGroup) },
                 enabled = name.isNotBlank(),
             ) {
                 Text(stringResource(Res.string.create_list_button))
@@ -961,8 +1237,12 @@ private fun ListOptionsDialog(
     listName: String,
     isOwner: Boolean,
     isArchived: Boolean,
+    isGroup: Boolean,
+    isGrouped: Boolean,
     onArchive: () -> Unit,
     onShare: () -> Unit,
+    onAddToGroup: () -> Unit,
+    onRemoveFromGroup: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
@@ -989,6 +1269,17 @@ private fun ListOptionsDialog(
                     onClick = onArchive,
                 )
                 if (isOwner) {
+                    if (!isGroup) {
+                        OptionRow(
+                            icon = if (isGrouped) Icons.Outlined.FolderOff else Icons.Outlined.CreateNewFolder,
+                            label = if (isGrouped) {
+                                stringResource(Res.string.remove_list_from_group)
+                            } else {
+                                stringResource(Res.string.add_list_to_group)
+                            },
+                            onClick = if (isGrouped) onRemoveFromGroup else onAddToGroup,
+                        )
+                    }
                     OptionRow(
                         icon = Icons.Outlined.Share,
                         label = stringResource(Res.string.share_list),
@@ -1042,6 +1333,62 @@ private fun OptionRow(
             style = MaterialTheme.typography.bodyLarge,
         )
     }
+}
+
+@Composable
+private fun GroupSelectionDialog(
+    listName: String,
+    groups: List<NotesListSummary>,
+    onGroupSelected: (NotesListSummary) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        title = { Text(stringResource(Res.string.select_group_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                )
+                Text(
+                    text = listName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (groups.isEmpty()) {
+                    Text(
+                        text = stringResource(Res.string.select_group_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 320.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        groups.forEach { group ->
+                            OptionRow(
+                                icon = Icons.Outlined.CreateNewFolder,
+                                label = group.name,
+                                onClick = { onGroupSelected(group) },
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
 }
 
 @Composable
@@ -1253,6 +1600,35 @@ private fun SortOption.label(): String {
         SortOption.DATE_ASC -> stringResource(Res.string.sort_date_asc)
         SortOption.DATE_DESC,
         SortOption.CUSTOM -> stringResource(Res.string.sort_date_desc)
+    }
+}
+
+private fun NotesListSummary.isVisibleInRoot(
+    currentUserId: String?,
+    selectedSection: NotesListsSection,
+    showArchivedLists: Boolean,
+): Boolean {
+    val isArchived = currentUserId != null && currentUserId in archivedBy
+    return if (showArchivedLists) {
+        isArchived
+    } else {
+        when (selectedSection) {
+            NotesListsSection.MINE -> !isShared && !isArchived
+            NotesListsSection.SHARED -> isShared && !isArchived
+        }
+    }
+}
+
+private fun NotesListSummary.isVisibleRootGroup(
+    currentUserId: String?,
+    showArchivedLists: Boolean,
+): Boolean {
+    val isArchived = currentUserId != null && currentUserId in archivedBy
+    val isAccessible = ownerId == currentUserId || isShared
+    return isAccessible && if (showArchivedLists) {
+        isArchived
+    } else {
+        !isArchived
     }
 }
 

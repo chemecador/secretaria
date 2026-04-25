@@ -71,6 +71,10 @@ class SecretariaMessagingService : FirebaseMessagingService() {
                 putExtra(NotificationOpenListIntent.EXTRA_LIST_ID, listId)
                 putExtra(NotificationOpenListIntent.EXTRA_LIST_NAME, listName)
                 putExtra(
+                    NotificationOpenListIntent.EXTRA_LIST_GROUP,
+                    message.data[DATA_OPEN_LIST_GROUP].toBoolean(),
+                )
+                putExtra(
                     NotificationOpenListIntent.EXTRA_LIST_ORDERED,
                     message.data[DATA_OPEN_LIST_ORDERED].toBoolean(),
                 )
@@ -95,6 +99,7 @@ class SecretariaMessagingService : FirebaseMessagingService() {
         const val DATA_BODY = "body"
         const val DATA_CHANNEL_ID = "channelId"
         const val DATA_NOTIFICATION_TAG = "notificationTag"
+        const val DATA_OPEN_LIST_GROUP = "openListGroup"
         const val DATA_OPEN_LIST_ID = "openListId"
         const val DATA_OPEN_LIST_NAME = "openListName"
         const val DATA_OPEN_LIST_ORDERED = "openListOrdered"

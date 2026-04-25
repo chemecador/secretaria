@@ -44,6 +44,8 @@
   - overflow menu with logout/about/amigos
   - shared-list visibility parity on Android/JVM/JS/iOS via `contributors`
   - owner can share a list with existing friends
+  - list groups as shareable containers; child lists keep optional `groupId`
+  - group shares propagate inherited contributors while individual list shares stay direct
   - only owner can rename/delete; shared users can still open
 - Notes support:
   - read, create, delete
@@ -59,7 +61,7 @@
 ## Navigation And Shared Architecture
 
 - No navigation library yet. `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/App.kt` uses a sealed `Screen`.
-- Current screens: `Login`, `Lists`, `Notes`, `NoteDetail`.
+- Current screens: `Login`, `Lists`, `ListGroup`, `Notes`, `NoteDetail`.
 - Keep this simple approach until navigation complexity clearly grows.
 - Package by feature, not by technical layer. Current feature packages: `login`, `noteslists`, `notes`, `friends`.
 - Typical feature shape: model, repository interface, fake repository, state, ViewModel, screen.

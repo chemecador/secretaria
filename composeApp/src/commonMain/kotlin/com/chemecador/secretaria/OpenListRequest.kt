@@ -5,4 +5,5 @@ data class OpenListRequest(
     val listId: String,
     val listName: String,
     val isOrdered: Boolean,
+    val isGroup: Boolean = false,
 )

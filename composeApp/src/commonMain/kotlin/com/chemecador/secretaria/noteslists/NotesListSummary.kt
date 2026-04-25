@@ -9,8 +9,13 @@ data class NotesListSummary(
     val creator: String,
     val createdAt: Instant,
     val isOrdered: Boolean,
+    val isGroup: Boolean = false,
+    val groupId: String? = null,
+    val groupOrder: Int = 0,
     val isShared: Boolean = false,
     val contributors: List<String> = emptyList(),
+    val directContributors: List<String> = contributors,
+    val inheritedGroupContributors: List<String> = emptyList(),
     val archivedBy: List<String> = emptyList(),
     val archivedAtBy: Map<String, Instant> = emptyMap(),
 )
@@ -19,3 +24,22 @@ val NotesListSummary.sharedWithUserIds: List<String>
     get() = contributors
         .distinct()
         .filterNot { contributorId -> contributorId == ownerId }
+
+val NotesListSummary.directSharedWithUserIds: List<String>
+    get() = directContributors
+        .distinct()
+        .filterNot { contributorId -> contributorId == ownerId }
+
+val NotesListSummary.inheritedSharedWithUserIds: List<String>
+    get() = inheritedGroupContributors
+        .distinct()
+        .filterNot { contributorId -> contributorId == ownerId }
+
+fun effectiveContributors(
+    ownerId: String,
+    directContributors: List<String>,
+    inheritedGroupContributors: List<String>,
+): List<String> =
+    (listOf(ownerId) + directContributors + inheritedGroupContributors)
+        .filter { contributorId -> contributorId.isNotBlank() }
+        .distinct()
