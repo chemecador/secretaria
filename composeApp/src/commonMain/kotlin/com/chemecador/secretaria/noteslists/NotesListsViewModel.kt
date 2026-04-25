@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.chemecador.secretaria.friends.FriendSummary
 import com.chemecador.secretaria.friends.FriendsRepository
 import com.chemecador.secretaria.login.AuthRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +24,7 @@ class NotesListsViewModel(
 
     private var allItems: List<NotesListSummary> = emptyList()
     private var knownFriendsByUserId: Map<String, FriendSummary> = emptyMap()
+    private var searchJob: Job? = null
 
     fun load() {
         viewModelScope.launch {
@@ -39,8 +42,19 @@ class NotesListsViewModel(
         _state.update { currentState ->
             currentState.copy(
                 sortOption = sortOption,
-                items = allItems.sortedByOption(sortOption),
+                items = allItems.filteredBySearch(currentState.searchQuery).sortedByOption(sortOption),
             )
+        }
+    }
+
+    fun setSearchQuery(query: String) {
+        if (query == _state.value.searchQuery) return
+
+        _state.update { it.copy(searchQuery = query) }
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MS)
+            applyCurrentItems()
         }
     }
 
@@ -129,7 +143,7 @@ class NotesListsViewModel(
                                 _state.update {
                                     it.copy(
                                         isUpdatingSharing = false,
-                                        items = allItems.sortedByOption(it.sortOption),
+                                        items = allItems.filteredBySearch(it.searchQuery).sortedByOption(it.sortOption),
                                         shareableFriends = it.shareableFriends.filterNot { candidate ->
                                             candidate.userId == friend.userId
                                         },
@@ -189,7 +203,7 @@ class NotesListsViewModel(
                                 _state.update {
                                     it.copy(
                                         isUpdatingSharing = false,
-                                        items = allItems.sortedByOption(it.sortOption),
+                                        items = allItems.filteredBySearch(it.searchQuery).sortedByOption(it.sortOption),
                                         shareableFriends = it.shareableFriends.withFriend(
                                             knownFriendsByUserId[collaborator.userId],
                                         ),
@@ -245,7 +259,7 @@ class NotesListsViewModel(
                     }
                     _state.update {
                         it.copy(
-                            items = allItems.sortedByOption(it.sortOption),
+                            items = allItems.filteredBySearch(it.searchQuery).sortedByOption(it.sortOption),
                             archiveFeedback = ListArchiveFeedback(action = action, isSuccess = true),
                         )
                     }
@@ -320,7 +334,9 @@ class NotesListsViewModel(
                 _state.value = _state.value.copy(
                     isLoading = false,
                     isRefreshing = false,
-                    items = items.sortedByOption(_state.value.sortOption),
+                    items = items
+                        .filteredBySearch(_state.value.searchQuery)
+                        .sortedByOption(_state.value.sortOption),
                     errorMessage = null,
                     collaboratorsByListId = emptyMap(),
                 )
@@ -385,6 +401,14 @@ class NotesListsViewModel(
 
     private fun cacheFriends(friends: List<FriendSummary>) {
         knownFriendsByUserId = friends.associateBy { friend -> friend.userId }
+    }
+
+    private fun applyCurrentItems() {
+        _state.update {
+            it.copy(
+                items = allItems.filteredBySearch(it.searchQuery).sortedByOption(it.sortOption),
+            )
+        }
     }
 
     private fun buildCollaborators(
@@ -452,6 +476,16 @@ class NotesListsViewModel(
 
     private companion object {
         const val OWNERSHIP_ERROR_MESSAGE = "Solo el propietario puede modificar esta lista"
+        const val SEARCH_DEBOUNCE_MS = 300L
+    }
+}
+
+private fun List<NotesListSummary>.filteredBySearch(query: String): List<NotesListSummary> {
+    val searchText = query.trim()
+    return if (searchText.isBlank()) {
+        this
+    } else {
+        filter { item -> item.name.contains(searchText, ignoreCase = true) }
     }
 }
 

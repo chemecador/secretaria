@@ -13,6 +13,10 @@
     <string name="notes_lists_empty_active_mine">No tienes listas propias activas.</string>
     <string name="notes_lists_empty_active_shared">No tienes listas compartidas activas.</string>
     <string name="notes_lists_empty_archived">No tienes listas archivadas.</string>
+    <string name="notes_lists_search_hint">Buscar listas</string>
+    <string name="notes_lists_search_clear">Limpiar búsqueda</string>
+    <string name="notes_lists_search_close">Cerrar búsqueda</string>
+    <string name="notes_lists_search_empty">No hay listas que coincidan con la búsqueda.</string>
     <string name="notes_lists_error_generic">No se han podido cargar las listas.</string>
     <string name="list_created_by">Creada por %1$s</string>
     <string name="list_archived_on">Archivada el %1$s</string>

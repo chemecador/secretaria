@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -177,6 +178,91 @@ class NotesListsViewModelTest {
         assertEquals(SortOption.NAME_ASC, viewModel.state.value.sortOption)
         assertEquals("Compra semanal", viewModel.state.value.items[0].name)
         assertEquals("Trabajo", viewModel.state.value.items[1].name)
+    }
+
+    @Test
+    fun setSearchQuery_filtersLoadedItemsAfterDebounce() = runTest(dispatcher) {
+        val items = listOf(
+            listSummary(
+                id = "1",
+                name = "Compra semanal",
+                createdAt = Instant.parse("2026-03-01T10:00:00Z"),
+            ),
+            listSummary(
+                id = "2",
+                name = "Trabajo",
+                createdAt = Instant.parse("2026-03-15T10:00:00Z"),
+            ),
+            listSummary(
+                id = "3",
+                name = "Viaje",
+                createdAt = Instant.parse("2026-03-20T10:00:00Z"),
+            ),
+        )
+        val repository = ImmediateRepository(Result.success(items))
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.setSearchQuery("tra")
+        runCurrent()
+
+        assertEquals("tra", viewModel.state.value.searchQuery)
+        assertEquals(listOf("Viaje", "Trabajo", "Compra semanal"), viewModel.state.value.items.map { it.name })
+
+        advanceTimeBy(299)
+        runCurrent()
+
+        assertEquals(listOf("Viaje", "Trabajo", "Compra semanal"), viewModel.state.value.items.map { it.name })
+
+        advanceTimeBy(1)
+        runCurrent()
+
+        assertEquals(listOf("Trabajo"), viewModel.state.value.items.map { it.name })
+    }
+
+    @Test
+    fun setSearchQuery_cancelsPendingSearch() = runTest(dispatcher) {
+        val items = listOf(
+            listSummary(
+                id = "1",
+                name = "Compra semanal",
+                createdAt = Instant.parse("2026-03-01T10:00:00Z"),
+            ),
+            listSummary(
+                id = "2",
+                name = "Trabajo",
+                createdAt = Instant.parse("2026-03-15T10:00:00Z"),
+            ),
+            listSummary(
+                id = "3",
+                name = "Viaje",
+                createdAt = Instant.parse("2026-03-20T10:00:00Z"),
+            ),
+        )
+        val repository = ImmediateRepository(Result.success(items))
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.setSearchQuery("tra")
+        runCurrent()
+        advanceTimeBy(150)
+
+        viewModel.setSearchQuery("comp")
+        runCurrent()
+        advanceTimeBy(299)
+        runCurrent()
+
+        assertEquals("comp", viewModel.state.value.searchQuery)
+        assertEquals(listOf("Viaje", "Trabajo", "Compra semanal"), viewModel.state.value.items.map { it.name })
+
+        advanceTimeBy(1)
+        runCurrent()
+
+        assertEquals(listOf("Compra semanal"), viewModel.state.value.items.map { it.name })
     }
 
     @Test

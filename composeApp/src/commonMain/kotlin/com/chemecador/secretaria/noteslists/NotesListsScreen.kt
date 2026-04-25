@@ -2,6 +2,7 @@ package com.chemecador.secretaria.noteslists
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,19 +16,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material3.AlertDialog
@@ -66,6 +71,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
@@ -107,6 +114,10 @@ import secretaria.composeapp.generated.resources.notes_lists_empty_active_shared
 import secretaria.composeapp.generated.resources.notes_lists_empty_archived
 import secretaria.composeapp.generated.resources.notes_lists_error_generic
 import secretaria.composeapp.generated.resources.notes_lists_mine_tab
+import secretaria.composeapp.generated.resources.notes_lists_search_clear
+import secretaria.composeapp.generated.resources.notes_lists_search_close
+import secretaria.composeapp.generated.resources.notes_lists_search_empty
+import secretaria.composeapp.generated.resources.notes_lists_search_hint
 import secretaria.composeapp.generated.resources.notes_lists_shared_tab
 import secretaria.composeapp.generated.resources.order_by
 import secretaria.composeapp.generated.resources.share_list
@@ -152,6 +163,8 @@ fun NotesListsScreen(
     var listToShare by remember { mutableStateOf<NotesListSummary?>(null) }
     var selectedSection by remember { mutableStateOf(NotesListsSection.MINE) }
     var showArchivedLists by remember { mutableStateOf(false) }
+    var showSearchInput by remember { mutableStateOf(false) }
+    val isSearchInputVisible = showSearchInput || state.searchQuery.isNotBlank()
     val openListOptions: (NotesListSummary) -> Unit = { item ->
         if (currentUserId != null) {
             listForOptions = item
@@ -391,6 +404,14 @@ fun NotesListsScreen(
 
             SortSelector(
                 selected = state.sortOption,
+                searchQuery = state.searchQuery,
+                isSearchInputVisible = isSearchInputVisible,
+                onSearchClick = { showSearchInput = true },
+                onSearchQueryChange = viewModel::setSearchQuery,
+                onCloseSearch = {
+                    showSearchInput = false
+                    viewModel.setSearchQuery("")
+                },
                 onSortSelected = viewModel::setSort,
             )
 
@@ -418,10 +439,16 @@ fun NotesListsScreen(
 
                         visibleItems.isEmpty() -> ScrollableCenteredMessage {
                             Text(
-                                text = if (!showArchivedLists && state.items.isEmpty()) {
-                                    stringResource(Res.string.notes_lists_empty)
-                                } else {
-                                    emptyMessage
+                                text = when {
+                                    state.searchQuery.isNotBlank() -> {
+                                        stringResource(Res.string.notes_lists_search_empty)
+                                    }
+
+                                    !showArchivedLists && state.items.isEmpty() -> {
+                                        stringResource(Res.string.notes_lists_empty)
+                                    }
+
+                                    else -> emptyMessage
                                 },
                                 style = MaterialTheme.typography.bodyLarge,
                                 textAlign = TextAlign.Center,
@@ -478,9 +505,15 @@ private fun ListsSectionTabs(
 @Composable
 private fun SortSelector(
     selected: SortOption,
+    searchQuery: String,
+    isSearchInputVisible: Boolean,
+    onSearchClick: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onCloseSearch: () -> Unit,
     onSortSelected: (SortOption) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
     val visibleOptions = listOf(
         SortOption.NAME_ASC,
         SortOption.NAME_DESC,
@@ -488,37 +521,128 @@ private fun SortSelector(
         SortOption.DATE_DESC,
     )
 
+    LaunchedEffect(isSearchInputVisible) {
+        if (isSearchInputVisible) {
+            searchFocusRequester.requestFocus()
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(top = 4.dp)
+            .height(48.dp)
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = stringResource(Res.string.order_by),
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        IconButton(onClick = onSearchClick) {
+            Icon(
+                imageVector = Icons.Outlined.Search,
+                contentDescription = stringResource(Res.string.notes_lists_search_hint),
+            )
+        }
 
-        Box {
-            TextButton(onClick = { expanded = true }) {
-                Text(selected.label())
-            }
+        if (isSearchInputVisible) {
+            SearchInput(
+                query = searchQuery,
+                focusRequester = searchFocusRequester,
+                onQueryChange = onSearchQueryChange,
+                onClose = onCloseSearch,
+                modifier = Modifier.weight(1f),
+            )
+        } else {
+            Spacer(modifier = Modifier.weight(1f))
 
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-            ) {
-                visibleOptions.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option.label()) },
-                        onClick = {
-                            onSortSelected(option)
-                            expanded = false
-                        },
-                    )
+            Text(
+                text = stringResource(Res.string.order_by),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Box {
+                TextButton(onClick = { expanded = true }) {
+                    Text(selected.label())
+                }
+
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    visibleOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option.label()) },
+                            onClick = {
+                                onSortSelected(option)
+                                expanded = false
+                            },
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SearchInput(
+    query: String,
+    focusRequester: FocusRequester,
+    onQueryChange: (String) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(10.dp)
+
+    Row(
+        modifier = modifier
+            .height(40.dp)
+            .clip(shape)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = shape,
+            )
+            .padding(start = 12.dp, end = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BasicTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
+            modifier = Modifier
+                .weight(1f)
+                .focusRequester(focusRequester),
+            decorationBox = { innerTextField ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (query.isEmpty()) {
+                        Text(
+                            text = stringResource(Res.string.notes_lists_search_hint),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    innerTextField()
+                }
+            },
+        )
+        IconButton(
+            onClick = onClose,
+            modifier = Modifier.size(36.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Close,
+                contentDescription = if (query.isBlank()) {
+                    stringResource(Res.string.notes_lists_search_close)
+                } else {
+                    stringResource(Res.string.notes_lists_search_clear)
+                },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }

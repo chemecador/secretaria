@@ -7,6 +7,7 @@ data class NotesListsState(
     val isRefreshing: Boolean = false,
     val items: List<NotesListSummary> = emptyList(),
     val sortOption: SortOption = SortOption.DATE_DESC,
+    val searchQuery: String = "",
     val errorMessage: String? = null,
     val collaboratorsByListId: Map<String, List<ListCollaborator>> = emptyMap(),
     val shareableFriends: List<FriendSummary> = emptyList(),
