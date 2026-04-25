@@ -64,10 +64,6 @@ private sealed class Screen {
     ) : Screen()
 }
 
-private fun Screen.canRestoreAfterUtilityScreen(): Boolean {
-    return this is Screen.Lists || this is Screen.Notes || this is Screen.NoteDetail
-}
-
 @Composable
 @Preview
 fun App(
@@ -94,11 +90,11 @@ fun App(
         val friendsViewModel = koinViewModel<FriendsViewModel>()
 
         var screen by remember { mutableStateOf<Screen>(Screen.Restoring) }
-        var utilityReturnScreen by remember { mutableStateOf<Screen>(Screen.Lists) }
+        var utilityBackStack by remember { mutableStateOf<List<Screen>>(emptyList()) }
         val coroutineScope = rememberCoroutineScope()
 
         fun openRequestedList(request: OpenListRequest) {
-            utilityReturnScreen = Screen.Lists
+            utilityBackStack = emptyList()
             screen = Screen.Notes(
                 ownerId = request.ownerId,
                 listId = request.listId,
@@ -108,24 +104,35 @@ fun App(
             onOpenListRequestConsumed()
         }
 
-        val openFriends = {
-            if (screen.canRestoreAfterUtilityScreen()) {
-                utilityReturnScreen = screen
+        fun openUtilityScreen(destination: Screen) {
+            if (screen == destination) return
+
+            val existingDestinationIndex = utilityBackStack.indexOfLast { it == destination }
+            if (existingDestinationIndex >= 0) {
+                utilityBackStack = utilityBackStack.take(existingDestinationIndex)
+                screen = destination
+                return
             }
-            screen = Screen.Friends
+
+            if (screen !is Screen.Restoring && screen !is Screen.Login) {
+                utilityBackStack = utilityBackStack + screen
+            }
+            screen = destination
+        }
+
+        val openFriends = {
+            openUtilityScreen(Screen.Friends)
         }
         val openSettings = {
-            if (screen.canRestoreAfterUtilityScreen()) {
-                utilityReturnScreen = screen
-            }
-            screen = Screen.Settings
+            openUtilityScreen(Screen.Settings)
         }
         val openSupportCreator = {
-            utilityReturnScreen = Screen.Settings
-            screen = Screen.SupportCreator
+            openUtilityScreen(Screen.SupportCreator)
         }
         val closeUtilityScreen = {
-            screen = utilityReturnScreen
+            val returnScreen = utilityBackStack.lastOrNull() ?: Screen.Lists
+            utilityBackStack = utilityBackStack.dropLast(1)
+            screen = returnScreen
         }
         val logout: () -> Unit = {
             coroutineScope.launch {
@@ -133,7 +140,7 @@ fun App(
                 authRepository.logout()
                 googleSignInController?.clearCredentialState()
                 loginViewModel.resetState()
-                utilityReturnScreen = Screen.Lists
+                utilityBackStack = emptyList()
                 screen = Screen.Login
             }
         }
@@ -141,7 +148,7 @@ fun App(
         LaunchedEffect(authRepository) {
             val restored = authRepository.restoreSession().getOrDefault(false)
             screen = if (restored) Screen.Lists else Screen.Login
-            utilityReturnScreen = Screen.Lists
+            utilityBackStack = emptyList()
             if (restored) {
                 fcmTokenRegister.registerCurrentToken()
             }
@@ -178,7 +185,7 @@ fun App(
                             LoginScreen(
                                 viewModel = loginViewModel,
                                 onLoginSuccess = {
-                                    utilityReturnScreen = Screen.Lists
+                                    utilityBackStack = emptyList()
                                     openListRequest?.let(::openRequestedList) ?: run {
                                         screen = Screen.Lists
                                     }
