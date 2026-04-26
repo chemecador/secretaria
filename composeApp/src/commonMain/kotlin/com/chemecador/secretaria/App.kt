@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +34,7 @@ import com.chemecador.secretaria.notes.NotesViewModel
 import com.chemecador.secretaria.noteslists.NotesListsScreen
 import com.chemecador.secretaria.noteslists.NotesListsSection
 import com.chemecador.secretaria.noteslists.NotesListsViewModel
+import com.chemecador.secretaria.noteslists.rememberNotesListsSectionPreferenceStore
 import com.chemecador.secretaria.settings.SettingsScreen
 import com.chemecador.secretaria.settings.SupportCreatorScreen
 import kotlinx.coroutines.launch
@@ -95,14 +97,22 @@ fun App(
         val authRepository = koinInject<AuthRepository>()
         val fcmTokenRegister = koinInject<FcmTokenRegister>()
         val googleSignInController = rememberGoogleSignInController(googleServerClientId)
+        val notesListsSectionPreferenceStore = rememberNotesListsSectionPreferenceStore()
         val loginViewModel = koinViewModel<LoginViewModel>()
         val listsViewModel = koinViewModel<NotesListsViewModel>()
         val friendsViewModel = koinViewModel<FriendsViewModel>()
 
         var screen by remember { mutableStateOf<Screen>(Screen.Restoring) }
         var utilityBackStack by remember { mutableStateOf<List<Screen>>(emptyList()) }
-        var selectedListsSection by remember { mutableStateOf(NotesListsSection.MINE) }
+        var selectedListsSection by rememberSaveable { mutableStateOf(NotesListsSection.MINE) }
         val coroutineScope = rememberCoroutineScope()
+
+        fun selectListsSection(section: NotesListsSection) {
+            selectedListsSection = section
+            coroutineScope.launch {
+                notesListsSectionPreferenceStore.save(section)
+            }
+        }
 
         fun openRequestedList(request: OpenListRequest) {
             utilityBackStack = emptyList()
@@ -162,12 +172,19 @@ fun App(
                 loginViewModel.resetState()
                 utilityBackStack = emptyList()
                 selectedListsSection = NotesListsSection.MINE
+                notesListsSectionPreferenceStore.clear()
                 screen = Screen.Login
             }
         }
 
-        LaunchedEffect(authRepository) {
+        LaunchedEffect(authRepository, notesListsSectionPreferenceStore) {
             val restored = authRepository.restoreSession().getOrDefault(false)
+            selectedListsSection = if (restored) {
+                notesListsSectionPreferenceStore.load()
+            } else {
+                notesListsSectionPreferenceStore.clear()
+                NotesListsSection.MINE
+            }
             screen = if (restored) Screen.Lists else Screen.Login
             utilityBackStack = emptyList()
             if (restored) {
@@ -228,7 +245,7 @@ fun App(
                             NotesListsScreen(
                                 viewModel = listsViewModel,
                                 selectedSection = selectedListsSection,
-                                onSectionSelected = { selectedListsSection = it },
+                                onSectionSelected = ::selectListsSection,
                                 onListSelected = { id, ownerId, name, isOrdered ->
                                     screen = Screen.Notes(ownerId, id, name, isOrdered)
                                 },
