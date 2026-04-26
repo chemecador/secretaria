@@ -167,6 +167,50 @@ internal class FirestoreRestNotesListsRepository(
             }
         }
 
+    override suspend fun leaveSharedList(ownerId: String, listId: String): Result<Unit> =
+        runCatching {
+            val userId = requireUserId()
+            if (ownerId == userId) error("Owner cannot leave own list")
+            val documentPath = listDocumentPath(ownerId, listId)
+            val document = firestore.getDocumentOrNull(documentPath)
+                ?: error("List not found")
+            if (userId !in document.fields.firestoreStringList(CONTRIBUTORS)) {
+                error("List not found")
+            }
+            if (userId !in document.fields.directContributors()) {
+                error("List is not shared directly with current user")
+            }
+
+            val directContributors = document.fields.directContributors()
+                .filterNot { contributorId -> contributorId == userId }
+            val patches = mutableListOf(
+                document.withDirectContributorsPatch(ownerId, directContributors),
+            )
+            if (document.isGroup) {
+                patches += visibleListDocuments(userId)
+                    .filter { child ->
+                        child.fields.firestoreString(GROUP_ID) == listId &&
+                            child.groupOwnerId() == ownerId
+                    }
+                    .map { child ->
+                        child.withInheritedContributorPatch(
+                            ownerId = ownerIdFromDocumentName(child.name),
+                            friendUserId = userId,
+                            added = false,
+                        )
+                    }
+                firestore.commitPatches(patches)
+            } else {
+                val patch = patches.single()
+                firestore.patchDocument(
+                    documentPath = documentPath,
+                    fields = patch.fields,
+                    updateMask = patch.updateMask,
+                    currentDocument = document.toPrecondition(),
+                )
+            }
+        }
+
     override suspend fun updateList(
         listId: String,
         name: String,

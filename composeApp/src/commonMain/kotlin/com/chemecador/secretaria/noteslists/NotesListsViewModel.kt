@@ -310,6 +310,36 @@ class NotesListsViewModel(
         }
     }
 
+    fun leaveSharedList(list: NotesListSummary) {
+        viewModelScope.launch {
+            val currentUserId = authRepository.currentUserId
+            val currentList = findCurrentList(list)
+            if (
+                currentUserId == null ||
+                currentList.ownerId == currentUserId ||
+                currentUserId !in currentList.directContributors
+            ) {
+                _state.update {
+                    it.copy(leaveSharedListFeedback = ListLeaveSharedFeedback(isSuccess = false))
+                }
+                return@launch
+            }
+
+            repository.leaveSharedList(currentList.ownerId, currentList.id)
+                .onSuccess {
+                    fetchLists()
+                    _state.update {
+                        it.copy(leaveSharedListFeedback = ListLeaveSharedFeedback(isSuccess = true))
+                    }
+                }
+                .onFailure {
+                    _state.update {
+                        it.copy(leaveSharedListFeedback = ListLeaveSharedFeedback(isSuccess = false))
+                    }
+                }
+        }
+    }
+
     fun setListGroup(list: NotesListSummary, group: NotesListSummary?) {
         viewModelScope.launch {
             requireAccessibleList(list)
@@ -450,6 +480,10 @@ class NotesListsViewModel(
 
     fun consumeArchiveFeedback() {
         _state.update { it.copy(archiveFeedback = null) }
+    }
+
+    fun consumeLeaveSharedListFeedback() {
+        _state.update { it.copy(leaveSharedListFeedback = null) }
     }
 
     private suspend fun fetchLists(isRefresh: Boolean = false) {

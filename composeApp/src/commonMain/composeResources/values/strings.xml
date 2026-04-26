@@ -80,6 +80,11 @@
     <string name="share_list_success">Lista compartida con %1$s.</string>
     <string name="unshare_list">Dejar de compartir</string>
     <string name="unshare_list_success">La lista ya no está compartida con %1$s.</string>
+    <string name="leave_shared_list">Dejar de compartir conmigo</string>
+    <string name="leave_shared_list_title">Dejar de compartir conmigo</string>
+    <string name="leave_shared_list_message">¿Quieres dejar de ver %1$s? La lista no se borrará para su propietario.</string>
+    <string name="leave_shared_list_success">La lista ya no aparecerá en tus compartidas.</string>
+    <string name="leave_shared_list_error">No se ha podido dejar de compartir esta lista.</string>
     <string name="archived_lists_title">Archivadas</string>
     <string name="archive_list">Archivar</string>
     <string name="unarchive_list">Desarchivar</string>

@@ -335,6 +335,79 @@ class NotesListsViewModelTest {
     }
 
     @Test
+    fun leaveSharedList_sharedListRemovesAccessAndPublishesSuccess() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val sharedList = listSummary(id = "shared", name = "Compartida", ownerId = SHARED_OWNER_ID)
+        repository.seed(sharedList)
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.leaveSharedList(sharedList)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.leaveSharedCalls)
+        assertEquals(SHARED_OWNER_ID, repository.lastLeftSharedOwnerId)
+        assertEquals("shared", repository.lastLeftSharedListId)
+        assertTrue(viewModel.state.value.items.isEmpty())
+        assertTrue(viewModel.state.value.leaveSharedListFeedback?.isSuccess == true)
+    }
+
+    @Test
+    fun leaveSharedList_ownedListPublishesFailureAndSkipsRepository() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val ownedList = listSummary(id = "own", name = "Propia")
+        repository.seed(ownedList)
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.leaveSharedList(ownedList)
+        advanceUntilIdle()
+
+        assertEquals(0, repository.leaveSharedCalls)
+        assertEquals(1, viewModel.state.value.items.size)
+        assertFalse(viewModel.state.value.leaveSharedListFeedback?.isSuccess == true)
+    }
+
+    @Test
+    fun leaveSharedList_sharedGroupRemovesInheritedChildren() = runTest(dispatcher) {
+        val repository = MutableRepository()
+        val group = listSummary(
+            id = "group",
+            name = "Compartidas",
+            ownerId = SHARED_OWNER_ID,
+            isGroup = true,
+        )
+        repository.seed(group)
+        repository.seed(
+            listSummary(
+                id = "child",
+                name = "Heredada",
+                ownerId = SHARED_OWNER_ID,
+                groupId = "group",
+                groupOwnerId = SHARED_OWNER_ID,
+                directContributors = listOf(SHARED_OWNER_ID),
+                inheritedGroupContributors = listOf(OWNER_ID),
+            ),
+        )
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.leaveSharedList(group)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.leaveSharedCalls)
+        assertTrue(viewModel.state.value.items.none { item -> item.id == "group" })
+        assertTrue(viewModel.state.value.items.none { item -> item.id == "child" })
+        assertTrue(viewModel.state.value.leaveSharedListFeedback?.isSuccess == true)
+    }
+
+    @Test
     fun updateList_updatesItemInState() = runTest(dispatcher) {
         val repository = MutableRepository()
         val viewModel = buildViewModel(repository)
@@ -988,6 +1061,8 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
+        override suspend fun leaveSharedList(ownerId: String, listId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
         override suspend fun setListGroup(
             listOwnerId: String,
             listId: String,
@@ -1036,6 +1111,8 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
+        override suspend fun leaveSharedList(ownerId: String, listId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
         override suspend fun setListGroup(
             listOwnerId: String,
             listId: String,
@@ -1078,11 +1155,17 @@ class NotesListsViewModelTest {
             private set
         var unshareCalls = 0
             private set
+        var leaveSharedCalls = 0
+            private set
         var archiveCalls = 0
             private set
         var lastSharedFriendId: String? = null
             private set
         var lastUnsharedFriendId: String? = null
+            private set
+        var lastLeftSharedOwnerId: String? = null
+            private set
+        var lastLeftSharedListId: String? = null
             private set
         var lastArchiveOwnerId: String? = null
             private set
@@ -1100,7 +1183,7 @@ class NotesListsViewModelTest {
         }
 
         override suspend fun getLists(): Result<List<NotesListSummary>> =
-            Result.success(lists.toList())
+            Result.success(lists.filter { list -> OWNER_ID in list.contributors })
 
         override suspend fun createList(
             name: String,
@@ -1158,6 +1241,23 @@ class NotesListsViewModelTest {
                 if (lists[index].isGroup) {
                     lists.propagateGroupContributor(lists[index], friendUserId, added = false)
                 }
+            }
+            return Result.success(Unit)
+        }
+
+        override suspend fun leaveSharedList(ownerId: String, listId: String): Result<Unit> {
+            leaveSharedCalls += 1
+            lastLeftSharedOwnerId = ownerId
+            lastLeftSharedListId = listId
+            if (ownerId == OWNER_ID) return Result.failure(IllegalStateException("Owner cannot leave own list"))
+            val index = lists.indexOfFirst { it.ownerId == ownerId && it.id == listId }
+            if (index == -1) return Result.failure(IllegalStateException("List not found"))
+            val directContributors = lists[index].directContributors.filterNot { contributorId ->
+                contributorId == OWNER_ID
+            }
+            lists[index] = lists[index].withDirectContributors(directContributors)
+            if (lists[index].isGroup) {
+                lists.propagateGroupContributor(lists[index], OWNER_ID, added = false)
             }
             return Result.success(Unit)
         }
@@ -1268,6 +1368,8 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
+        override suspend fun leaveSharedList(ownerId: String, listId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
         override suspend fun setListGroup(
             listOwnerId: String,
             listId: String,
@@ -1309,6 +1411,8 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
         override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
+        override suspend fun leaveSharedList(ownerId: String, listId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
         override suspend fun setListGroup(
             listOwnerId: String,
             listId: String,
@@ -1349,6 +1453,8 @@ class NotesListsViewModelTest {
         override suspend fun shareList(listId: String, friendUserId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
         override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
+        override suspend fun leaveSharedList(ownerId: String, listId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
         override suspend fun setListGroup(
             listOwnerId: String,
@@ -1396,6 +1502,9 @@ class NotesListsViewModelTest {
             Result.failure(UnsupportedOperationException())
 
         override suspend fun unshareList(listId: String, friendUserId: String): Result<Unit> =
+            Result.failure(UnsupportedOperationException())
+
+        override suspend fun leaveSharedList(ownerId: String, listId: String): Result<Unit> =
             Result.failure(UnsupportedOperationException())
 
         override suspend fun setListGroup(

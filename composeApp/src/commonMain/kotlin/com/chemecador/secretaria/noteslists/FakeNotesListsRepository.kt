@@ -15,7 +15,7 @@ class FakeNotesListsRepository(
             resultProvider().onSuccess { lists.addAll(it) }
             seeded = true
         }
-        return Result.success(lists.toList())
+        return Result.success(lists.filter { list -> CURRENT_USER_ID in list.contributors })
     }
 
     override suspend fun createList(
@@ -86,6 +86,23 @@ class FakeNotesListsRepository(
             if (lists[index].isGroup) {
                 lists.propagateGroupContributor(lists[index], friendUserId, added = false)
             }
+        }
+        return Result.success(Unit)
+    }
+
+    override suspend fun leaveSharedList(ownerId: String, listId: String): Result<Unit> {
+        if (ownerId == CURRENT_USER_ID) {
+            return Result.failure(IllegalStateException("Owner cannot leave own list"))
+        }
+        val index = lists.indexOfFirst { it.ownerId == ownerId && it.id == listId }
+        if (index == -1) return Result.failure(IllegalStateException("List not found"))
+
+        val updatedDirectContributors = lists[index].directContributors.filterNot { contributorId ->
+            contributorId == CURRENT_USER_ID
+        }
+        lists[index] = lists[index].withDirectContributors(updatedDirectContributors)
+        if (lists[index].isGroup) {
+            lists.propagateGroupContributor(lists[index], CURRENT_USER_ID, added = false)
         }
         return Result.success(Unit)
     }
@@ -168,6 +185,8 @@ class FakeNotesListsRepository(
     }
 
     companion object {
+        private const val CURRENT_USER_ID = "Alex"
+
         val seedLists = listOf(
             NotesListSummary(
                 id = "shopping",

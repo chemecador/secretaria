@@ -7,6 +7,7 @@ interface NotesListsRepository {
     suspend fun updateList(listId: String, name: String, ordered: Boolean): Result<NotesListSummary>
     suspend fun shareList(listId: String, friendUserId: String): Result<Unit>
     suspend fun unshareList(listId: String, friendUserId: String): Result<Unit>
+    suspend fun leaveSharedList(ownerId: String, listId: String): Result<Unit>
     suspend fun setListGroup(
         listOwnerId: String,
         listId: String,

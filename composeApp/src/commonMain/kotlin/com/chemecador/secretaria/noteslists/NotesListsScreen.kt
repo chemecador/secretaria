@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -89,6 +90,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
@@ -123,6 +125,11 @@ import secretaria.composeapp.generated.resources.delete_list_title
 import secretaria.composeapp.generated.resources.edit_list
 import secretaria.composeapp.generated.resources.edit_list_button
 import secretaria.composeapp.generated.resources.edit_list_title
+import secretaria.composeapp.generated.resources.leave_shared_list
+import secretaria.composeapp.generated.resources.leave_shared_list_error
+import secretaria.composeapp.generated.resources.leave_shared_list_message
+import secretaria.composeapp.generated.resources.leave_shared_list_success
+import secretaria.composeapp.generated.resources.leave_shared_list_title
 import secretaria.composeapp.generated.resources.list_created_by
 import secretaria.composeapp.generated.resources.list_archived_on
 import secretaria.composeapp.generated.resources.list_archived_on_unknown
@@ -194,6 +201,7 @@ fun NotesListsScreen(
     var listForOptions by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToEdit by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToDelete by remember { mutableStateOf<NotesListSummary?>(null) }
+    var listToLeaveShared by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToShare by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToGroup by remember { mutableStateOf<NotesListSummary?>(null) }
     var showArchivedLists by remember { mutableStateOf(false) }
@@ -245,6 +253,14 @@ fun NotesListsScreen(
             } else {
                 stringResource(Res.string.unarchive_list_error)
             }
+        }
+    }
+    val leaveSharedListFeedback = state.leaveSharedListFeedback
+    val leaveSharedListFeedbackMessage = leaveSharedListFeedback?.let { feedback ->
+        if (feedback.isSuccess) {
+            stringResource(Res.string.leave_shared_list_success)
+        } else {
+            stringResource(Res.string.leave_shared_list_error)
         }
     }
     val visibleRootGroups = state.items.filter { item ->
@@ -301,12 +317,19 @@ fun NotesListsScreen(
         viewModel.consumeArchiveFeedback()
     }
 
+    LaunchedEffect(leaveSharedListFeedback) {
+        val message = leaveSharedListFeedbackMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.consumeLeaveSharedListFeedback()
+    }
+
     PlatformBackHandler(
         enabled = showArchivedLists &&
             !showCreateDialog &&
             listForOptions == null &&
             listToEdit == null &&
             listToDelete == null &&
+            listToLeaveShared == null &&
             listToShare == null &&
             listToGroup == null,
         onBack = { showArchivedLists = false },
@@ -317,6 +340,7 @@ fun NotesListsScreen(
             listForOptions == null &&
             listToEdit == null &&
             listToDelete == null &&
+            listToLeaveShared == null &&
             listToShare == null &&
             listToGroup == null &&
             onBack != null,
@@ -404,6 +428,7 @@ fun NotesListsScreen(
             ListOptionsDialog(
                 listName = list.name,
                 isOwner = list.ownerId == currentUserId,
+                canLeaveSharedList = list.canLeaveSharedList(currentUserId),
                 isArchived = isArchived,
                 isGrouped = list.groupId != null,
                 canManageGrouping = canManageGrouping,
@@ -429,6 +454,10 @@ fun NotesListsScreen(
                 },
                 onDelete = {
                     listToDelete = list
+                    listForOptions = null
+                },
+                onLeaveSharedList = {
+                    listToLeaveShared = list
                     listForOptions = null
                 },
                 onDismiss = { listForOptions = null },
@@ -498,6 +527,17 @@ fun NotesListsScreen(
                 onConfirm = {
                     viewModel.deleteList(list)
                     listToDelete = null
+                },
+            )
+        }
+
+        listToLeaveShared?.let { list ->
+            LeaveSharedListDialog(
+                listName = list.name,
+                onDismiss = { listToLeaveShared = null },
+                onConfirm = {
+                    viewModel.leaveSharedList(list)
+                    listToLeaveShared = null
                 },
             )
         }
@@ -1175,6 +1215,9 @@ private fun CreateListDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text(stringResource(Res.string.create_list_name_hint)) },
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                    ),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1247,9 +1290,36 @@ private fun DeleteListDialog(
 }
 
 @Composable
+private fun LeaveSharedListDialog(
+    listName: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        title = { Text(stringResource(Res.string.leave_shared_list_title)) },
+        text = { Text(stringResource(Res.string.leave_shared_list_message, listName)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(Res.string.leave_shared_list))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
+}
+
+@Composable
 private fun ListOptionsDialog(
     listName: String,
     isOwner: Boolean,
+    canLeaveSharedList: Boolean,
     isArchived: Boolean,
     isGrouped: Boolean,
     canManageGrouping: Boolean,
@@ -1259,6 +1329,7 @@ private fun ListOptionsDialog(
     onRemoveFromGroup: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onLeaveSharedList: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -1310,6 +1381,15 @@ private fun ListOptionsDialog(
                         tint = MaterialTheme.colorScheme.error,
                         textColor = MaterialTheme.colorScheme.error,
                         onClick = onDelete,
+                    )
+                }
+                if (canLeaveSharedList) {
+                    OptionRow(
+                        icon = Icons.Outlined.DeleteOutline,
+                        label = stringResource(Res.string.leave_shared_list),
+                        tint = MaterialTheme.colorScheme.error,
+                        textColor = MaterialTheme.colorScheme.error,
+                        onClick = onLeaveSharedList,
                     )
                 }
             }
@@ -1414,6 +1494,9 @@ private fun GroupSelectionDialog(
                         value = newGroupName,
                         onValueChange = { newGroupName = it },
                         label = { Text(stringResource(Res.string.create_list_name_hint)) },
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences,
+                        ),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1703,6 +1786,11 @@ private fun NotesListSummary.isVisibleRootGroup(
         !isArchived
     }
 }
+
+private fun NotesListSummary.canLeaveSharedList(currentUserId: String?): Boolean =
+    currentUserId != null &&
+        ownerId != currentUserId &&
+        currentUserId in directContributors
 
 enum class NotesListsSection {
     MINE,

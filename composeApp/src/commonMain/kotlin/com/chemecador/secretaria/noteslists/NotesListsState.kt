@@ -16,4 +16,5 @@ data class NotesListsState(
     val shareErrorMessage: String? = null,
     val shareFeedback: ListSharingFeedback? = null,
     val archiveFeedback: ListArchiveFeedback? = null,
+    val leaveSharedListFeedback: ListLeaveSharedFeedback? = null,
 )

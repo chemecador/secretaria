@@ -251,6 +251,69 @@ class FirestoreNotesListsRepository(
         }
     }
 
+    override suspend fun leaveSharedList(ownerId: String, listId: String): Result<Unit> {
+        return try {
+            val userId = requireUserId()
+            if (ownerId == userId) error("Owner cannot leave own list")
+            val docRef = listDocument(ownerId, listId)
+            val listSnapshot = docRef.get().await()
+            if (userId !in listSnapshot.stringList(CONTRIBUTORS)) {
+                error("List not found")
+            }
+            if (userId !in listSnapshot.directContributors()) {
+                error("List is not shared directly with current user")
+            }
+
+            val directContributors = listSnapshot.directContributors().filterNot { contributorId ->
+                contributorId == userId
+            }
+            val inheritedContributors = listSnapshot.inheritedGroupContributors()
+            val batch = firestore.batch()
+            batch.update(
+                docRef,
+                mapOf(
+                    DIRECT_CONTRIBUTORS to directContributors,
+                    CONTRIBUTORS to effectiveContributors(ownerId, directContributors, inheritedContributors),
+                ),
+            )
+            if (listSnapshot.getBoolean(IS_GROUP) == true) {
+                val childLists = firestore.collectionGroup(NOTES_LIST)
+                    .whereArrayContains(CONTRIBUTORS, userId)
+                    .get()
+                    .await()
+                childLists.documents
+                    .filter { childDoc ->
+                        childDoc.getString(GROUP_ID) == listId &&
+                            childDoc.groupOwnerId() == ownerId
+                    }
+                    .forEach { childDoc ->
+                        val childDirectContributors = childDoc.directContributors()
+                        val childInheritedContributors =
+                            childDoc.inheritedGroupContributors().filterNot { contributorId ->
+                                contributorId == userId
+                            }
+                        val childOwnerId = childDoc.ownerId()
+                        batch.update(
+                            childDoc.reference,
+                            mapOf(
+                                DIRECT_CONTRIBUTORS to childDirectContributors,
+                                INHERITED_GROUP_CONTRIBUTORS to childInheritedContributors,
+                                CONTRIBUTORS to effectiveContributors(
+                                    ownerId = childOwnerId,
+                                    directContributors = childDirectContributors,
+                                    inheritedGroupContributors = childInheritedContributors,
+                                ),
+                            ),
+                        )
+                    }
+            }
+            batch.commit().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     override suspend fun setListGroup(
         listOwnerId: String,
         listId: String,

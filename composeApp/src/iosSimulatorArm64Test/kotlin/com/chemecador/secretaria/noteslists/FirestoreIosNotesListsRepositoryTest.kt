@@ -295,6 +295,76 @@ class FirestoreIosNotesListsRepositoryTest {
     }
 
     @Test
+    fun leaveSharedList_patchesSharedListUnderRealOwner() = kotlinx.coroutines.test.runTest {
+        val transport = RecordingFirestoreTransport(
+            responses = listOf(
+                FirebaseIosFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "name": "projects/project-id/databases/(default)/documents/users/user-999/noteslist/list-1",
+                          "fields": {
+                            "contributors": {
+                              "arrayValue": {
+                                "values": [
+                                  { "stringValue": "user-999" },
+                                  { "stringValue": "user-123" }
+                                ]
+                              }
+                            }
+                          },
+                          "updateTime": "2026-04-15T10:00:00Z"
+                        }
+                    """.trimIndent(),
+                ),
+                FirebaseIosFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "name": "projects/project-id/databases/(default)/documents/users/user-999/noteslist/list-1",
+                          "fields": {
+                            "contributors": {
+                              "arrayValue": {
+                                "values": [
+                                  { "stringValue": "user-999" }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                    """.trimIndent(),
+                ),
+            ),
+        )
+        val repository = FirestoreIosNotesListsRepository(
+            authRepository = LoggedInAuthRepository("user-123"),
+            firestore = FirebaseIosFirestoreRestApi(
+                projectId = "project-id",
+                tokenProvider = StaticTokenProvider("ios-token"),
+                transport = transport,
+            ),
+        )
+
+        val result = repository.leaveSharedList("user-999", "list-1")
+
+        assertTrue(result.isSuccess)
+        assertEquals("GET", transport.requests[0].method)
+        assertEquals("PATCH", transport.requests[1].method)
+        assertEquals(
+            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/user-999/noteslist/list-1",
+            transport.requests[0].url,
+        )
+        assertEquals(
+            "https://firestore.googleapis.com/v1/projects/project-id/databases/(default)/documents/users/user-999/noteslist/list-1?updateMask.fieldPaths=directContributors&updateMask.fieldPaths=contributors&currentDocument.updateTime=2026-04-15T10%3A00%3A00Z",
+            transport.requests[1].url,
+        )
+        assertTrue(transport.requests[1].body!!.contains(""""directContributors""""))
+        assertTrue(transport.requests[1].body!!.contains(""""contributors""""))
+        assertTrue(transport.requests[1].body!!.contains(""""stringValue":"user-999""""))
+        assertTrue(!transport.requests[1].body!!.contains(""""stringValue":"user-123""""))
+    }
+
+    @Test
     fun setListGroup_patchesSharedListUnderRealOwner() = kotlinx.coroutines.test.runTest {
         val transport = RecordingFirestoreTransport(
             responses = listOf(
