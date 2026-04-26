@@ -172,6 +172,8 @@ import kotlin.time.Instant
 @Composable
 fun NotesListsScreen(
     viewModel: NotesListsViewModel,
+    selectedSection: NotesListsSection = NotesListsSection.MINE,
+    onSectionSelected: (NotesListsSection) -> Unit = {},
     onListSelected: (id: String, ownerId: String, name: String, isOrdered: Boolean) -> Unit,
     onGroupSelected: (id: String, ownerId: String, name: String, isOrdered: Boolean) -> Unit,
     onOpenFriends: () -> Unit,
@@ -194,7 +196,6 @@ fun NotesListsScreen(
     var listToDelete by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToShare by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToGroup by remember { mutableStateOf<NotesListSummary?>(null) }
-    var selectedSection by remember { mutableStateOf(NotesListsSection.MINE) }
     var showArchivedLists by remember { mutableStateOf(false) }
     var showSearchInput by remember { mutableStateOf(false) }
     val isSearchInputVisible = showSearchInput || state.searchQuery.isNotBlank()
@@ -387,7 +388,7 @@ fun NotesListsScreen(
             CreateListDialog(
                 onDismiss = { showCreateDialog = false },
                 onCreate = { name, ordered, isGroup ->
-                    selectedSection = NotesListsSection.MINE
+                    onSectionSelected(NotesListsSection.MINE)
                     viewModel.createList(name, ordered, isGroup)
                     showCreateDialog = false
                 },
@@ -450,7 +451,7 @@ fun NotesListsScreen(
                     listToGroup = null
                 },
                 onCreateGroup = { name, ordered ->
-                    selectedSection = NotesListsSection.MINE
+                    onSectionSelected(NotesListsSection.MINE)
                     viewModel.createGroupAndAddList(list, name, ordered)
                     listToGroup = null
                 },
@@ -509,7 +510,7 @@ fun NotesListsScreen(
             if (!showArchivedLists && !isGroupScreen) {
                 ListsSectionTabs(
                     selectedSection = selectedSection,
-                    onSectionSelected = { selectedSection = it },
+                    onSectionSelected = onSectionSelected,
                 )
             }
 
@@ -1703,7 +1704,7 @@ private fun NotesListSummary.isVisibleRootGroup(
     }
 }
 
-private enum class NotesListsSection {
+enum class NotesListsSection {
     MINE,
     SHARED,
 }

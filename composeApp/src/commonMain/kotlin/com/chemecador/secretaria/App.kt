@@ -31,6 +31,7 @@ import com.chemecador.secretaria.notes.NoteDetailScreen
 import com.chemecador.secretaria.notes.NotesScreen
 import com.chemecador.secretaria.notes.NotesViewModel
 import com.chemecador.secretaria.noteslists.NotesListsScreen
+import com.chemecador.secretaria.noteslists.NotesListsSection
 import com.chemecador.secretaria.noteslists.NotesListsViewModel
 import com.chemecador.secretaria.settings.SettingsScreen
 import com.chemecador.secretaria.settings.SupportCreatorScreen
@@ -100,6 +101,7 @@ fun App(
 
         var screen by remember { mutableStateOf<Screen>(Screen.Restoring) }
         var utilityBackStack by remember { mutableStateOf<List<Screen>>(emptyList()) }
+        var selectedListsSection by remember { mutableStateOf(NotesListsSection.MINE) }
         val coroutineScope = rememberCoroutineScope()
 
         fun openRequestedList(request: OpenListRequest) {
@@ -159,6 +161,7 @@ fun App(
                 googleSignInController?.clearCredentialState()
                 loginViewModel.resetState()
                 utilityBackStack = emptyList()
+                selectedListsSection = NotesListsSection.MINE
                 screen = Screen.Login
             }
         }
@@ -224,6 +227,8 @@ fun App(
                         is Screen.Lists -> {
                             NotesListsScreen(
                                 viewModel = listsViewModel,
+                                selectedSection = selectedListsSection,
+                                onSectionSelected = { selectedListsSection = it },
                                 onListSelected = { id, ownerId, name, isOrdered ->
                                     screen = Screen.Notes(ownerId, id, name, isOrdered)
                                 },
