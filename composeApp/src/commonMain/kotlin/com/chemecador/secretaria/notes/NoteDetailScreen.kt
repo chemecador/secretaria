@@ -62,15 +62,16 @@ import com.chemecador.secretaria.PlatformBackHandler
 import com.chemecador.secretaria.SecretariaOverflowMenu
 import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
+import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.noteslists.formatNotesListDate
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 import secretaria.composeapp.generated.resources.Res
 import secretaria.composeapp.generated.resources.action_collapse_colors
 import secretaria.composeapp.generated.resources.action_expand_colors
 import secretaria.composeapp.generated.resources.cancel
 import secretaria.composeapp.generated.resources.delete
 import secretaria.composeapp.generated.resources.delete_note_confirmation
-import secretaria.composeapp.generated.resources.list_created_by
 import secretaria.composeapp.generated.resources.note_completed_badge
 import secretaria.composeapp.generated.resources.note_detail_color
 import secretaria.composeapp.generated.resources.note_detail_content_hint
@@ -101,6 +102,7 @@ fun NoteDetailScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showUnsavedDialog by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
+    val currentUserEmail = koinInject<AuthRepository>().currentUserEmail
 
     val hasUnsavedChanges by remember {
         derivedStateOf {
@@ -246,7 +248,7 @@ fun NoteDetailScreen(
             }
             Spacer(Modifier.height(8.dp))
             Text(
-                text = stringResource(Res.string.list_created_by, note.creator),
+                text = noteCreatorLabel(note.creator, currentUserEmail),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

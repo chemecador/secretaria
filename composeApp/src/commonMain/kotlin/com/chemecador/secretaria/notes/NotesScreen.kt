@@ -71,8 +71,10 @@ import com.chemecador.secretaria.PlatformBackHandler
 import com.chemecador.secretaria.SecretariaOverflowMenu
 import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
+import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.noteslists.formatNotesListDate
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 import secretaria.composeapp.generated.resources.Res
 import secretaria.composeapp.generated.resources.cancel
 import secretaria.composeapp.generated.resources.create_note_button
@@ -83,6 +85,7 @@ import secretaria.composeapp.generated.resources.create_note_content_hint
 import secretaria.composeapp.generated.resources.create_note_name_hint
 import secretaria.composeapp.generated.resources.create_note_title
 import secretaria.composeapp.generated.resources.list_created_by
+import secretaria.composeapp.generated.resources.list_created_by_you
 import secretaria.composeapp.generated.resources.note_completed_badge
 import secretaria.composeapp.generated.resources.notes_empty
 import secretaria.composeapp.generated.resources.notes_error_generic
@@ -102,6 +105,8 @@ fun NotesScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
+    val authRepository = koinInject<AuthRepository>()
+    val currentUserEmail = authRepository.currentUserEmail
     var showCreateDialog by remember { mutableStateOf(false) }
     var noteToDelete by remember { mutableStateOf<Note?>(null) }
 
@@ -216,6 +221,7 @@ fun NotesScreen(
                             NotesContent(
                                 notes = displayNotes,
                                 isOrdered = isOrdered,
+                                currentUserEmail = currentUserEmail,
                                 onNoteClick = onNoteClick,
                                 onNoteLongClick = { noteToDelete = it },
                                 onNotesReordered = viewModel::reorderNotes,
@@ -232,6 +238,7 @@ fun NotesScreen(
 private fun NotesContent(
     notes: List<Note>,
     isOrdered: Boolean,
+    currentUserEmail: String?,
     onNoteClick: (Note) -> Unit,
     onNoteLongClick: (Note) -> Unit,
     onNotesReordered: (List<String>) -> Unit,
@@ -239,6 +246,7 @@ private fun NotesContent(
     if (isOrdered) {
         OrderedNotesContent(
             notes = notes.sortedBy(Note::order),
+            currentUserEmail = currentUserEmail,
             onNoteClick = onNoteClick,
             onNoteLongClick = onNoteLongClick,
             onNotesReordered = onNotesReordered,
@@ -254,6 +262,7 @@ private fun NotesContent(
                     note = note,
                     isOrdered = false,
                     orderIndex = index + 1,
+                    currentUserEmail = currentUserEmail,
                     onClick = { onNoteClick(note) },
                     onLongClick = { onNoteLongClick(note) },
                 )
@@ -265,6 +274,7 @@ private fun NotesContent(
 @Composable
 private fun OrderedNotesContent(
     notes: List<Note>,
+    currentUserEmail: String?,
     onNoteClick: (Note) -> Unit,
     onNoteLongClick: (Note) -> Unit,
     onNotesReordered: (List<String>) -> Unit,
@@ -324,6 +334,7 @@ private fun OrderedNotesContent(
                 note = note,
                 isOrdered = true,
                 orderIndex = index + 1,
+                currentUserEmail = currentUserEmail,
                 modifier = Modifier
                     .graphicsLayer {
                         translationY = reorderState.translationFor(index)
@@ -358,6 +369,7 @@ private fun NoteCard(
     note: Note,
     isOrdered: Boolean,
     orderIndex: Int,
+    currentUserEmail: String?,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -420,7 +432,7 @@ private fun NoteCard(
                 )
             }
             Text(
-                text = stringResource(Res.string.list_created_by, note.creator),
+                text = noteCreatorLabel(note.creator, currentUserEmail),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -445,6 +457,14 @@ private fun NoteCard(
         }
     }
 }
+
+@Composable
+internal fun noteCreatorLabel(creator: String, currentUserEmail: String?): String =
+    if (!currentUserEmail.isNullOrBlank() && creator.equals(currentUserEmail, ignoreCase = true)) {
+        stringResource(Res.string.list_created_by_you)
+    } else {
+        stringResource(Res.string.list_created_by, creator)
+    }
 
 @Composable
 private fun CenteredMessage(

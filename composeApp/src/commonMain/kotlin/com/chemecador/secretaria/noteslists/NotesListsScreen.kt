@@ -131,11 +131,13 @@ import secretaria.composeapp.generated.resources.leave_shared_list_message
 import secretaria.composeapp.generated.resources.leave_shared_list_success
 import secretaria.composeapp.generated.resources.leave_shared_list_title
 import secretaria.composeapp.generated.resources.list_created_by
+import secretaria.composeapp.generated.resources.list_created_by_you
 import secretaria.composeapp.generated.resources.list_archived_on
 import secretaria.composeapp.generated.resources.list_archived_on_unknown
 import secretaria.composeapp.generated.resources.list_group_badge
 import secretaria.composeapp.generated.resources.list_options
 import secretaria.composeapp.generated.resources.list_ordered_badge
+import secretaria.composeapp.generated.resources.list_shared_badge
 import secretaria.composeapp.generated.resources.group_lists_empty
 import secretaria.composeapp.generated.resources.notes_lists_empty
 import secretaria.composeapp.generated.resources.notes_lists_empty_active_mine
@@ -159,6 +161,7 @@ import secretaria.composeapp.generated.resources.share_list_shared_with_count_ma
 import secretaria.composeapp.generated.resources.share_list_shared_with_count_one
 import secretaria.composeapp.generated.resources.share_list_shared_with_many
 import secretaria.composeapp.generated.resources.share_list_shared_with_one
+import secretaria.composeapp.generated.resources.share_list_shared_with_you
 import secretaria.composeapp.generated.resources.share_list_success
 import secretaria.composeapp.generated.resources.remove_list_from_group
 import secretaria.composeapp.generated.resources.reorder_list_handle
@@ -967,6 +970,12 @@ private fun NotesListCard(
     archivedAt: Instant? = null,
     onUnarchiveClick: (() -> Unit)? = null,
 ) {
+    val isOwnedByCurrentUser = currentUserId != null && item.ownerId == currentUserId
+    val createdByLabel = when {
+        isOwnedByCurrentUser && !item.isShared -> null
+        isOwnedByCurrentUser -> stringResource(Res.string.list_created_by_you)
+        else -> stringResource(Res.string.list_created_by, item.creator)
+    }
     val sharingSummary = sharingSummaryText(
         item = item,
         collaborators = collaborators,
@@ -1017,16 +1026,18 @@ private fun NotesListCard(
                     }
                 }
             }
-            Text(
-                text = stringResource(Res.string.list_created_by, item.creator),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            sharingSummary?.let { summary ->
+            createdByLabel?.let { label ->
                 Text(
-                    text = summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            sharingSummary?.let { summary ->
+                ListTypeBadge(
+                    icon = Icons.Outlined.Share,
+                    label = summary,
+                    contentDescription = stringResource(Res.string.list_shared_badge),
                 )
             }
             Row(
@@ -1134,7 +1145,10 @@ private fun sharingSummaryText(
     collaborators: List<ListCollaborator>,
     currentUserId: String?,
 ): String? {
-    if (item.ownerId != currentUserId) return null
+    if (currentUserId == null) return null
+    if (item.ownerId != currentUserId) {
+        return if (item.isShared) stringResource(Res.string.share_list_shared_with_you) else null
+    }
 
     val sharedCount = item.directSharedWithUserIds.size
     if (sharedCount == 0) return null
