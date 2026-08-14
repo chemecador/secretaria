@@ -948,6 +948,14 @@ private fun OrderedNotesListsContent(
                 onOptionsClick = { onListOptionsClick(item) },
                 orderIndex = index + 1,
                 modifier = Modifier
+                    // El arrastrado se mueve con translationY; el resto se desliza a su hueco.
+                    .then(
+                        if (reorderState.draggingItemIndex == index) {
+                            Modifier
+                        } else {
+                            Modifier.animateItem()
+                        },
+                    )
                     .graphicsLayer {
                         translationY = reorderState.translationFor(index)
                     }

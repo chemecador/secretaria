@@ -330,16 +330,20 @@ private fun OrderedNotesContent(
                     )
                 }
 
+            val isDragged = reorderState.draggingItemIndex == index
+
             NoteCard(
                 note = note,
                 isOrdered = true,
                 orderIndex = index + 1,
                 currentUserEmail = currentUserEmail,
                 modifier = Modifier
+                    // El arrastrado se mueve con translationY; el resto se desliza a su hueco.
+                    .then(if (isDragged) Modifier else Modifier.animateItem())
                     .graphicsLayer {
                         translationY = reorderState.translationFor(index)
                     }
-                    .zIndex(if (reorderState.draggingItemIndex == index) 1f else 0f),
+                    .zIndex(if (isDragged) 1f else 0f),
                 onClick = { onNoteClick(note) },
                 onLongClick = {
                     if (pressedDragHandleNoteId != note.id) {

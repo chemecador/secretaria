@@ -66,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -79,6 +80,9 @@ import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
 import com.chemecador.secretaria.notes.NotesReorderState
 import com.chemecador.secretaria.noteslists.formatNotesListDate
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.stringResource
 import secretaria.composeapp.generated.resources.Res
 import secretaria.composeapp.generated.resources.cancel
@@ -475,13 +479,17 @@ private fun PendingRemindersContent(
                     )
                 }
 
+            val isDragged = reorderState.draggingItemIndex == index
+
             ReminderCard(
                 reminder = reminder,
                 modifier = Modifier
+                    // El arrastrado se mueve con translationY; el resto se desliza a su hueco.
+                    .then(if (isDragged) Modifier else Modifier.animateItem())
                     .graphicsLayer {
                         translationY = reorderState.translationFor(index)
                     }
-                    .zIndex(if (reorderState.draggingItemIndex == index) 1f else 0f),
+                    .zIndex(if (isDragged) 1f else 0f),
                 onClick = { onReminderClick(reminder) },
                 onLongClick = {
                     if (pressedDragHandleReminderId != reminder.id) {
@@ -597,7 +605,8 @@ private fun ReminderEditorDialog(
             initialTime = due?.time,
             onDismiss = { showTimePicker = false },
             onConfirm = { time ->
-                due = due?.copy(time = time)
+                // Poner hora sin fecha asume hoy: es el caso mas comun y ahorra elegir el dia.
+                due = due?.copy(time = time) ?: ReminderDue(today(), time)
                 showTimePicker = false
             },
         )
@@ -652,6 +661,11 @@ private fun ReminderEditorDialog(
     )
 }
 
+/**
+ * Fecha y hora se ofrecen siempre por separado. Elegir solo la hora es el caso frecuente
+ * ("hoy a las siete"), y entonces la fecha se rellena con hoy en lugar de obligar a pasar por
+ * el calendario.
+ */
 @Composable
 private fun ReminderDueEditor(
     due: ReminderDue?,
@@ -660,64 +674,52 @@ private fun ReminderDueEditor(
     onClearDate: () -> Unit,
     onClearTime: () -> Unit,
 ) {
-    if (due == null) {
-        TextButton(onClick = onPickDate) {
-            Icon(
-                imageVector = Icons.Filled.CalendarToday,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                text = stringResource(Res.string.reminder_due_add),
-                modifier = Modifier.padding(start = 8.dp),
-            )
-        }
-        return
-    }
+    ReminderDueRow(
+        icon = Icons.Filled.CalendarToday,
+        label = due?.let { formatNotesListDate(it.date) }
+            ?: stringResource(Res.string.reminder_due_add),
+        clearDescription = stringResource(Res.string.reminder_due_clear),
+        onClick = onPickDate,
+        onClear = onClearDate.takeIf { due != null },
+    )
 
+    ReminderDueRow(
+        icon = Icons.Filled.Schedule,
+        label = due?.time?.let(::formatReminderTime)
+            ?: stringResource(Res.string.reminder_due_add_time),
+        clearDescription = stringResource(Res.string.reminder_due_clear_time),
+        onClick = onPickTime,
+        onClear = onClearTime.takeIf { due?.time != null },
+    )
+}
+
+@Composable
+private fun ReminderDueRow(
+    icon: ImageVector,
+    label: String,
+    clearDescription: String,
+    onClick: () -> Unit,
+    onClear: (() -> Unit)?,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        TextButton(onClick = onPickDate, modifier = Modifier.weight(1f)) {
+        TextButton(onClick = onClick, modifier = Modifier.weight(1f)) {
             Icon(
-                imageVector = Icons.Filled.CalendarToday,
+                imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
             )
             Text(
-                text = formatNotesListDate(due.date),
+                text = label,
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 8.dp),
             )
         }
-        IconButton(onClick = onClearDate) {
-            Icon(
-                imageVector = Icons.Filled.Close,
-                contentDescription = stringResource(Res.string.reminder_due_clear),
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        TextButton(onClick = onPickTime, modifier = Modifier.weight(1f)) {
-            Icon(
-                imageVector = Icons.Filled.Schedule,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                text = due.time?.let(::formatReminderTime)
-                    ?: stringResource(Res.string.reminder_due_add_time),
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 8.dp),
-            )
-        }
-        if (due.time != null) {
-            IconButton(onClick = onClearTime) {
+        if (onClear != null) {
+            IconButton(onClick = onClear) {
                 Icon(
                     imageVector = Icons.Filled.Close,
-                    contentDescription = stringResource(Res.string.reminder_due_clear_time),
+                    contentDescription = clearDescription,
                     modifier = Modifier.size(18.dp),
                 )
             }
@@ -726,6 +728,9 @@ private fun ReminderDueEditor(
         }
     }
 }
+
+private fun today(): LocalDate =
+    Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
 
 /**
  * Traduce el feedback fuera del [LaunchedEffect] porque `stringResource` es composable, igual que
