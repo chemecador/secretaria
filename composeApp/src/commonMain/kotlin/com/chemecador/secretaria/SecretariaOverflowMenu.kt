@@ -27,7 +27,6 @@ import secretaria.composeapp.generated.resources.menu_archived_lists
 import secretaria.composeapp.generated.resources.menu_completed_reminders
 import secretaria.composeapp.generated.resources.menu_friends
 import secretaria.composeapp.generated.resources.menu_logout
-import secretaria.composeapp.generated.resources.menu_reminders
 import secretaria.composeapp.generated.resources.menu_settings
 
 @Composable
@@ -36,7 +35,6 @@ fun SecretariaOverflowMenu(
     onOpenSettings: () -> Unit,
     onLogout: () -> Unit,
     onOpenArchivedLists: (() -> Unit)? = null,
-    onOpenReminders: (() -> Unit)? = null,
     onOpenCompletedReminders: (() -> Unit)? = null,
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -60,15 +58,6 @@ fun SecretariaOverflowMenu(
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false },
             ) {
-                onOpenReminders?.let { openReminders ->
-                    DropdownMenuItem(
-                        text = { Text(stringResource(Res.string.menu_reminders)) },
-                        onClick = {
-                            showMenu = false
-                            openReminders()
-                        },
-                    )
-                }
                 onOpenCompletedReminders?.let { openCompletedReminders ->
                     DropdownMenuItem(
                         text = { Text(stringResource(Res.string.menu_completed_reminders)) },

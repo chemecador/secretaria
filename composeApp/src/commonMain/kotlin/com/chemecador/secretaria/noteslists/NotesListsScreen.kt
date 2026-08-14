@@ -62,7 +62,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.SnackbarHost
@@ -190,7 +190,7 @@ fun NotesListsScreen(
     onOpenSettings: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
-    onOpenReminders: (() -> Unit)? = null,
+    bottomBar: @Composable () -> Unit = {},
     groupOwnerId: String? = null,
     groupId: String? = null,
     groupName: String? = null,
@@ -355,6 +355,12 @@ fun NotesListsScreen(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        // Solo la raiz de Listas es destino de primer nivel; grupos y archivadas son empujes.
+        bottomBar = {
+            if (!showArchivedLists && !isGroupScreen) {
+                bottomBar()
+            }
+        },
         topBar = {
             TopAppBar(
                 title = {
@@ -394,9 +400,6 @@ fun NotesListsScreen(
                             null
                         } else {
                             { showArchivedLists = true }
-                        },
-                        onOpenReminders = onOpenReminders?.takeUnless {
-                            showArchivedLists || isGroupScreen
                         },
                     )
                 },
@@ -555,7 +558,7 @@ fun NotesListsScreen(
                 .padding(innerPadding),
         ) {
             if (!showArchivedLists && !isGroupScreen) {
-                ListsSectionTabs(
+                ListsSectionChips(
                     selectedSection = selectedSection,
                     onSectionSelected = onSectionSelected,
                 )
@@ -640,25 +643,32 @@ fun NotesListsScreen(
     }
 }
 
+/**
+ * Propias y compartidas son un filtro sobre la misma coleccion, no navegacion: por eso son chips
+ * y no tabs. La navegacion entre modos vive en la barra inferior.
+ */
 @Composable
-private fun ListsSectionTabs(
+private fun ListsSectionChips(
     selectedSection: NotesListsSection,
     onSectionSelected: (NotesListsSection) -> Unit,
 ) {
-    val sections = listOf(NotesListsSection.MINE, NotesListsSection.SHARED)
-    val selectedTabIndex = sections.indexOf(selectedSection)
-
-    PrimaryTabRow(selectedTabIndex = selectedTabIndex) {
-        sections.forEachIndexed { index, section ->
-            Tab(
-                selected = index == selectedTabIndex,
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        listOf(NotesListsSection.MINE, NotesListsSection.SHARED).forEach { section ->
+            FilterChip(
+                selected = section == selectedSection,
                 onClick = { onSectionSelected(section) },
-                text = {
+                label = {
                     Text(
                         text = when (section) {
                             NotesListsSection.MINE -> stringResource(Res.string.notes_lists_mine_tab)
                             NotesListsSection.SHARED -> stringResource(Res.string.notes_lists_shared_tab)
                         },
+                        style = MaterialTheme.typography.labelLarge,
                     )
                 },
             )

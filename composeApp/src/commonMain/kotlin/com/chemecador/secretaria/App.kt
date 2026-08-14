@@ -166,11 +166,16 @@ fun App(
         val openSupportCreator = {
             openUtilityScreen(Screen.SupportCreator)
         }
-        val openReminders = {
-            openUtilityScreen(Screen.Reminders)
-        }
         val openCompletedReminders = {
             openUtilityScreen(Screen.CompletedReminders)
+        }
+        // Los modos son destinos raiz: cambiar de modo vacia la pila, no apila.
+        val selectRootMode: (SecretariaRootMode) -> Unit = { mode ->
+            utilityBackStack = emptyList()
+            screen = when (mode) {
+                SecretariaRootMode.REMINDERS -> Screen.Reminders
+                SecretariaRootMode.LISTS -> Screen.Lists
+            }
         }
         val closeUtilityScreen = {
             val returnScreen = utilityBackStack.lastOrNull() ?: Screen.Lists
@@ -267,8 +272,13 @@ fun App(
                                 },
                                 onOpenFriends = openFriends,
                                 onOpenSettings = openSettings,
-                                onOpenReminders = openReminders,
                                 onLogout = logout,
+                                bottomBar = {
+                                    SecretariaBottomBar(
+                                        selected = SecretariaRootMode.LISTS,
+                                        onSelect = selectRootMode,
+                                    )
+                                },
                             )
                         }
 
@@ -296,10 +306,15 @@ fun App(
                             RemindersScreen(
                                 viewModel = remindersViewModel,
                                 onOpenCompleted = openCompletedReminders,
-                                onBack = closeUtilityScreen,
                                 onOpenFriends = openFriends,
                                 onOpenSettings = openSettings,
                                 onLogout = logout,
+                                bottomBar = {
+                                    SecretariaBottomBar(
+                                        selected = SecretariaRootMode.REMINDERS,
+                                        onSelect = selectRootMode,
+                                    )
+                                },
                             )
                         }
 

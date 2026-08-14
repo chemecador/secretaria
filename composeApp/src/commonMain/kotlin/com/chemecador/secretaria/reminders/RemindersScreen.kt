@@ -112,11 +112,13 @@ import kotlin.time.Instant
 fun RemindersScreen(
     viewModel: RemindersViewModel,
     onOpenCompleted: () -> Unit,
-    onBack: () -> Unit,
     onOpenFriends: () -> Unit,
     onOpenSettings: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Nulo cuando la pantalla es un destino raiz: sin flecha atras y sin back handler. */
+    onBack: (() -> Unit)? = null,
+    bottomBar: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -133,22 +135,27 @@ fun RemindersScreen(
         onConsume = viewModel::consumeFeedback,
     )
 
-    PlatformBackHandler(
-        enabled = reminderToEdit == null && reminderToDelete == null,
-        onBack = onBack,
-    )
+    onBack?.let { navigateBack ->
+        PlatformBackHandler(
+            enabled = reminderToEdit == null && reminderToDelete == null,
+            onBack = navigateBack,
+        )
+    }
 
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = bottomBar,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(Res.string.reminders_title)) },
                 colors = remindersTopAppBarColors(),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    onBack?.let { navigateBack ->
+                        IconButton(onClick = navigateBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        }
                     }
                 },
                 actions = {
