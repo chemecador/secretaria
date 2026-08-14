@@ -27,7 +27,7 @@ private val sharedAppModule = module {
     viewModel { LoginViewModel(get()) }
     viewModel { NotesListsViewModel(get(), get(), get()) }
     viewModel { FriendsViewModel(get()) }
-    viewModel { RemindersViewModel(get()) }
+    viewModel { RemindersViewModel(get(), get(), get()) }
     viewModel { params ->
         NotesViewModel(
             repository = get(),

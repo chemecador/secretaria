@@ -2,6 +2,7 @@ package com.chemecador.secretaria.reminders
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -15,8 +16,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -35,12 +39,15 @@ import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +56,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -65,6 +73,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -78,12 +87,16 @@ import com.chemecador.secretaria.PlatformBackHandler
 import com.chemecador.secretaria.SecretariaOverflowMenu
 import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
+import com.chemecador.secretaria.friends.FriendSummary
+import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.notes.NotesReorderState
+import com.chemecador.secretaria.noteslists.ListCollaborator
 import com.chemecador.secretaria.noteslists.formatNotesListDate
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 import secretaria.composeapp.generated.resources.Res
 import secretaria.composeapp.generated.resources.cancel
 import secretaria.composeapp.generated.resources.completed_reminders_empty
@@ -96,6 +109,11 @@ import secretaria.composeapp.generated.resources.delete_reminder_title
 import secretaria.composeapp.generated.resources.edit_reminder_button
 import secretaria.composeapp.generated.resources.edit_reminder_text_hint
 import secretaria.composeapp.generated.resources.edit_reminder_title
+import secretaria.composeapp.generated.resources.leave_shared_reminder
+import secretaria.composeapp.generated.resources.leave_shared_reminder_error
+import secretaria.composeapp.generated.resources.leave_shared_reminder_message
+import secretaria.composeapp.generated.resources.leave_shared_reminder_success
+import secretaria.composeapp.generated.resources.leave_shared_reminder_title
 import secretaria.composeapp.generated.resources.reminder_complete_action
 import secretaria.composeapp.generated.resources.reminder_completed_error
 import secretaria.composeapp.generated.resources.reminder_completed_feedback
@@ -106,14 +124,32 @@ import secretaria.composeapp.generated.resources.reminder_due_add
 import secretaria.composeapp.generated.resources.reminder_due_add_time
 import secretaria.composeapp.generated.resources.reminder_due_clear
 import secretaria.composeapp.generated.resources.reminder_due_clear_time
+import secretaria.composeapp.generated.resources.reminder_due_switch
 import secretaria.composeapp.generated.resources.reminder_due_with_time
+import secretaria.composeapp.generated.resources.reminder_options
 import secretaria.composeapp.generated.resources.reminder_restore_action
 import secretaria.composeapp.generated.resources.reminder_restored_error
 import secretaria.composeapp.generated.resources.reminder_restored_feedback
+import secretaria.composeapp.generated.resources.reminder_shared_badge
 import secretaria.composeapp.generated.resources.reminders_empty
 import secretaria.composeapp.generated.resources.reminders_error_generic
 import secretaria.composeapp.generated.resources.reminders_title
 import secretaria.composeapp.generated.resources.reorder_reminder_handle
+import secretaria.composeapp.generated.resources.share_list
+import secretaria.composeapp.generated.resources.share_list_available_friends
+import secretaria.composeapp.generated.resources.share_list_private
+import secretaria.composeapp.generated.resources.share_list_shared_with_count_many
+import secretaria.composeapp.generated.resources.share_list_shared_with_count_one
+import secretaria.composeapp.generated.resources.share_list_shared_with_many
+import secretaria.composeapp.generated.resources.share_list_shared_with_one
+import secretaria.composeapp.generated.resources.share_list_shared_with_you
+import secretaria.composeapp.generated.resources.share_reminder_current_access
+import secretaria.composeapp.generated.resources.share_reminder_empty_friends
+import secretaria.composeapp.generated.resources.share_reminder_no_available_friends
+import secretaria.composeapp.generated.resources.share_reminder_success
+import secretaria.composeapp.generated.resources.share_reminder_title
+import secretaria.composeapp.generated.resources.unshare_list
+import secretaria.composeapp.generated.resources.unshare_reminder_success
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -130,11 +166,15 @@ fun RemindersScreen(
     onBack: (() -> Unit)? = null,
     bottomBar: @Composable () -> Unit = {},
 ) {
+    val currentUserId = koinInject<AuthRepository>().currentUserId
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showCreateDialog by remember { mutableStateOf(false) }
     var reminderToEdit by remember { mutableStateOf<Reminder?>(null) }
     var reminderToDelete by remember { mutableStateOf<Reminder?>(null) }
+    var reminderForOptions by remember { mutableStateOf<Reminder?>(null) }
+    var reminderToShare by remember { mutableStateOf<Reminder?>(null) }
+    var reminderToLeave by remember { mutableStateOf<Reminder?>(null) }
 
     LaunchedEffect(viewModel) {
         viewModel.load()
@@ -146,9 +186,25 @@ fun RemindersScreen(
         onConsume = viewModel::consumeFeedback,
     )
 
+    ReminderSharingFeedbackHost(
+        feedback = state.shareFeedback,
+        snackbarHostState = snackbarHostState,
+        onConsume = viewModel::consumeShareFeedback,
+    )
+
+    LaunchedEffect(reminderToShare?.key) {
+        val selectedReminder = reminderToShare ?: return@LaunchedEffect
+        viewModel.loadShareableFriends(selectedReminder)
+    }
+
     onBack?.let { navigateBack ->
         PlatformBackHandler(
-            enabled = !showCreateDialog && reminderToEdit == null && reminderToDelete == null,
+            enabled = !showCreateDialog &&
+                reminderToEdit == null &&
+                reminderToDelete == null &&
+                reminderForOptions == null &&
+                reminderToShare == null &&
+                reminderToLeave == null,
             onBack = navigateBack,
         )
     }
@@ -212,7 +268,7 @@ fun RemindersScreen(
                 initialDue = reminder.due,
                 onDismiss = { reminderToEdit = null },
                 onConfirm = { text, due ->
-                    viewModel.updateReminder(reminder.id, text, due)
+                    viewModel.updateReminder(reminder.key, text, due)
                     reminderToEdit = null
                 },
             )
@@ -223,8 +279,56 @@ fun RemindersScreen(
                 reminderText = reminder.text,
                 onDismiss = { reminderToDelete = null },
                 onConfirm = {
-                    viewModel.deleteReminder(reminder.id)
+                    viewModel.deleteReminder(reminder.key)
                     reminderToDelete = null
+                },
+            )
+        }
+
+        reminderForOptions?.let { reminder ->
+            ReminderOptionsDialog(
+                reminder = reminder,
+                currentUserId = currentUserId,
+                onShare = {
+                    reminderToShare = reminder
+                    reminderForOptions = null
+                },
+                onDelete = {
+                    reminderToDelete = reminder
+                    reminderForOptions = null
+                },
+                onLeaveShared = {
+                    reminderToLeave = reminder
+                    reminderForOptions = null
+                },
+                onDismiss = { reminderForOptions = null },
+            )
+        }
+
+        reminderToShare?.let { reminder ->
+            ShareReminderDialog(
+                reminderText = reminder.text,
+                collaborators = state.collaboratorsByReminderId[reminder.id].orEmpty(),
+                friends = state.shareableFriends,
+                isLoading = state.isLoadingShareableFriends,
+                isUpdatingSharing = state.isUpdatingSharing,
+                errorMessage = state.shareErrorMessage,
+                onShare = { friend -> viewModel.shareReminder(reminder, friend) },
+                onUnshare = { collaborator -> viewModel.unshareReminder(reminder, collaborator) },
+                onDismiss = {
+                    reminderToShare = null
+                    viewModel.clearShareState()
+                },
+            )
+        }
+
+        reminderToLeave?.let { reminder ->
+            LeaveSharedReminderDialog(
+                reminderText = reminder.text,
+                onDismiss = { reminderToLeave = null },
+                onConfirm = {
+                    viewModel.leaveSharedReminder(reminder)
+                    reminderToLeave = null
                 },
             )
         }
@@ -267,10 +371,12 @@ fun RemindersScreen(
 
                         else -> PendingRemindersContent(
                             reminders = pending,
+                            currentUserId = currentUserId,
+                            collaboratorsByReminderId = state.collaboratorsByReminderId,
                             onReminderClick = { reminderToEdit = it },
-                            onReminderLongClick = { reminderToDelete = it },
+                            onReminderLongClick = { reminderForOptions = it },
                             onReminderCompleted = { reminder ->
-                                viewModel.setReminderCompleted(reminder.id, completed = true)
+                                viewModel.setReminderCompleted(reminder.key, completed = true)
                             },
                             onRemindersReordered = viewModel::reorderReminders,
                         )
@@ -295,9 +401,12 @@ fun CompletedRemindersScreen(
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val currentUserId = koinInject<AuthRepository>().currentUserId
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var reminderToDelete by remember { mutableStateOf<Reminder?>(null) }
+    var reminderForOptions by remember { mutableStateOf<Reminder?>(null) }
+    var reminderToLeave by remember { mutableStateOf<Reminder?>(null) }
 
     ReminderFeedbackHost(
         feedback = state.feedback,
@@ -306,7 +415,9 @@ fun CompletedRemindersScreen(
     )
 
     PlatformBackHandler(
-        enabled = reminderToDelete == null,
+        enabled = reminderToDelete == null &&
+            reminderForOptions == null &&
+            reminderToLeave == null,
         onBack = onBack,
     )
 
@@ -339,8 +450,38 @@ fun CompletedRemindersScreen(
                 reminderText = reminder.text,
                 onDismiss = { reminderToDelete = null },
                 onConfirm = {
-                    viewModel.deleteReminder(reminder.id)
+                    viewModel.deleteReminder(reminder.key)
                     reminderToDelete = null
+                },
+            )
+        }
+
+        reminderForOptions?.let { reminder ->
+            ReminderOptionsDialog(
+                reminder = reminder,
+                currentUserId = currentUserId,
+                // Compartir un completado no aporta nada: solo queda gestionar el acceso ya dado.
+                canShare = false,
+                onShare = {},
+                onDelete = {
+                    reminderToDelete = reminder
+                    reminderForOptions = null
+                },
+                onLeaveShared = {
+                    reminderToLeave = reminder
+                    reminderForOptions = null
+                },
+                onDismiss = { reminderForOptions = null },
+            )
+        }
+
+        reminderToLeave?.let { reminder ->
+            LeaveSharedReminderDialog(
+                reminderText = reminder.text,
+                onDismiss = { reminderToLeave = null },
+                onConfirm = {
+                    viewModel.leaveSharedReminder(reminder)
+                    reminderToLeave = null
                 },
             )
         }
@@ -374,16 +515,21 @@ fun CompletedRemindersScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(completed, key = Reminder::id) { reminder ->
+                    items(completed, key = { reminder -> "${reminder.ownerId}/${reminder.id}" }) { reminder ->
                         ReminderCard(
                             reminder = reminder,
                             textDecoration = TextDecoration.LineThrough,
                             onClick = {},
-                            onLongClick = { reminderToDelete = reminder },
+                            onLongClick = { reminderForOptions = reminder },
+                            sharingSummary = reminderSharingSummary(
+                                reminder = reminder,
+                                collaborators = state.collaboratorsByReminderId[reminder.id].orEmpty(),
+                                currentUserId = currentUserId,
+                            ),
                             leading = {
                                 IconButton(
                                     onClick = {
-                                        viewModel.setReminderCompleted(reminder.id, completed = false)
+                                        viewModel.setReminderCompleted(reminder.key, completed = false)
                                     },
                                 ) {
                                     Icon(
@@ -422,15 +568,17 @@ fun CompletedRemindersScreen(
 @Composable
 private fun PendingRemindersContent(
     reminders: List<Reminder>,
+    currentUserId: String?,
+    collaboratorsByReminderId: Map<String, List<ListCollaborator>>,
     onReminderClick: (Reminder) -> Unit,
     onReminderLongClick: (Reminder) -> Unit,
     onReminderCompleted: (Reminder) -> Unit,
-    onRemindersReordered: (List<String>) -> Unit,
+    onRemindersReordered: (List<ReminderKey>) -> Unit,
 ) {
     val lazyListState = rememberLazyListState()
     val now = remember { Clock.System.now() }
     var displayReminders by remember { mutableStateOf(reminders) }
-    var pressedDragHandleReminderId by remember { mutableStateOf<String?>(null) }
+    var pressedDragHandleReminderKey by remember { mutableStateOf<ReminderKey?>(null) }
     val reorderState = remember(lazyListState) {
         NotesReorderState(lazyListState) { fromIndex, toIndex ->
             displayReminders = displayReminders.moveReminder(fromIndex, toIndex)
@@ -449,19 +597,22 @@ private fun PendingRemindersContent(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        itemsIndexed(displayReminders, key = { _, reminder -> reminder.id }) { index, reminder ->
+        itemsIndexed(
+            displayReminders,
+            key = { _, reminder -> "${reminder.ownerId}/${reminder.id}" },
+        ) { index, reminder ->
             val currentIndex by rememberUpdatedState(index)
             val dragHandleModifier = Modifier
                 .size(40.dp)
-                .pointerInput(reminder.id) {
+                .pointerInput(reminder.key) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
-                        pressedDragHandleReminderId = reminder.id
+                        pressedDragHandleReminderKey = reminder.key
                         waitForUpOrCancellation()
-                        pressedDragHandleReminderId = null
+                        pressedDragHandleReminderKey = null
                     }
                 }
-                .pointerInput(reminder.id) {
+                .pointerInput(reminder.key) {
                     detectDragGesturesAfterLongPress(
                         onDragStart = { reorderState.startDrag(currentIndex) },
                         onDrag = { change, dragAmount ->
@@ -469,7 +620,7 @@ private fun PendingRemindersContent(
                             reorderState.dragBy(dragAmount.y)
                         },
                         onDragEnd = {
-                            onRemindersReordered(displayReminders.map(Reminder::id))
+                            onRemindersReordered(displayReminders.map(Reminder::key))
                             reorderState.endDrag()
                         },
                         onDragCancel = {
@@ -492,10 +643,15 @@ private fun PendingRemindersContent(
                     .zIndex(if (isDragged) 1f else 0f),
                 onClick = { onReminderClick(reminder) },
                 onLongClick = {
-                    if (pressedDragHandleReminderId != reminder.id) {
+                    if (pressedDragHandleReminderKey != reminder.key) {
                         onReminderLongClick(reminder)
                     }
                 },
+                sharingSummary = reminderSharingSummary(
+                    reminder = reminder,
+                    collaborators = collaboratorsByReminderId[reminder.id].orEmpty(),
+                    currentUserId = currentUserId,
+                ),
                 leading = {
                     IconButton(onClick = { onReminderCompleted(reminder) }) {
                         Icon(
@@ -535,6 +691,7 @@ internal fun ReminderCard(
     leading: @Composable () -> Unit,
     trailing: (@Composable () -> Unit)? = null,
     secondaryContent: (@Composable () -> Unit)? = null,
+    sharingSummary: String? = null,
     textDecoration: TextDecoration? = null,
 ) {
     Card(
@@ -564,6 +721,7 @@ internal fun ReminderCard(
                     style = MaterialTheme.typography.bodyLarge,
                     textDecoration = textDecoration,
                 )
+                sharingSummary?.let { summary -> ReminderSharingBadge(summary) }
                 secondaryContent?.invoke()
             }
             trailing?.invoke()
@@ -574,6 +732,9 @@ internal fun ReminderCard(
 /**
  * Mismo dialogo para crear y editar: el texto es lo unico obligatorio, y la hora solo se ofrece
  * cuando ya hay fecha, porque el modelo no admite hora suelta.
+ *
+ * El vencimiento esta detras de un interruptor: la mayoria de recordatorios no lo llevan, asi que
+ * los botones de fecha y hora solo aparecen cuando el usuario los pide.
  */
 @Composable
 private fun ReminderEditorDialog(
@@ -586,6 +747,7 @@ private fun ReminderEditorDialog(
 ) {
     var text by remember { mutableStateOf(initialText) }
     var due by remember { mutableStateOf(initialDue) }
+    var isDueEnabled by remember { mutableStateOf(initialDue != null) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
 
@@ -636,18 +798,37 @@ private fun ReminderEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                ReminderDueEditor(
-                    due = due,
-                    onPickDate = { showDatePicker = true },
-                    onPickTime = { showTimePicker = true },
-                    onClearDate = { due = null },
-                    onClearTime = { due = due?.copy(time = null) },
-                )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(stringResource(Res.string.reminder_due_switch))
+                    Switch(
+                        checked = isDueEnabled,
+                        onCheckedChange = { enabled ->
+                            isDueEnabled = enabled
+                            // Apagar el interruptor es la forma de quitar el vencimiento.
+                            if (!enabled) due = null
+                        },
+                    )
+                }
+
+                if (isDueEnabled) {
+                    ReminderDueEditor(
+                        due = due,
+                        onPickDate = { showDatePicker = true },
+                        onPickTime = { showTimePicker = true },
+                        onClearDate = { due = null },
+                        onClearTime = { due = due?.copy(time = null) },
+                    )
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(text.trim(), due) },
+                onClick = { onConfirm(text.trim(), due.takeIf { isDueEnabled }) },
                 enabled = text.isNotBlank(),
             ) {
                 Text(confirmLabel)
@@ -757,6 +938,12 @@ private fun ReminderFeedbackHost(
             }
 
             ReminderFeedbackAction.DELETED -> stringResource(Res.string.reminder_deleted_error)
+
+            ReminderFeedbackAction.LEFT_SHARED -> if (current.isSuccess) {
+                stringResource(Res.string.leave_shared_reminder_success)
+            } else {
+                stringResource(Res.string.leave_shared_reminder_error)
+            }
         }
     }
 
@@ -872,4 +1059,351 @@ internal fun DeleteReminderDialog(
             }
         },
     )
+}
+
+/** Mismo patron que [ReminderFeedbackHost]: traducir fuera del `LaunchedEffect`. */
+@Composable
+private fun ReminderSharingFeedbackHost(
+    feedback: ReminderSharingFeedback?,
+    snackbarHostState: SnackbarHostState,
+    onConsume: () -> Unit,
+) {
+    val message = feedback?.let { current ->
+        when (current.action) {
+            ReminderSharingAction.SHARED -> stringResource(
+                Res.string.share_reminder_success,
+                current.friendName,
+            )
+
+            ReminderSharingAction.UNSHARED -> stringResource(
+                Res.string.unshare_reminder_success,
+                current.friendName,
+            )
+        }
+    }
+
+    LaunchedEffect(message) {
+        val currentMessage = message ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(currentMessage)
+        onConsume()
+    }
+}
+
+/**
+ * La pulsacion larga abre las opciones en lugar de borrar directamente: es el mismo patron que
+ * `ListOptionsDialog`, y ahora hay mas de una accion posible sobre un recordatorio.
+ */
+@Composable
+private fun ReminderOptionsDialog(
+    reminder: Reminder,
+    currentUserId: String?,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
+    onLeaveShared: () -> Unit,
+    onDismiss: () -> Unit,
+    canShare: Boolean = true,
+) {
+    val isOwner = currentUserId != null && reminder.ownerId == currentUserId
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        title = { Text(reminder.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(bottom = 4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                )
+                if (isOwner) {
+                    if (canShare) {
+                        ReminderOptionRow(
+                            icon = Icons.Outlined.Share,
+                            label = stringResource(Res.string.share_list),
+                            onClick = onShare,
+                        )
+                    }
+                    ReminderOptionRow(
+                        icon = Icons.Outlined.DeleteOutline,
+                        label = stringResource(Res.string.delete),
+                        tint = MaterialTheme.colorScheme.error,
+                        textColor = MaterialTheme.colorScheme.error,
+                        onClick = onDelete,
+                    )
+                } else {
+                    ReminderOptionRow(
+                        icon = Icons.Outlined.DeleteOutline,
+                        label = stringResource(Res.string.leave_shared_reminder),
+                        tint = MaterialTheme.colorScheme.error,
+                        textColor = MaterialTheme.colorScheme.error,
+                        onClick = onLeaveShared,
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun ReminderOptionRow(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    tint: Color = MaterialTheme.colorScheme.primary,
+    textColor: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = tint)
+        Spacer(Modifier.width(16.dp))
+        Text(
+            text = label,
+            color = textColor,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+    }
+}
+
+/** Calcado de `ShareListDialog`: compartir un recordatorio funciona igual que compartir una lista. */
+@Composable
+private fun ShareReminderDialog(
+    reminderText: String,
+    collaborators: List<ListCollaborator>,
+    friends: List<FriendSummary>,
+    isLoading: Boolean,
+    isUpdatingSharing: Boolean,
+    errorMessage: String?,
+    onShare: (FriendSummary) -> Unit,
+    onUnshare: (ListCollaborator) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        title = { Text(stringResource(Res.string.share_reminder_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = reminderText,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                )
+
+                if (!errorMessage.isNullOrBlank()) {
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+
+                if (isLoading) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 360.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        ReminderSharingSectionTitle(
+                            stringResource(Res.string.share_reminder_current_access),
+                        )
+
+                        if (collaborators.isEmpty()) {
+                            Text(
+                                text = stringResource(Res.string.share_list_private),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            collaborators.forEach { collaborator ->
+                                ReminderSharingRow(
+                                    name = collaborator.name,
+                                    actionLabel = stringResource(Res.string.unshare_list),
+                                    actionColor = MaterialTheme.colorScheme.error,
+                                    enabled = !isUpdatingSharing,
+                                    onAction = { onUnshare(collaborator) },
+                                )
+                            }
+                        }
+
+                        ReminderSharingSectionTitle(
+                            stringResource(Res.string.share_list_available_friends),
+                        )
+
+                        if (friends.isEmpty()) {
+                            Text(
+                                text = if (collaborators.isEmpty()) {
+                                    stringResource(Res.string.share_reminder_empty_friends)
+                                } else {
+                                    stringResource(Res.string.share_reminder_no_available_friends)
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            friends.forEach { friend ->
+                                ReminderSharingRow(
+                                    name = friend.name,
+                                    actionLabel = stringResource(Res.string.share_list),
+                                    actionColor = MaterialTheme.colorScheme.primary,
+                                    enabled = !isUpdatingSharing,
+                                    onAction = { onShare(friend) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(
+                enabled = !isUpdatingSharing,
+                onClick = onDismiss,
+            ) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun ReminderSharingRow(
+    name: String,
+    actionLabel: String,
+    actionColor: Color,
+    enabled: Boolean,
+    onAction: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = name,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(enabled = enabled, onClick = onAction) {
+            Text(text = actionLabel, color = actionColor)
+        }
+    }
+}
+
+@Composable
+private fun ReminderSharingSectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+    )
+}
+
+@Composable
+private fun LeaveSharedReminderDialog(
+    reminderText: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        title = { Text(stringResource(Res.string.leave_shared_reminder_title)) },
+        text = { Text(stringResource(Res.string.leave_shared_reminder_message, reminderText)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(Res.string.leave_shared_reminder))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun ReminderSharingBadge(summary: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Share,
+            contentDescription = stringResource(Res.string.reminder_shared_badge),
+            modifier = Modifier.size(14.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = summary,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+/** Mismo texto que en las listas: "contigo" en lo ajeno y "con Fulano" en lo propio. */
+@Composable
+private fun reminderSharingSummary(
+    reminder: Reminder,
+    collaborators: List<ListCollaborator>,
+    currentUserId: String?,
+): String? {
+    if (currentUserId == null) return null
+    if (reminder.ownerId != currentUserId) {
+        return if (reminder.isShared) stringResource(Res.string.share_list_shared_with_you) else null
+    }
+
+    val sharedCount = reminder.sharedWithUserIds.size
+    if (sharedCount == 0) return null
+
+    val firstResolvedCollaborator = collaborators.firstOrNull { it.isResolvedName }
+    return when {
+        firstResolvedCollaborator == null -> if (sharedCount == 1) {
+            stringResource(Res.string.share_list_shared_with_count_one)
+        } else {
+            stringResource(Res.string.share_list_shared_with_count_many, sharedCount)
+        }
+
+        sharedCount == 1 -> stringResource(
+            Res.string.share_list_shared_with_one,
+            firstResolvedCollaborator.name,
+        )
+
+        else -> stringResource(
+            Res.string.share_list_shared_with_many,
+            firstResolvedCollaborator.name,
+            sharedCount - 1,
+        )
+    }
 }

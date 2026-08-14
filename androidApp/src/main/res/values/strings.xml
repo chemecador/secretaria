@@ -4,4 +4,6 @@
     <string name="channel_list_shared_desc">Avisos cuando comparten una lista o añaden notas en una lista compartida.</string>
     <string name="channel_friend_requests_name">Solicitudes de amistad</string>
     <string name="channel_friend_requests_desc">Avisos cuando te llega una nueva solicitud de amistad.</string>
+    <string name="channel_reminder_shared_name">Recordatorios compartidos</string>
+    <string name="channel_reminder_shared_desc">Avisos cuando alguien comparte un recordatorio contigo.</string>
 </resources>

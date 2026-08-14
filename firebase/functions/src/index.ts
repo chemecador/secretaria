@@ -15,6 +15,7 @@ const FCM_TOKENS_COLLECTION = "fcm_tokens";
 const NOTES_LIST_COLLECTION = "noteslist";
 const NOTES_COLLECTION = "notes";
 const CHANNEL_LIST_SHARED = "list_shared";
+const CHANNEL_REMINDER_SHARED = "reminder_shared";
 const CHANNEL_FRIEND_REQUESTS = "friend_requests";
 const CLICK_ACTION_OPEN_LIST = "com.chemecador.secretaria.OPEN_LIST";
 
@@ -62,6 +63,41 @@ export const onListShared = onDocumentUpdated(
             Boolean(after.ordered),
             Boolean(after.isGroup),
           ),
+        });
+      }),
+    );
+  },
+);
+
+/**
+ * Un recordatorio compartido tiene un unico array `contributors`: no hay grupos ni
+ * `directContributors` como en las listas, asi que basta comparar el antes y el despues.
+ */
+export const onReminderShared = onDocumentUpdated(
+  "users/{userId}/reminders/{reminderId}",
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+
+    const ownerId = event.params.userId;
+    const oldContributors = asStringList(before.contributors);
+    const newContributors = asStringList(after.contributors);
+    const added = newContributors.filter(
+      (uid) => !oldContributors.includes(uid) && uid !== ownerId,
+    );
+    if (added.length === 0) return;
+
+    const reminderText = asNonBlankString(after.text) ?? "Recordatorio sin texto";
+
+    await Promise.all(
+      added.map(async (uid) => {
+        await sendPushToUser(uid, {
+          title: "Nuevo recordatorio compartido",
+          body: reminderText,
+          channelId: CHANNEL_REMINDER_SHARED,
+          type: "reminder_shared",
+          tag: `reminder_shared_${ownerId}_${event.params.reminderId}`,
         });
       }),
     );

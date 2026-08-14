@@ -1,5 +1,11 @@
 package com.chemecador.secretaria.reminders
 
+import com.chemecador.secretaria.friends.FriendSummary
+import com.chemecador.secretaria.friends.FriendsRepository
+import com.chemecador.secretaria.friends.IncomingFriendRequest
+import com.chemecador.secretaria.friends.OutgoingFriendRequest
+import com.chemecador.secretaria.login.AuthRepository
+import com.chemecador.secretaria.noteslists.ListCollaborator
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -103,7 +109,7 @@ class RemindersViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf("vigente", "reciente"), viewModel.state.value.reminders.map(Reminder::id))
-        assertEquals(listOf(listOf("caducado")), repository.deleteCalls)
+        assertEquals(listOf(keys("caducado")), repository.deleteCalls)
     }
 
     @Test
@@ -142,7 +148,7 @@ class RemindersViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        viewModel.setReminderCompleted("r1", completed = true)
+        viewModel.setReminderCompleted(key("r1"), completed = true)
 
         // Sin avanzar el dispatcher: el estado ya refleja el cambio.
         val optimistic = viewModel.state.value.reminders.single()
@@ -165,7 +171,7 @@ class RemindersViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        viewModel.setReminderCompleted("r1", completed = true)
+        viewModel.setReminderCompleted(key("r1"), completed = true)
         advanceUntilIdle()
 
         val reminder = viewModel.state.value.reminders.single()
@@ -188,7 +194,7 @@ class RemindersViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        viewModel.setReminderCompleted("restaurable", completed = false)
+        viewModel.setReminderCompleted(key("restaurable"), completed = false)
         advanceUntilIdle()
 
         val restored = viewModel.state.value.reminders.single { it.id == "restaurable" }
@@ -206,7 +212,7 @@ class RemindersViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        viewModel.reorderReminders(listOf("c", "a", "b"))
+        viewModel.reorderReminders(keys("c", "a", "b"))
 
         assertEquals(
             listOf("c", "a", "b"),
@@ -214,7 +220,7 @@ class RemindersViewModelTest {
         )
 
         advanceUntilIdle()
-        assertEquals(listOf(listOf("c", "a", "b")), repository.reorderCalls)
+        assertEquals(listOf(keys("c", "a", "b")), repository.reorderCalls)
     }
 
     @Test
@@ -227,7 +233,7 @@ class RemindersViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        viewModel.reorderReminders(listOf("b", "a"))
+        viewModel.reorderReminders(keys("b", "a"))
         advanceUntilIdle()
 
         assertEquals(
@@ -250,7 +256,7 @@ class RemindersViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        viewModel.reorderReminders(listOf("b", "a"))
+        viewModel.reorderReminders(keys("b", "a"))
         advanceUntilIdle()
 
         assertEquals(
@@ -267,7 +273,7 @@ class RemindersViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        viewModel.setReminderCompleted("r1", completed = true)
+        viewModel.setReminderCompleted(key("r1"), completed = true)
         advanceUntilIdle()
         assertTrue(viewModel.state.value.feedback != null)
 
@@ -276,11 +282,138 @@ class RemindersViewModelTest {
         assertNull(viewModel.state.value.feedback)
     }
 
-    private fun buildViewModel(repository: RemindersRepository): RemindersViewModel =
-        RemindersViewModel(repository = repository, nowProvider = { NOW })
+    @Test
+    fun loadShareableFriends_hidesFriendsThatAlreadyHaveAccess() = runTest(dispatcher) {
+        val shared = pending("r1", order = 0).withContributors(listOf("marta"))
+        val repository = TestRemindersRepository(initial = listOf(shared))
+        val viewModel = buildViewModel(repository)
+        viewModel.load()
+        advanceUntilIdle()
 
-    private fun pending(id: String, order: Int): Reminder = Reminder(
+        viewModel.loadShareableFriends(shared)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.shareableFriends.isEmpty())
+        assertEquals(
+            listOf("Marta"),
+            viewModel.state.value.collaboratorsByReminderId["r1"]?.map { it.name },
+        )
+    }
+
+    @Test
+    fun shareReminder_addsTheContributorAndReportsIt() = runTest(dispatcher) {
+        val reminder = pending("r1", order = 0)
+        val repository = TestRemindersRepository(initial = listOf(reminder))
+        val viewModel = buildViewModel(repository)
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.shareReminder(reminder, FRIEND)
+        advanceUntilIdle()
+
+        assertEquals(listOf("r1" to "marta"), repository.shareCalls)
+        val updated = viewModel.state.value.reminders.single()
+        assertEquals(listOf("marta"), updated.sharedWithUserIds)
+        assertTrue(updated.isShared)
+        assertEquals(ReminderSharingAction.SHARED, viewModel.state.value.shareFeedback?.action)
+    }
+
+    @Test
+    fun shareReminder_isRejectedForRemindersOwnedBySomeoneElse() = runTest(dispatcher) {
+        val foreign = pending("r1", order = 0, ownerId = "marta")
+        val repository = TestRemindersRepository(initial = listOf(foreign))
+        val viewModel = buildViewModel(repository)
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.shareReminder(foreign, FRIEND)
+        advanceUntilIdle()
+
+        assertTrue(repository.shareCalls.isEmpty())
+        assertTrue(viewModel.state.value.shareErrorMessage != null)
+    }
+
+    @Test
+    fun unshareReminder_removesTheContributorAndReportsIt() = runTest(dispatcher) {
+        val shared = pending("r1", order = 0).withContributors(listOf("marta"))
+        val repository = TestRemindersRepository(initial = listOf(shared))
+        val viewModel = buildViewModel(repository)
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.unshareReminder(
+            shared,
+            ListCollaborator(userId = "marta", name = "Marta"),
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf("r1" to "marta"), repository.unshareCalls)
+        val updated = viewModel.state.value.reminders.single()
+        assertTrue(updated.sharedWithUserIds.isEmpty())
+        assertEquals(ReminderSharingAction.UNSHARED, viewModel.state.value.shareFeedback?.action)
+    }
+
+    @Test
+    fun leaveSharedReminder_dropsItFromTheListWithFeedback() = runTest(dispatcher) {
+        val foreign = pending("r1", order = 0, ownerId = "marta")
+        val repository = TestRemindersRepository(initial = listOf(foreign))
+        val viewModel = buildViewModel(repository)
+        viewModel.load()
+        advanceUntilIdle()
+
+        viewModel.leaveSharedReminder(foreign)
+        advanceUntilIdle()
+
+        assertEquals(listOf(ReminderKey("marta", "r1")), repository.leaveCalls)
+        assertTrue(viewModel.state.value.reminders.isEmpty())
+        assertEquals(ReminderFeedbackAction.LEFT_SHARED, viewModel.state.value.feedback?.action)
+        assertTrue(viewModel.state.value.feedback?.isSuccess == true)
+    }
+
+    @Test
+    fun load_purgeOnlyTouchesRemindersOwnedByTheCurrentUser() = runTest(dispatcher) {
+        val repository = TestRemindersRepository(
+            initial = listOf(
+                completed("propio", completedAt = NOW - 40.days),
+                Reminder(
+                    id = "ajeno",
+                    ownerId = "marta",
+                    text = "ajeno",
+                    createdAt = NOW - 100.days,
+                    completed = true,
+                    completedAt = NOW - 40.days,
+                    order = 99,
+                ),
+            ),
+        )
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        assertEquals(listOf(keys("propio")), repository.deleteCalls)
+        assertEquals(listOf("ajeno"), viewModel.state.value.reminders.map(Reminder::id))
+    }
+
+    private fun buildViewModel(
+        repository: RemindersRepository,
+        friendsRepository: FriendsRepository = TestFriendsRepository(),
+        currentUserId: String? = OWNER_ID,
+    ): RemindersViewModel =
+        RemindersViewModel(
+            repository = repository,
+            authRepository = TestAuthRepository(currentUserId),
+            friendsRepository = friendsRepository,
+            nowProvider = { NOW },
+        )
+
+    private fun key(id: String, ownerId: String = OWNER_ID): ReminderKey = ReminderKey(ownerId, id)
+
+    private fun keys(vararg ids: String): List<ReminderKey> = ids.map { id -> key(id) }
+
+    private fun pending(id: String, order: Int, ownerId: String = OWNER_ID): Reminder = Reminder(
         id = id,
+        ownerId = ownerId,
         text = id,
         createdAt = NOW - 100.days,
         order = order,
@@ -288,6 +421,7 @@ class RemindersViewModelTest {
 
     private fun completed(id: String, completedAt: Instant): Reminder = Reminder(
         id = id,
+        ownerId = OWNER_ID,
         text = id,
         createdAt = NOW - 100.days,
         completed = true,
@@ -315,22 +449,31 @@ class RemindersViewModelTest {
             throw UnsupportedOperationException()
 
         override suspend fun updateReminder(
-            reminderId: String,
+            key: ReminderKey,
             text: String,
             due: ReminderDue?,
         ): Result<Reminder> = throw UnsupportedOperationException()
 
         override suspend fun setReminderCompleted(
-            reminderId: String,
+            key: ReminderKey,
             completed: Boolean,
             completedAt: Instant?,
             order: Int,
         ): Result<Unit> = throw UnsupportedOperationException()
 
-        override suspend fun reorderReminders(reminderIdsInOrder: List<String>): Result<Unit> =
+        override suspend fun reorderReminders(reminderKeysInOrder: List<ReminderKey>): Result<Unit> =
             throw UnsupportedOperationException()
 
-        override suspend fun deleteReminders(reminderIds: List<String>): Result<Unit> =
+        override suspend fun deleteReminders(reminderKeys: List<ReminderKey>): Result<Unit> =
+            throw UnsupportedOperationException()
+
+        override suspend fun shareReminder(reminderId: String, friendUserId: String): Result<Unit> =
+            throw UnsupportedOperationException()
+
+        override suspend fun unshareReminder(reminderId: String, friendUserId: String): Result<Unit> =
+            throw UnsupportedOperationException()
+
+        override suspend fun leaveSharedReminder(key: ReminderKey): Result<Unit> =
             throw UnsupportedOperationException()
     }
 
@@ -341,11 +484,16 @@ class RemindersViewModelTest {
         private val completeFailure: Throwable? = null,
         private val reorderFailure: Throwable? = null,
         private val deleteFailure: Throwable? = null,
+        private val shareFailure: Throwable? = null,
+        private val leaveFailure: Throwable? = null,
     ) : RemindersRepository {
 
         val reminders = initial.toMutableList()
-        val deleteCalls = mutableListOf<List<String>>()
-        val reorderCalls = mutableListOf<List<String>>()
+        val deleteCalls = mutableListOf<List<ReminderKey>>()
+        val reorderCalls = mutableListOf<List<ReminderKey>>()
+        val shareCalls = mutableListOf<Pair<String, String>>()
+        val unshareCalls = mutableListOf<Pair<String, String>>()
+        val leaveCalls = mutableListOf<ReminderKey>()
 
         override suspend fun getReminders(): Result<List<Reminder>> =
             getFailure?.let { Result.failure(it) } ?: Result.success(reminders.toList())
@@ -353,6 +501,7 @@ class RemindersViewModelTest {
         override suspend fun createReminder(text: String, due: ReminderDue?): Result<Reminder> {
             val created = Reminder(
                 id = "created-${reminders.size + 1}",
+                ownerId = OWNER_ID,
                 text = text,
                 createdAt = Instant.fromEpochMilliseconds(0),
                 due = due,
@@ -363,11 +512,11 @@ class RemindersViewModelTest {
         }
 
         override suspend fun updateReminder(
-            reminderId: String,
+            key: ReminderKey,
             text: String,
             due: ReminderDue?,
         ): Result<Reminder> {
-            val index = reminders.indexOfFirst { it.id == reminderId }
+            val index = reminders.indexOfFirst { it.key == key }
             if (index == -1) return Result.failure(IllegalStateException("Reminder not found"))
             val updated = reminders[index].copy(text = text, due = due)
             reminders[index] = updated
@@ -375,13 +524,13 @@ class RemindersViewModelTest {
         }
 
         override suspend fun setReminderCompleted(
-            reminderId: String,
+            key: ReminderKey,
             completed: Boolean,
             completedAt: Instant?,
             order: Int,
         ): Result<Unit> {
             completeFailure?.let { return Result.failure(it) }
-            val index = reminders.indexOfFirst { it.id == reminderId }
+            val index = reminders.indexOfFirst { it.key == key }
             if (index == -1) return Result.failure(IllegalStateException("Reminder not found"))
             reminders[index] = reminders[index].copy(
                 completed = completed,
@@ -391,11 +540,11 @@ class RemindersViewModelTest {
             return Result.success(Unit)
         }
 
-        override suspend fun reorderReminders(reminderIdsInOrder: List<String>): Result<Unit> {
-            reorderCalls += reminderIdsInOrder
+        override suspend fun reorderReminders(reminderKeysInOrder: List<ReminderKey>): Result<Unit> {
+            reorderCalls += reminderKeysInOrder
             reorderFailure?.let { return Result.failure(it) }
-            reminderIdsInOrder.forEachIndexed { index, reminderId ->
-                val position = reminders.indexOfFirst { it.id == reminderId }
+            reminderKeysInOrder.forEachIndexed { index, key ->
+                val position = reminders.indexOfFirst { it.key == key }
                 if (position != -1) {
                     reminders[position] = reminders[position].copy(order = index)
                 }
@@ -403,15 +552,98 @@ class RemindersViewModelTest {
             return Result.success(Unit)
         }
 
-        override suspend fun deleteReminders(reminderIds: List<String>): Result<Unit> {
-            deleteCalls += reminderIds
+        override suspend fun deleteReminders(reminderKeys: List<ReminderKey>): Result<Unit> {
+            deleteCalls += reminderKeys
             deleteFailure?.let { return Result.failure(it) }
-            reminders.removeAll { it.id in reminderIds }
+            reminders.removeAll { it.key in reminderKeys }
+            return Result.success(Unit)
+        }
+
+        override suspend fun shareReminder(reminderId: String, friendUserId: String): Result<Unit> {
+            shareCalls += reminderId to friendUserId
+            shareFailure?.let { return Result.failure(it) }
+            val index = reminders.indexOfFirst { it.id == reminderId }
+            if (index == -1) return Result.failure(IllegalStateException("Reminder not found"))
+            reminders[index] = reminders[index].withContributors(
+                reminders[index].contributors + friendUserId,
+            )
+            return Result.success(Unit)
+        }
+
+        override suspend fun unshareReminder(
+            reminderId: String,
+            friendUserId: String,
+        ): Result<Unit> {
+            unshareCalls += reminderId to friendUserId
+            shareFailure?.let { return Result.failure(it) }
+            val index = reminders.indexOfFirst { it.id == reminderId }
+            if (index == -1) return Result.failure(IllegalStateException("Reminder not found"))
+            reminders[index] = reminders[index].withContributors(
+                reminders[index].contributors.filterNot { it == friendUserId },
+            )
+            return Result.success(Unit)
+        }
+
+        override suspend fun leaveSharedReminder(key: ReminderKey): Result<Unit> {
+            leaveCalls += key
+            leaveFailure?.let { return Result.failure(it) }
+            reminders.removeAll { it.key == key }
             return Result.success(Unit)
         }
     }
 
+    private class TestAuthRepository(
+        override val currentUserId: String?,
+    ) : AuthRepository {
+        override val currentUserEmail: String? = null
+        override suspend fun login(email: String, password: String): Result<Unit> =
+            throw UnsupportedOperationException()
+
+        override suspend fun signup(email: String, password: String): Result<Unit> =
+            throw UnsupportedOperationException()
+
+        override suspend fun loginWithGoogle(idToken: String?): Result<Unit> =
+            throw UnsupportedOperationException()
+
+        override suspend fun loginAsGuest(): Result<Unit> = throw UnsupportedOperationException()
+        override suspend fun logout(): Result<Unit> = throw UnsupportedOperationException()
+        override suspend fun restoreSession(): Result<Boolean> = Result.success(false)
+    }
+
+    private class TestFriendsRepository(
+        private val friends: List<FriendSummary> = listOf(FRIEND),
+        private val failure: Throwable? = null,
+    ) : FriendsRepository {
+        override suspend fun getMyFriendCode(): Result<String> = Result.success("code")
+
+        override suspend fun getFriends(): Result<List<FriendSummary>> =
+            failure?.let { Result.failure(it) } ?: Result.success(friends)
+
+        override suspend fun getIncomingRequests(): Result<List<IncomingFriendRequest>> =
+            Result.success(emptyList())
+
+        override suspend fun getOutgoingRequests(): Result<List<OutgoingFriendRequest>> =
+            Result.success(emptyList())
+
+        override suspend fun sendFriendRequest(friendCode: String): Result<Unit> =
+            throw UnsupportedOperationException()
+
+        override suspend fun acceptFriendRequest(requestId: String): Result<Unit> =
+            throw UnsupportedOperationException()
+
+        override suspend fun rejectFriendRequest(requestId: String): Result<Unit> =
+            throw UnsupportedOperationException()
+
+        override suspend fun cancelFriendRequest(requestId: String): Result<Unit> =
+            throw UnsupportedOperationException()
+
+        override suspend fun deleteFriend(friendshipId: String): Result<Unit> =
+            throw UnsupportedOperationException()
+    }
+
     private companion object {
+        const val OWNER_ID = "alex"
         val NOW: Instant = Instant.parse("2026-08-13T10:00:00Z")
+        val FRIEND = FriendSummary(friendshipId = "f1", userId = "marta", name = "Marta")
     }
 }

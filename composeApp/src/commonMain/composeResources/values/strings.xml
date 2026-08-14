@@ -217,6 +217,7 @@
     <string name="reminder_restored_feedback">Recordatorio restaurado</string>
     <string name="reminder_restored_error">No se ha podido restaurar el recordatorio.</string>
     <string name="reminder_deleted_error">No se ha podido eliminar el recordatorio.</string>
+    <string name="reminder_due_switch">Recordar en…</string>
     <string name="reminder_due_add">Añadir fecha</string>
     <string name="reminder_due_clear">Quitar fecha</string>
     <string name="reminder_due_add_time">Añadir hora</string>
@@ -225,4 +226,17 @@
     <string name="reminder_completed_on">Completado el %1$s</string>
     <string name="reminder_completed_retention">Los recordatorios completados se eliminan a los 30 días.</string>
     <string name="reorder_reminder_handle">Mantén pulsado para reordenar el recordatorio</string>
+    <string name="reminder_options">Opciones del recordatorio</string>
+    <string name="share_reminder_title">Compartir recordatorio</string>
+    <string name="share_reminder_current_access">Compartido con</string>
+    <string name="share_reminder_empty_friends">Todavía no tienes amigos para compartir este recordatorio.</string>
+    <string name="share_reminder_no_available_friends">No hay más amigos disponibles para compartir este recordatorio.</string>
+    <string name="share_reminder_success">Recordatorio compartido con %1$s.</string>
+    <string name="unshare_reminder_success">El recordatorio ya no está compartido con %1$s.</string>
+    <string name="reminder_shared_badge">Compartido</string>
+    <string name="leave_shared_reminder">Dejar de compartir conmigo</string>
+    <string name="leave_shared_reminder_title">Dejar de compartir conmigo</string>
+    <string name="leave_shared_reminder_message">¿Quieres dejar de ver «%1$s»? El recordatorio no se borrará para su propietario.</string>
+    <string name="leave_shared_reminder_success">El recordatorio ya no aparecerá en tu lista.</string>
+    <string name="leave_shared_reminder_error">No se ha podido dejar de compartir este recordatorio.</string>
 </resources>

@@ -11,18 +11,20 @@ internal fun List<Reminder>.moveReminder(fromIndex: Int, toIndex: Int): List<Rem
     return mutableReminders.normalizeReminderOrder()
 }
 
-internal fun List<Reminder>.applyReminderOrder(reminderIdsInOrder: List<String>): List<Reminder>? {
-    if (size != reminderIdsInOrder.size || reminderIdsInOrder.distinct().size != size) {
+internal fun List<Reminder>.applyReminderOrder(
+    reminderKeysInOrder: List<ReminderKey>,
+): List<Reminder>? {
+    if (size != reminderKeysInOrder.size || reminderKeysInOrder.distinct().size != size) {
         return null
     }
 
-    val remindersById = associateBy(Reminder::id)
-    if (remindersById.size != size || reminderIdsInOrder.any { it !in remindersById }) {
+    val remindersByKey = associateBy(Reminder::key)
+    if (remindersByKey.size != size || reminderKeysInOrder.any { it !in remindersByKey }) {
         return null
     }
 
-    return reminderIdsInOrder.mapIndexed { index, reminderId ->
-        val reminder = remindersById.getValue(reminderId)
+    return reminderKeysInOrder.mapIndexed { index, reminderKey ->
+        val reminder = remindersByKey.getValue(reminderKey)
         if (reminder.order == index) {
             reminder
         } else {

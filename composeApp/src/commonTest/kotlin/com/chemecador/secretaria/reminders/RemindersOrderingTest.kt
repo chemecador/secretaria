@@ -31,7 +31,7 @@ class RemindersOrderingTest {
     fun applyReminderOrder_reassignsOrderFollowingTheGivenIds() {
         val reminders = listOf(reminder("a", order = 0), reminder("b", order = 1), reminder("c", order = 2))
 
-        val reordered = reminders.applyReminderOrder(listOf("b", "c", "a"))
+        val reordered = reminders.applyReminderOrder(keys("b", "c", "a"))
 
         assertEquals(listOf("b", "c", "a"), reordered?.map(Reminder::id))
         assertEquals(listOf(0, 1, 2), reordered?.map(Reminder::order))
@@ -41,27 +41,35 @@ class RemindersOrderingTest {
     fun applyReminderOrder_returnsNullWhenSizesDiffer() {
         val reminders = listOf(reminder("a"), reminder("b"))
 
-        assertNull(reminders.applyReminderOrder(listOf("a")))
+        assertNull(reminders.applyReminderOrder(keys("a")))
     }
 
     @Test
     fun applyReminderOrder_returnsNullWhenIdsAreDuplicated() {
         val reminders = listOf(reminder("a"), reminder("b"))
 
-        assertNull(reminders.applyReminderOrder(listOf("a", "a")))
+        assertNull(reminders.applyReminderOrder(keys("a", "a")))
     }
 
     @Test
     fun applyReminderOrder_returnsNullWhenAnIdIsUnknown() {
         val reminders = listOf(reminder("a"), reminder("b"))
 
-        assertNull(reminders.applyReminderOrder(listOf("a", "z")))
+        assertNull(reminders.applyReminderOrder(keys("a", "z")))
     }
 
     private fun reminder(id: String, order: Int = 0): Reminder = Reminder(
         id = id,
+        ownerId = OWNER_ID,
         text = id,
         createdAt = Instant.parse("2026-01-01T00:00:00Z"),
         order = order,
     )
+
+    private fun keys(vararg ids: String): List<ReminderKey> =
+        ids.map { id -> ReminderKey(OWNER_ID, id) }
+
+    private companion object {
+        const val OWNER_ID = "alex"
+    }
 }

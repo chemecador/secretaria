@@ -42,7 +42,7 @@
 ## Current Product State
 
 - Shared flows implemented: login -> lists -> notes -> note detail, plus friends.
-- Android push notifications already cover shared lists, incoming friend requests, and new notes in shared lists.
+- Android push notifications already cover shared lists, incoming friend requests, new notes in shared lists, and shared reminders.
 - Lists support:
   - read, create, delete
   - sort by name/date
@@ -58,12 +58,14 @@
   - read, create, delete
   - ordered/unordered display
 - Reminders support:
-  - personal flat collection, not attached to any list, never shared
+  - flat collection, not attached to any list; shareable with friends one by one
+  - a shared reminder is a single document: completion, edits and manual order are shared
   - single list ordered manually by drag and drop; no automatic sections or sorting
   - optional floating due date with optional time; overdue items are highlighted but never reordered or archived
   - manual completion only; completed reminders move to a separate "Completados" screen reachable from the overflow menu
+  - long press opens an options dialog: owner gets Compartir/Eliminar, invited users get "Dejar de compartir conmigo"
   - completed reminders are deleted 30 days after completion, client-side, in a single batch on screen load
-  - no notifications yet (see "Pending: Reminder Notifications")
+  - sharing pushes a notification; due dates still do not (see "Pending: Reminder Notifications")
 - Note detail supports editing title/content and delete confirmation.
 - Logout has confirmation and clears auth session on all platforms.
 - Settings screen shows account email, user code, version, author, contact, and project info.
@@ -141,12 +143,13 @@
 - `collectionGroup("noteslist").whereArrayContains("contributors", userId)` needs a composite index. Indexes live in `firebase/firestore.indexes.json`.
 - Deploy indexes with `cd firebase && firebase deploy --only firestore:indexes --project <projectId>`.
 - List deletion uses a batch for notes + list document. Partial failure can leave orphaned notes; acceptable for now.
-- Reminders live under `users/{uid}/reminders`. Confirm the Firestore security rules cover that subcollection; the rules are not in this repo.
+- Reminders live under `users/{uid}/reminders`. The rules are not in this repo, so confirm they allow: the owner full access, and any uid inside `contributors` to read and to update `text`, `dueDate`, `dueTime`, `completed`, `completedAt`, `order` and `contributors` (to leave the share). Without that, sharing fails silently at write time.
+- `collectionGroup("reminders").whereArrayContains("contributors", userId)` needs its own composite index, already declared in `firebase/firestore.indexes.json`.
 
 ## Reminders
 
-- Firestore path is `users/{userId}/reminders/{reminderId}`. No `contributors`, no sharing, no `ownerId` in repository signatures.
-- Document fields: `text`, `dueDate` (string `"yyyy-MM-dd"` or null), `dueTime` (string `"HH:mm"` or null), `completed`, `completedAt` (timestamp or null), `order` (int), `date` (createdAt).
+- Firestore path is `users/{userId}/reminders/{reminderId}`. `ownerId` is derived from the path, never stored.
+- Document fields: `text`, `dueDate` (string `"yyyy-MM-dd"` or null), `dueTime` (string `"HH:mm"` or null), `completed`, `completedAt` (timestamp or null), `order` (int), `date` (createdAt), `contributors` (array of uids including the owner).
 - The due date is a FLOATING local date/time (`LocalDate` + optional `LocalTime`), not an `Instant`. Deliberate: it renders the same calendar day on every target regardless of device timezone, and manual ordering means the server never sorts by it. There is intentionally no `timeZoneId`. `createdAt` and `completedAt` are still `Instant`.
 - `dueTime == null` means "all day": never render `00:00`, and it only counts as overdue once the whole day has passed.
 - `completedAt` is written with the CLIENT clock on all five targets and is produced by `RemindersViewModel`, not by the repositories, so the optimistic UI value is identical to the persisted one and to what the 30-day purge compares against.
@@ -155,14 +158,28 @@
 - `RemindersScreen` and `CompletedRemindersScreen` share ONE `RemindersViewModel` hoisted in `App.kt`. `CompletedRemindersScreen` must not call `load()`.
 - Marking complete / restoring is OPTIMISTIC with rollback, like `NotesViewModel.reorderNotes`. Create, update and delete stay fire-and-refetch, like the rest of the app.
 - Restoring a reminder sends it to the end of the pending list (`maxPendingOrder + 1`) so it cannot collide with an existing `order`.
-- `reorderReminders` only ever receives pending ids; completed reminders keep their stored `order` and are never reordered.
+- `reorderReminders` only ever receives pending keys; completed reminders keep their stored `order` and are never reordered.
 - `NotesReorderState` (package `notes`) is the SHARED manual-reorder controller; `noteslists` and `reminders` both reuse it despite the package name.
 - Manual-ordering helpers are duplicated on purpose in `notes/NotesOrdering.kt`, `noteslists/NotesListsGrouping.kt` and `reminders/RemindersOrdering.kt`. Full unification is impossible because the lists case uses a composite key (`NotesListKey`) and a different field (`groupOrder`), so generalising would only merge two of three while touching working features. Revisit only if a fourth case appears.
-- Reminders need no Firestore composite index and no Cloud Function.
+
+## Reminder Sharing
+
+- Mirrors list sharing, minus groups: one `contributors` array, no `directContributors` / `inheritedGroupContributors`.
+- `getReminders()` does TWO reads: own reminders by path plus `contributors`-array-contains over the `reminders` collection group, merged with `distinctBy(Reminder::key)`. Reading own reminders by path is deliberate: documents created before sharing existed have no `contributors` field, so a collection-group-only query would make them vanish. No migration is needed because of this.
+- `ReminderKey(ownerId, reminderId)` is the identity everywhere a write can land on someone else's document: update, complete, reorder, delete and leave all take keys. Only `shareReminder` / `unshareReminder` take a bare id, because only the owner can call them.
+- A shared reminder is ONE document, so `completed`, `order` and the text are shared state, exactly like notes inside a shared list. Deliberate: two people sharing "comprar pan" want to see it disappear when either buys it.
+- `order` can collide between owners (each user's counter starts at 0), so `pendingReminders` sorts by `order`, then `createdAt`, then `id`. The first manual drag renumbers everything and removes the collision.
+- The 30-day purge only deletes the CURRENT user's own completed reminders: an invited user has no permission to delete, and a batch that mixes owners would fail as a whole.
+- Only the owner can delete a shared reminder; an invited user gets "Dejar de compartir conmigo", which removes their uid from `contributors`.
+- `RemindersViewModel` needs `AuthRepository` (ownership checks, purge scope) and `FriendsRepository` (resolving collaborator names), like `NotesListsViewModel`.
+- The reminders feature reuses `noteslists.ListCollaborator` instead of duplicating it; the sharing dialog is a copy of `ShareListDialog` because the Compose bodies are private to their screens.
+- `onReminderShared` in `firebase/functions/src/index.ts` pushes to newly added contributors on the `reminder_shared` Android channel. Reminders have no `creator` field, so the notification shows the reminder text rather than the sharer's name; add a `creator` field first if that ever matters.
+- Deploy after touching this: `firebase deploy --only firestore:indexes,functions --project <projectId>`.
 
 ## Pending: Reminder Notifications
 
-- Phase 1 of reminders shipped deliberately WITHOUT notifications: no FCM, no local alarms, no scheduling, no permissions.
+- This section is about DUE-DATE notifications only. Share notifications already exist (`onReminderShared`); what is missing is "avisame a las 09:00".
+- Phase 1 of reminders shipped deliberately without them: no local alarms, no scheduling, no permissions.
 - When notifications are added:
   - Use LOCAL scheduling per platform, not server-side FCM fan-out. A personal reminder has exactly one recipient, so the existing Cloud Functions in `firebase/functions/src/index.ts` (shared lists, friend requests, notes in shared lists) are not a template here.
   - Android: `AlarmManager` (or WorkManager) + `POST_NOTIFICATIONS` runtime permission on API 33+ + reschedule on `BOOT_COMPLETED`.
