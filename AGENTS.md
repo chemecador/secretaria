@@ -23,6 +23,12 @@
 - Prefer simple interfaces, `expect`/`actual`, and fakes when portability is unclear.
 - Treat the original Android app as a business/domain reference, not an implementation template.
 
+## Git
+
+- Always commit directly on `main`. Do not create feature branches for this project.
+- Never add a `Co-Authored-By` trailer to commit messages.
+- Commit subjects follow the existing style: `Feat: ...`, `Refactor: ...`, `Fix: ...`.
+
 ## Modules And Identity
 
 - `composeApp`: shared UI, models, state, ViewModels, resources, and desktop/web/iOS entrypoints.
