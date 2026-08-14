@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
@@ -38,6 +40,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -81,6 +84,8 @@ import secretaria.composeapp.generated.resources.Res
 import secretaria.composeapp.generated.resources.cancel
 import secretaria.composeapp.generated.resources.completed_reminders_empty
 import secretaria.composeapp.generated.resources.completed_reminders_title
+import secretaria.composeapp.generated.resources.create_reminder_button
+import secretaria.composeapp.generated.resources.create_reminder_title
 import secretaria.composeapp.generated.resources.delete
 import secretaria.composeapp.generated.resources.delete_reminder_message
 import secretaria.composeapp.generated.resources.delete_reminder_title
@@ -94,14 +99,15 @@ import secretaria.composeapp.generated.resources.reminder_completed_on
 import secretaria.composeapp.generated.resources.reminder_completed_retention
 import secretaria.composeapp.generated.resources.reminder_deleted_error
 import secretaria.composeapp.generated.resources.reminder_due_add
+import secretaria.composeapp.generated.resources.reminder_due_add_time
+import secretaria.composeapp.generated.resources.reminder_due_clear
+import secretaria.composeapp.generated.resources.reminder_due_clear_time
 import secretaria.composeapp.generated.resources.reminder_due_with_time
 import secretaria.composeapp.generated.resources.reminder_restore_action
 import secretaria.composeapp.generated.resources.reminder_restored_error
 import secretaria.composeapp.generated.resources.reminder_restored_feedback
 import secretaria.composeapp.generated.resources.reminders_empty
 import secretaria.composeapp.generated.resources.reminders_error_generic
-import secretaria.composeapp.generated.resources.reminders_quick_add_action
-import secretaria.composeapp.generated.resources.reminders_quick_add_hint
 import secretaria.composeapp.generated.resources.reminders_title
 import secretaria.composeapp.generated.resources.reorder_reminder_handle
 import kotlin.time.Clock
@@ -122,6 +128,7 @@ fun RemindersScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showCreateDialog by remember { mutableStateOf(false) }
     var reminderToEdit by remember { mutableStateOf<Reminder?>(null) }
     var reminderToDelete by remember { mutableStateOf<Reminder?>(null) }
 
@@ -137,7 +144,7 @@ fun RemindersScreen(
 
     onBack?.let { navigateBack ->
         PlatformBackHandler(
-            enabled = reminderToEdit == null && reminderToDelete == null,
+            enabled = !showCreateDialog && reminderToEdit == null && reminderToDelete == null,
             onBack = navigateBack,
         )
     }
@@ -168,13 +175,39 @@ fun RemindersScreen(
                 },
             )
         },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showCreateDialog = true },
+                containerColor = SecretariaTopBarColor,
+                contentColor = SecretariaTopBarContentColor,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+            }
+        },
     ) { innerPadding ->
 
+        if (showCreateDialog) {
+            ReminderEditorDialog(
+                title = stringResource(Res.string.create_reminder_title),
+                confirmLabel = stringResource(Res.string.create_reminder_button),
+                initialText = "",
+                initialDue = null,
+                onDismiss = { showCreateDialog = false },
+                onConfirm = { text, due ->
+                    viewModel.createReminder(text, due)
+                    showCreateDialog = false
+                },
+            )
+        }
+
         reminderToEdit?.let { reminder ->
-            EditReminderDialog(
-                reminder = reminder,
+            ReminderEditorDialog(
+                title = stringResource(Res.string.edit_reminder_title),
+                confirmLabel = stringResource(Res.string.edit_reminder_button),
+                initialText = reminder.text,
+                initialDue = reminder.due,
                 onDismiss = { reminderToEdit = null },
-                onSave = { text, due ->
+                onConfirm = { text, due ->
                     viewModel.updateReminder(reminder.id, text, due)
                     reminderToEdit = null
                 },
@@ -197,8 +230,6 @@ fun RemindersScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            QuickAddReminderField(onAdd = viewModel::createReminder)
-
             if (state.isLoading) {
                 CenteredMessage {
                     CircularProgressIndicator()
@@ -532,46 +563,168 @@ internal fun ReminderCard(
     }
 }
 
+/**
+ * Mismo dialogo para crear y editar: el texto es lo unico obligatorio, y la hora solo se ofrece
+ * cuando ya hay fecha, porque el modelo no admite hora suelta.
+ */
 @Composable
-private fun QuickAddReminderField(
-    onAdd: (String) -> Unit,
+private fun ReminderEditorDialog(
+    title: String,
+    confirmLabel: String,
+    initialText: String,
+    initialDue: ReminderDue?,
+    onDismiss: () -> Unit,
+    onConfirm: (String, ReminderDue?) -> Unit,
 ) {
-    var text by remember { mutableStateOf("") }
-    val submit = {
-        if (text.isNotBlank()) {
-            onAdd(text)
-            text = ""
-        }
+    var text by remember { mutableStateOf(initialText) }
+    var due by remember { mutableStateOf(initialDue) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+
+    if (showDatePicker) {
+        ReminderDatePickerDialog(
+            initialDate = due?.date,
+            onDismiss = { showDatePicker = false },
+            onConfirm = { date ->
+                due = due?.copy(date = date) ?: ReminderDue(date)
+                showDatePicker = false
+            },
+        )
     }
 
-    OutlinedTextField(
-        value = text,
-        onValueChange = { text = it },
-        placeholder = { Text(stringResource(Res.string.reminders_quick_add_hint)) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(
-            capitalization = KeyboardCapitalization.Sentences,
-            imeAction = ImeAction.Done,
-        ),
-        keyboardActions = KeyboardActions(onDone = { submit() }),
-        trailingIcon = {
-            IconButton(onClick = submit, enabled = text.isNotBlank()) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = stringResource(Res.string.reminders_quick_add_action),
+    if (showTimePicker) {
+        ReminderTimePickerDialog(
+            initialTime = due?.time,
+            onDismiss = { showTimePicker = false },
+            onConfirm = { time ->
+                due = due?.copy(time = time)
+                showTimePicker = false
+            },
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        title = { Text(title) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text(stringResource(Res.string.edit_reminder_text_hint)) },
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                ReminderDueEditor(
+                    due = due,
+                    onPickDate = { showDatePicker = true },
+                    onPickTime = { showTimePicker = true },
+                    onClearDate = { due = null },
+                    onClearTime = { due = due?.copy(time = null) },
                 )
             }
         },
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            focusedLabelColor = MaterialTheme.colorScheme.primary,
-            cursorColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(text.trim(), due) },
+                enabled = text.isNotBlank(),
+            ) {
+                Text(confirmLabel)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
     )
+}
+
+@Composable
+private fun ReminderDueEditor(
+    due: ReminderDue?,
+    onPickDate: () -> Unit,
+    onPickTime: () -> Unit,
+    onClearDate: () -> Unit,
+    onClearTime: () -> Unit,
+) {
+    if (due == null) {
+        TextButton(onClick = onPickDate) {
+            Icon(
+                imageVector = Icons.Filled.CalendarToday,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = stringResource(Res.string.reminder_due_add),
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        return
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = onPickDate, modifier = Modifier.weight(1f)) {
+            Icon(
+                imageVector = Icons.Filled.CalendarToday,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = formatNotesListDate(due.date),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp),
+            )
+        }
+        IconButton(onClick = onClearDate) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = stringResource(Res.string.reminder_due_clear),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = onPickTime, modifier = Modifier.weight(1f)) {
+            Icon(
+                imageVector = Icons.Filled.Schedule,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = due.time?.let(::formatReminderTime)
+                    ?: stringResource(Res.string.reminder_due_add_time),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp),
+            )
+        }
+        if (due.time != null) {
+            IconButton(onClick = onClearTime) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = stringResource(Res.string.reminder_due_clear_time),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        } else {
+            Spacer(modifier = Modifier.size(48.dp))
+        }
+    }
 }
 
 /**
@@ -688,80 +841,6 @@ internal fun ScrollableCenteredMessage(
     ) {
         content()
     }
-}
-
-@Composable
-private fun EditReminderDialog(
-    reminder: Reminder,
-    onDismiss: () -> Unit,
-    onSave: (String, ReminderDue?) -> Unit,
-) {
-    var text by remember(reminder.id) { mutableStateOf(reminder.text) }
-    var due by remember(reminder.id) { mutableStateOf(reminder.due) }
-    var showDuePicker by remember { mutableStateOf(false) }
-
-    if (showDuePicker) {
-        ReminderDuePickerDialog(
-            initialDue = due,
-            onDismiss = { showDuePicker = false },
-            onConfirm = { selectedDue ->
-                due = selectedDue
-                showDuePicker = false
-            },
-        )
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        titleContentColor = MaterialTheme.colorScheme.onSurface,
-        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        title = { Text(stringResource(Res.string.edit_reminder_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    label = { Text(stringResource(Res.string.edit_reminder_text_hint)) },
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Sentences,
-                    ),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                        cursorColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                TextButton(onClick = { showDuePicker = true }) {
-                    Icon(
-                        imageVector = Icons.Filled.CalendarToday,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        text = due?.let { reminderDueLabel(it) }
-                            ?: stringResource(Res.string.reminder_due_add),
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onSave(text.trim(), due) },
-                enabled = text.isNotBlank(),
-            ) {
-                Text(stringResource(Res.string.edit_reminder_button))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(Res.string.cancel))
-            }
-        },
-    )
 }
 
 @Composable
