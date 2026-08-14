@@ -51,6 +51,13 @@
 - Notes support:
   - read, create, delete
   - ordered/unordered display
+- Reminders support:
+  - personal flat collection, not attached to any list, never shared
+  - single list ordered manually by drag and drop; no automatic sections or sorting
+  - optional floating due date with optional time; overdue items are highlighted but never reordered or archived
+  - manual completion only; completed reminders move to a separate "Completados" screen reachable from the overflow menu
+  - completed reminders are deleted 30 days after completion, client-side, in a single batch on screen load
+  - no notifications yet (see "Pending: Reminder Notifications")
 - Note detail supports editing title/content and delete confirmation.
 - Logout has confirmation and clears auth session on all platforms.
 - Settings screen shows account email, user code, version, author, contact, and project info.
@@ -62,9 +69,9 @@
 ## Navigation And Shared Architecture
 
 - No navigation library yet. `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/App.kt` uses a sealed `Screen`.
-- Current screens: `Login`, `Lists`, `ListGroup`, `Notes`, `NoteDetail`.
+- Current screens: `Login`, `Lists`, `ListGroup`, `Notes`, `NoteDetail`, `Reminders`, `CompletedReminders`.
 - Keep this simple approach until navigation complexity clearly grows.
-- Package by feature, not by technical layer. Current feature packages: `login`, `noteslists`, `notes`, `friends`.
+- Package by feature, not by technical layer. Current feature packages: `login`, `noteslists`, `notes`, `friends`, `reminders`.
 - Typical feature shape: model, repository interface, fake repository, state, ViewModel, screen.
 - Shared conventions:
   - immutable UI state with `data class`
@@ -128,6 +135,38 @@
 - `collectionGroup("noteslist").whereArrayContains("contributors", userId)` needs a composite index. Indexes live in `firebase/firestore.indexes.json`.
 - Deploy indexes with `cd firebase && firebase deploy --only firestore:indexes --project <projectId>`.
 - List deletion uses a batch for notes + list document. Partial failure can leave orphaned notes; acceptable for now.
+- Reminders live under `users/{uid}/reminders`. Confirm the Firestore security rules cover that subcollection; the rules are not in this repo.
+
+## Reminders
+
+- Firestore path is `users/{userId}/reminders/{reminderId}`. No `contributors`, no sharing, no `ownerId` in repository signatures.
+- Document fields: `text`, `dueDate` (string `"yyyy-MM-dd"` or null), `dueTime` (string `"HH:mm"` or null), `completed`, `completedAt` (timestamp or null), `order` (int), `date` (createdAt).
+- The due date is a FLOATING local date/time (`LocalDate` + optional `LocalTime`), not an `Instant`. Deliberate: it renders the same calendar day on every target regardless of device timezone, and manual ordering means the server never sorts by it. There is intentionally no `timeZoneId`. `createdAt` and `completedAt` are still `Instant`.
+- `dueTime == null` means "all day": never render `00:00`, and it only counts as overdue once the whole day has passed.
+- `completedAt` is written with the CLIENT clock on all five targets and is produced by `RemindersViewModel`, not by the repositories, so the optimistic UI value is identical to the persisted one and to what the 30-day purge compares against.
+- The 30-day purge is client-side: `remindersToPurge()` (pure, `commonMain`) computes the ids and `RemindersViewModel.load()` calls `deleteReminders(ids)` once. `getReminders()` already returns pending + completed in one read, so the purge costs no extra request. Purge failures are swallowed and never surface as an error.
+- The purge runs on `load()` only, never on `refresh()`.
+- `RemindersScreen` and `CompletedRemindersScreen` share ONE `RemindersViewModel` hoisted in `App.kt`. `CompletedRemindersScreen` must not call `load()`.
+- Marking complete / restoring is OPTIMISTIC with rollback, like `NotesViewModel.reorderNotes`. Create, update and delete stay fire-and-refetch, like the rest of the app.
+- Restoring a reminder sends it to the end of the pending list (`maxPendingOrder + 1`) so it cannot collide with an existing `order`.
+- `reorderReminders` only ever receives pending ids; completed reminders keep their stored `order` and are never reordered.
+- `NotesReorderState` (package `notes`) is the SHARED manual-reorder controller; `noteslists` and `reminders` both reuse it despite the package name.
+- Manual-ordering helpers are duplicated on purpose in `notes/NotesOrdering.kt`, `noteslists/NotesListsGrouping.kt` and `reminders/RemindersOrdering.kt`. Full unification is impossible because the lists case uses a composite key (`NotesListKey`) and a different field (`groupOrder`), so generalising would only merge two of three while touching working features. Revisit only if a fourth case appears.
+- Reminders need no Firestore composite index and no Cloud Function.
+
+## Pending: Reminder Notifications
+
+- Phase 1 of reminders shipped deliberately WITHOUT notifications: no FCM, no local alarms, no scheduling, no permissions.
+- When notifications are added:
+  - Use LOCAL scheduling per platform, not server-side FCM fan-out. A personal reminder has exactly one recipient, so the existing Cloud Functions in `firebase/functions/src/index.ts` (shared lists, friend requests, notes in shared lists) are not a template here.
+  - Android: `AlarmManager` (or WorkManager) + `POST_NOTIFICATIONS` runtime permission on API 33+ + reschedule on `BOOT_COMPLETED`.
+  - iOS: `UNUserNotificationCenter` local notifications.
+  - JVM/JS/Wasm: out of scope; use a no-op.
+  - Resolve the floating `dueDate`/`dueTime` against the DEVICE timezone at scheduling time. That is the desired "remind me at 09:00 wherever I am" semantics and the reason no `timeZoneId` is stored.
+  - Reminders with no `due` are never schedulable.
+  - Reschedule triggers: create, edit due, complete, restore, delete, session restore on app start, timezone change, Android reboot.
+  - Suggested shape: a `ReminderScheduler` interface in `commonMain` with a `NoopReminderScheduler`, wired per platform in `di/PlatformModule.*.kt` and called from `RemindersViewModel` after successful mutations. This mirrors `FcmTokenRegister` / `NoopFcmTokenRegister`.
+  - If "notify at the timezone where I created it" is ever required, add a nullable `dueTimeZoneId` field; existing documents default to the device timezone. It is an additive change.
 
 ## Build And Test Pitfalls
 
@@ -157,10 +196,12 @@
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/login/`
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/noteslists/`
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/notes/`
+  - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/reminders/`
 - iOS native repository tests:
   - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/login/`
   - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/noteslists/`
   - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/notes/`
+  - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/reminders/`
 - Current test focus: ViewModel loading transitions, empty/content/error states, sorting logic, date formatting, and JVM/iOS Firestore request-response mapping.
 - Read first when orienting:
   - `composeApp/build.gradle.kts`
@@ -177,6 +218,7 @@
 ## Near-Term Roadmap
 
 - notifications expansion
+- reminder notifications (see "Pending: Reminder Notifications")
 
 ## Notes For Future Agents
 

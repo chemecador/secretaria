@@ -14,6 +14,9 @@ import com.chemecador.secretaria.notes.NotesViewModel
 import com.chemecador.secretaria.noteslists.FakeNotesListsRepository
 import com.chemecador.secretaria.noteslists.NotesListsRepository
 import com.chemecador.secretaria.noteslists.NotesListsViewModel
+import com.chemecador.secretaria.reminders.FakeRemindersRepository
+import com.chemecador.secretaria.reminders.RemindersRepository
+import com.chemecador.secretaria.reminders.RemindersViewModel
 import com.chemecador.secretaria.settings.AccountSettingsRepository
 import com.chemecador.secretaria.settings.FakeAccountSettingsRepository
 import org.koin.core.module.Module
@@ -24,6 +27,7 @@ private val sharedAppModule = module {
     viewModel { LoginViewModel(get()) }
     viewModel { NotesListsViewModel(get(), get(), get()) }
     viewModel { FriendsViewModel(get()) }
+    viewModel { RemindersViewModel(get()) }
     viewModel { params ->
         NotesViewModel(
             repository = get(),
@@ -44,6 +48,7 @@ private fun previewPlatformModule(): Module = module {
     single<AuthRepository> { FakeAuthRepository() }
     single<NotesListsRepository> { FakeNotesListsRepository() }
     single<NotesRepository> { FakeNotesRepository() }
+    single<RemindersRepository> { FakeRemindersRepository() }
     single<FriendsRepository> { FakeFriendsRepository() }
     single<AccountSettingsRepository> { FakeAccountSettingsRepository() }
     single<FcmTokenRegister> { NoopFcmTokenRegister() }

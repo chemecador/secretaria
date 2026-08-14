@@ -7,6 +7,7 @@ import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.login.FakeAuthRepository
 import com.chemecador.secretaria.notes.NotesViewModel
 import com.chemecador.secretaria.noteslists.NotesListsViewModel
+import com.chemecador.secretaria.reminders.RemindersViewModel
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -58,6 +59,16 @@ class AppModulesTest : KoinTest {
     @Test
     fun resolvesNotesListsViewModelFromSharedGraph() {
         assertIs<NotesListsViewModel>(resolveTestViewModel(NotesListsViewModel::class))
+    }
+
+    @Test
+    fun resolvesRemindersViewModelFromSharedGraph() = runTest(dispatcher) {
+        val viewModel = resolveTestViewModel(RemindersViewModel::class)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.reminders.isNotEmpty())
     }
 
     @Test

@@ -35,6 +35,9 @@ import com.chemecador.secretaria.noteslists.NotesListsScreen
 import com.chemecador.secretaria.noteslists.NotesListsSection
 import com.chemecador.secretaria.noteslists.NotesListsViewModel
 import com.chemecador.secretaria.noteslists.rememberNotesListsSectionPreferenceStore
+import com.chemecador.secretaria.reminders.CompletedRemindersScreen
+import com.chemecador.secretaria.reminders.RemindersScreen
+import com.chemecador.secretaria.reminders.RemindersViewModel
 import com.chemecador.secretaria.settings.SettingsScreen
 import com.chemecador.secretaria.settings.SupportCreatorScreen
 import kotlinx.coroutines.launch
@@ -51,6 +54,8 @@ private sealed class Screen {
     data object Friends : Screen()
     data object Settings : Screen()
     data object SupportCreator : Screen()
+    data object Reminders : Screen()
+    data object CompletedReminders : Screen()
     data class Notes(
         val ownerId: String,
         val listId: String,
@@ -101,6 +106,8 @@ fun App(
         val loginViewModel = koinViewModel<LoginViewModel>()
         val listsViewModel = koinViewModel<NotesListsViewModel>()
         val friendsViewModel = koinViewModel<FriendsViewModel>()
+        // Una sola instancia compartida entre Recordatorios y Completados.
+        val remindersViewModel = koinViewModel<RemindersViewModel>()
 
         var screen by remember { mutableStateOf<Screen>(Screen.Restoring) }
         var utilityBackStack by remember { mutableStateOf<List<Screen>>(emptyList()) }
@@ -158,6 +165,12 @@ fun App(
         }
         val openSupportCreator = {
             openUtilityScreen(Screen.SupportCreator)
+        }
+        val openReminders = {
+            openUtilityScreen(Screen.Reminders)
+        }
+        val openCompletedReminders = {
+            openUtilityScreen(Screen.CompletedReminders)
         }
         val closeUtilityScreen = {
             val returnScreen = utilityBackStack.lastOrNull() ?: Screen.Lists
@@ -254,6 +267,7 @@ fun App(
                                 },
                                 onOpenFriends = openFriends,
                                 onOpenSettings = openSettings,
+                                onOpenReminders = openReminders,
                                 onLogout = logout,
                             )
                         }
@@ -274,6 +288,27 @@ fun App(
                                 onOpenFriends = openFriends,
                                 onOpenSettings = openSettings,
                                 onOpenSupportCreator = openSupportCreator,
+                                onLogout = logout,
+                            )
+                        }
+
+                        is Screen.Reminders -> {
+                            RemindersScreen(
+                                viewModel = remindersViewModel,
+                                onOpenCompleted = openCompletedReminders,
+                                onBack = closeUtilityScreen,
+                                onOpenFriends = openFriends,
+                                onOpenSettings = openSettings,
+                                onLogout = logout,
+                            )
+                        }
+
+                        is Screen.CompletedReminders -> {
+                            CompletedRemindersScreen(
+                                viewModel = remindersViewModel,
+                                onBack = closeUtilityScreen,
+                                onOpenFriends = openFriends,
+                                onOpenSettings = openSettings,
                                 onLogout = logout,
                             )
                         }

@@ -193,4 +193,34 @@
     <string name="action_accept">Aceptar</string>
     <string name="action_reject">Rechazar</string>
     <string name="action_cancel_request">Cancelar solicitud</string>
+
+    <!-- Reminders -->
+    <string name="reminders_title">Recordatorios</string>
+    <string name="menu_reminders">Recordatorios</string>
+    <string name="menu_completed_reminders">Completados</string>
+    <string name="completed_reminders_title">Completados</string>
+    <string name="reminders_empty">No tienes recordatorios pendientes. Apunta lo primero que se te ocurra.</string>
+    <string name="completed_reminders_empty">Aquí aparecerán los recordatorios que vayas completando.</string>
+    <string name="reminders_error_generic">No se han podido cargar los recordatorios.</string>
+    <string name="reminders_quick_add_hint">Apuntar algo rápido…</string>
+    <string name="reminders_quick_add_action">Añadir recordatorio</string>
+    <string name="edit_reminder_title">Editar recordatorio</string>
+    <string name="edit_reminder_text_hint">Recordatorio</string>
+    <string name="edit_reminder_button">Guardar</string>
+    <string name="delete_reminder_title">Eliminar recordatorio</string>
+    <string name="delete_reminder_message">¿Eliminar «%1$s»?</string>
+    <string name="reminder_complete_action">Marcar como completado</string>
+    <string name="reminder_restore_action">Restaurar</string>
+    <string name="reminder_completed_feedback">Movido a Completados</string>
+    <string name="reminder_completed_error">No se ha podido completar el recordatorio.</string>
+    <string name="reminder_restored_feedback">Recordatorio restaurado</string>
+    <string name="reminder_restored_error">No se ha podido restaurar el recordatorio.</string>
+    <string name="reminder_deleted_error">No se ha podido eliminar el recordatorio.</string>
+    <string name="reminder_due_add">Añadir fecha</string>
+    <string name="reminder_due_clear">Quitar fecha</string>
+    <string name="reminder_due_add_time">Añadir hora</string>
+    <string name="reminder_due_with_time">%1$s · %2$s</string>
+    <string name="reminder_completed_on">Completado el %1$s</string>
+    <string name="reminder_completed_retention">Los recordatorios completados se eliminan a los 30 días.</string>
+    <string name="reorder_reminder_handle">Mantén pulsado para reordenar el recordatorio</string>
 </resources>

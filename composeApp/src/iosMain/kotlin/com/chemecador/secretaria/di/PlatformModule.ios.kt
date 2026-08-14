@@ -16,6 +16,8 @@ import com.chemecador.secretaria.notes.FirestoreIosNotesRepository
 import com.chemecador.secretaria.notes.NotesRepository
 import com.chemecador.secretaria.noteslists.FirestoreIosNotesListsRepository
 import com.chemecador.secretaria.noteslists.NotesListsRepository
+import com.chemecador.secretaria.reminders.FirestoreIosRemindersRepository
+import com.chemecador.secretaria.reminders.RemindersRepository
 import com.chemecador.secretaria.settings.AccountSettingsRepository
 import com.chemecador.secretaria.settings.FirestoreIosAccountSettingsRepository
 import org.koin.core.module.Module
@@ -43,6 +45,16 @@ internal actual fun platformModule(): Module = module {
     single<NotesRepository> {
         val authRepository: AuthRepository = get()
         FirestoreIosNotesRepository(
+            authRepository = authRepository,
+            firestore = FirebaseIosFirestoreRestApi(
+                projectId = resolveIosFirebaseProjectId(),
+                tokenProvider = authRepository.requireFirebaseIosIdTokenProvider(),
+            ),
+        )
+    }
+    single<RemindersRepository> {
+        val authRepository: AuthRepository = get()
+        FirestoreIosRemindersRepository(
             authRepository = authRepository,
             firestore = FirebaseIosFirestoreRestApi(
                 projectId = resolveIosFirebaseProjectId(),

@@ -190,6 +190,7 @@ fun NotesListsScreen(
     onOpenSettings: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenReminders: (() -> Unit)? = null,
     groupOwnerId: String? = null,
     groupId: String? = null,
     groupName: String? = null,
@@ -393,6 +394,9 @@ fun NotesListsScreen(
                             null
                         } else {
                             { showArchivedLists = true }
+                        },
+                        onOpenReminders = onOpenReminders?.takeUnless {
+                            showArchivedLists || isGroupScreen
                         },
                     )
                 },

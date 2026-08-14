@@ -10,6 +10,8 @@ import com.chemecador.secretaria.notes.FakeNotesRepository
 import com.chemecador.secretaria.notes.NotesRepository
 import com.chemecador.secretaria.noteslists.FakeNotesListsRepository
 import com.chemecador.secretaria.noteslists.NotesListsRepository
+import com.chemecador.secretaria.reminders.FakeRemindersRepository
+import com.chemecador.secretaria.reminders.RemindersRepository
 import com.chemecador.secretaria.settings.AccountSettingsRepository
 import com.chemecador.secretaria.settings.FakeAccountSettingsRepository
 import org.koin.core.module.Module
@@ -19,6 +21,7 @@ internal actual fun platformModule(): Module = module {
     single<AuthRepository> { FakeAuthRepository() }
     single<NotesListsRepository> { FakeNotesListsRepository() }
     single<NotesRepository> { FakeNotesRepository() }
+    single<RemindersRepository> { FakeRemindersRepository() }
     single<FriendsRepository> { FakeFriendsRepository() }
     single<AccountSettingsRepository> { FakeAccountSettingsRepository() }
     single<FcmTokenRegister> { NoopFcmTokenRegister() }

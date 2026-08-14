@@ -10,6 +10,8 @@ import com.chemecador.secretaria.notes.FirestoreNotesRepository
 import com.chemecador.secretaria.notes.NotesRepository
 import com.chemecador.secretaria.noteslists.FirestoreNotesListsRepository
 import com.chemecador.secretaria.noteslists.NotesListsRepository
+import com.chemecador.secretaria.reminders.FirestoreRemindersRepository
+import com.chemecador.secretaria.reminders.RemindersRepository
 import com.chemecador.secretaria.settings.AccountSettingsRepository
 import com.chemecador.secretaria.settings.FirestoreAccountSettingsRepository
 import org.koin.core.module.Module
@@ -19,6 +21,7 @@ internal actual fun platformModule(): Module = module {
     single<AuthRepository> { FirebaseAuthRepository() }
     single<NotesListsRepository> { FirestoreNotesListsRepository(get()) }
     single<NotesRepository> { FirestoreNotesRepository(get()) }
+    single<RemindersRepository> { FirestoreRemindersRepository(get()) }
     single<FriendsRepository> { FirestoreFriendsRepository(get()) }
     single<AccountSettingsRepository> { FirestoreAccountSettingsRepository(get()) }
     single<FcmTokenRegister> { FirestoreFcmTokenRegister(get()) }
