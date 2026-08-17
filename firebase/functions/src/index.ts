@@ -3,6 +3,7 @@ import {
   onDocumentCreatedWithAuthContext,
   onDocumentUpdated,
 } from "firebase-functions/v2/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions";
 import * as admin from "firebase-admin";
 
@@ -14,10 +15,30 @@ const USERS_COLLECTION = "users";
 const FCM_TOKENS_COLLECTION = "fcm_tokens";
 const NOTES_LIST_COLLECTION = "noteslist";
 const NOTES_COLLECTION = "notes";
+const REMINDERS_COLLECTION = "reminders";
 const CHANNEL_LIST_SHARED = "list_shared";
 const CHANNEL_REMINDER_SHARED = "reminder_shared";
+const CHANNEL_REMINDER_DUE = "reminder_due";
 const CHANNEL_FRIEND_REQUESTS = "friend_requests";
 const CLICK_ACTION_OPEN_LIST = "com.chemecador.secretaria.OPEN_LIST";
+const CLICK_ACTION_OPEN_REMINDERS =
+  "com.chemecador.secretaria.OPEN_REMINDERS";
+
+/** Zona horaria usada cuando el dispositivo no ha registrado la suya todavia. */
+const DEFAULT_TIME_ZONE = "Europe/Madrid";
+/**
+ * Hora local a la que se avisa de un recordatorio sin hora ("todo el dia").
+ * Punto unico de cambio si algun dia se hace configurable por usuario.
+ */
+const ALL_DAY_DUE_TIME = "09:00";
+/**
+ * Un aviso que llega con mas de una hora de retraso ya no sirve: se descarta en
+ * vez de enviarse. Tambien evita una rafaga de avisos rancios en el primer
+ * despliegue, cuando la ventana se llena de recordatorios ya vencidos.
+ */
+const MAX_LATE_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_BATCH_WRITES = 400;
 
 type PushPayload = {
   title: string;
@@ -27,6 +48,19 @@ type PushPayload = {
   tag: string;
   clickAction?: string;
   data?: Record<string, string>;
+};
+
+/** Tokens de un usuario mas la zona horaria de su dispositivo mas reciente. */
+type UserTokens = {
+  tokens: string[];
+  docs: admin.firestore.QueryDocumentSnapshot[];
+  timeZoneId: string;
+};
+
+type DueNotificationMark = {
+  ref: admin.firestore.DocumentReference;
+  userId: string;
+  signature: string;
 };
 
 export const onListShared = onDocumentUpdated(
@@ -103,6 +137,80 @@ export const onReminderShared = onDocumentUpdated(
     );
   },
 );
+
+/**
+ * Aviso de vencimiento de recordatorios.
+ *
+ * `dueDate`/`dueTime` son una fecha FLOTANTE sin zona horaria: el documento no
+ * dice en que instante vence, asi que no se puede programar nada por
+ * adelantado. Por eso esto es un barrido periodico y no un trigger: cada pasada
+ * mira la ventana de recordatorios que pueden estar venciendo y resuelve la
+ * hora flotante contra la zona horaria de CADA destinatario, que es lo que
+ * conserva la semantica de "avisame a las 09:00 este donde este".
+ *
+ * Un recordatorio compartido es un unico documento, asi que avisa a todos sus
+ * `contributors`, cada uno a su hora local.
+ */
+export const onReminderDue = onSchedule("every 5 minutes", async () => {
+  const now = Date.now();
+  // La fecha local de un destinatario nunca se aleja mas de un dia de la fecha
+  // UTC (los desfases reales van de -12 a +14), asi que la ventana cubre todas
+  // las zonas horarias sin recorrer la coleccion entera.
+  const snapshot = await db
+    .collectionGroup(REMINDERS_COLLECTION)
+    .where("completed", "==", false)
+    .where("dueDate", ">=", utcDateKey(now - DAY_MS))
+    .where("dueDate", "<=", utcDateKey(now + DAY_MS))
+    .get();
+  if (snapshot.empty) return;
+
+  const tokensByUserId = new Map<string, UserTokens>();
+  const marks: DueNotificationMark[] = [];
+
+  for (const doc of snapshot.docs) {
+    const reminder = doc.data();
+    const ownerId = doc.ref.parent.parent?.id;
+    const dueDate = asNonBlankString(reminder.dueDate);
+    if (!ownerId || !dueDate) continue;
+
+    const dueTime = asNonBlankString(reminder.dueTime);
+    const signature = dueSignature(dueDate, dueTime);
+    const alreadyNotified = asStringMap(reminder.dueNotified);
+    const text = asNonBlankString(reminder.text) ?? "Recordatorio sin texto";
+    const recipients = [
+      ...new Set([ownerId, ...asStringList(reminder.contributors)]),
+    ];
+
+    for (const userId of recipients) {
+      if (alreadyNotified[userId] === signature) continue;
+
+      const userTokens = await loadUserTokens(userId, tokensByUserId);
+      if (userTokens.tokens.length === 0) continue;
+
+      const dueAt = floatingDueToEpochMs(
+        dueDate,
+        dueTime ?? ALL_DAY_DUE_TIME,
+        userTokens.timeZoneId,
+      );
+      if (dueAt === null || dueAt > now || now - dueAt > MAX_LATE_MS) continue;
+
+      await sendPushToTokens(userId, userTokens, {
+        title: "Recordatorio",
+        body: text,
+        channelId: CHANNEL_REMINDER_DUE,
+        type: "reminder_due",
+        // La firma va en el tag a proposito: si se edita el vencimiento, el
+        // aviso nuevo es otra notificacion en vez de reemplazar a la anterior.
+        tag: `reminder_due_${ownerId}_${doc.id}_${signature}`,
+        clickAction: CLICK_ACTION_OPEN_REMINDERS,
+        data: { openReminders: "true" },
+      });
+      marks.push({ ref: doc.ref, userId, signature });
+    }
+  }
+
+  await markRemindersNotified(marks);
+});
 
 export const onFriendRequestCreated = onDocumentCreated(
   "friendships/{requestId}",
@@ -201,22 +309,69 @@ async function sendPushToUser(
   userId: string,
   payload: PushPayload,
 ): Promise<void> {
+  await sendPushToTokens(userId, await loadUserTokens(userId), payload);
+}
+
+/**
+ * Reads the FCM tokens of a user plus the time zone of the device that
+ * registered most recently. The time zone lives on the token document because
+ * it describes a device, and a push is delivered to a device.
+ * @param {string} userId Owner of the tokens.
+ * @param {Map<string, UserTokens>} [cache] Optional per-run cache.
+ * @return {Promise<UserTokens>} Tokens and resolved time zone.
+ */
+async function loadUserTokens(
+  userId: string,
+  cache?: Map<string, UserTokens>,
+): Promise<UserTokens> {
+  const cached = cache?.get(userId);
+  if (cached) return cached;
+
   const snap = await db
     .collection(USERS_COLLECTION)
     .doc(userId)
     .collection(FCM_TOKENS_COLLECTION)
     .get();
-  if (snap.empty) return;
 
   const tokens: string[] = [];
-  const docsByToken: admin.firestore.QueryDocumentSnapshot[] = [];
+  const docs: admin.firestore.QueryDocumentSnapshot[] = [];
+  let timeZoneId = DEFAULT_TIME_ZONE;
+  let newestUpdate = Number.NEGATIVE_INFINITY;
+
   snap.docs.forEach((doc) => {
-    const token = doc.data().token as string | undefined;
-    if (token) {
-      tokens.push(token);
-      docsByToken.push(doc);
+    const data = doc.data();
+    const token = asNonBlankString(data.token);
+    if (!token) return;
+    tokens.push(token);
+    docs.push(doc);
+
+    const zone = asNonBlankString(data.timeZoneId);
+    if (!zone) return;
+    const updatedAt = asEpochMillis(data.updatedAt);
+    if (updatedAt >= newestUpdate) {
+      newestUpdate = updatedAt;
+      timeZoneId = zone;
     }
   });
+
+  const userTokens: UserTokens = { tokens, docs, timeZoneId };
+  cache?.set(userId, userTokens);
+  return userTokens;
+}
+
+/**
+ * Delivers a payload to already loaded tokens and prunes the stale ones.
+ * @param {string} userId Destination user id.
+ * @param {UserTokens} userTokens Tokens previously loaded for the user.
+ * @param {PushPayload} payload Notification payload to deliver.
+ * @return {Promise<void>} Resolves when all token sends are processed.
+ */
+async function sendPushToTokens(
+  userId: string,
+  userTokens: UserTokens,
+  payload: PushPayload,
+): Promise<void> {
+  const { tokens, docs: docsByToken } = userTokens;
   if (tokens.length === 0) return;
 
   const response = await messaging.sendEachForMulticast({
@@ -278,6 +433,181 @@ function asNonBlankString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
+ * Returns a plain map of string values, ignoring anything else.
+ * @param {unknown} value Value to normalize.
+ * @return {Record<string, string>} Normalized string map.
+ */
+function asStringMap(value: unknown): Record<string, string> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return {};
+  }
+  const result: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const normalized = asNonBlankString(item);
+    if (normalized) result[key] = normalized;
+  }
+  return result;
+}
+
+/**
+ * Reads a Firestore timestamp as epoch millis, defaulting to zero.
+ * @param {unknown} value Value to normalize.
+ * @return {number} Epoch millis or zero.
+ */
+function asEpochMillis(value: unknown): number {
+  if (value instanceof admin.firestore.Timestamp) return value.toMillis();
+  return 0;
+}
+
+/**
+ * Builds the identity of a due notification. Editing the due date changes the
+ * signature, which is what allows the reminder to notify again.
+ * @param {string} dueDate Floating due date, "yyyy-MM-dd".
+ * @param {string | null} dueTime Floating due time, "HH:mm", or null.
+ * @return {string} Signature stored under `dueNotified.{uid}`.
+ */
+function dueSignature(dueDate: string, dueTime: string | null): string {
+  return `${dueDate}T${dueTime ?? "all-day"}`;
+}
+
+/**
+ * Returns the UTC calendar day of an instant as "yyyy-MM-dd".
+ * @param {number} epochMs Instant in epoch millis.
+ * @return {string} UTC date key.
+ */
+function utcDateKey(epochMs: number): string {
+  return new Date(epochMs).toISOString().slice(0, 10);
+}
+
+/**
+ * Resolves a floating due date/time against a time zone into an absolute
+ * instant. Two passes because the offset depends on the instant being
+ * computed: the first corrects the guess and the second settles DST changes.
+ * @param {string} dueDate Floating due date, "yyyy-MM-dd".
+ * @param {string} dueTime Floating due time, "HH:mm".
+ * @param {string} timeZone IANA time zone id.
+ * @return {number | null} Epoch millis, or null when the input is unusable.
+ */
+function floatingDueToEpochMs(
+  dueDate: string,
+  dueTime: string,
+  timeZone: string,
+): number | null {
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dueDate);
+  const timeMatch = /^(\d{2}):(\d{2})/.exec(dueTime);
+  if (!dateMatch || !timeMatch) return null;
+
+  const naiveUtc = Date.UTC(
+    Number(dateMatch[1]),
+    Number(dateMatch[2]) - 1,
+    Number(dateMatch[3]),
+    Number(timeMatch[1]),
+    Number(timeMatch[2]),
+  );
+  if (Number.isNaN(naiveUtc)) return null;
+
+  let epochMs = naiveUtc;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const offset = timeZoneOffsetMs(epochMs, timeZone);
+    if (offset === null) return null;
+    const corrected = naiveUtc - offset;
+    if (corrected === epochMs) break;
+    epochMs = corrected;
+  }
+  return epochMs;
+}
+
+/**
+ * Returns the UTC offset of a time zone at a given instant.
+ * @param {number} epochMs Instant in epoch millis.
+ * @param {string} timeZone IANA time zone id.
+ * @return {number | null} Offset in millis, or null when the zone is invalid.
+ */
+function timeZoneOffsetMs(epochMs: number, timeZone: string): number | null {
+  try {
+    const parts = zoneFormatter(timeZone).formatToParts(new Date(epochMs));
+    const values: Record<string, number> = {};
+    for (const part of parts) {
+      if (part.type !== "literal") values[part.type] = Number(part.value);
+    }
+    const asUtc = Date.UTC(
+      values.year,
+      values.month - 1,
+      values.day,
+      values.hour,
+      values.minute,
+      values.second,
+    );
+    return Number.isNaN(asUtc) ? null : asUtc - epochMs;
+  } catch (error) {
+    logger.warn("Unknown time zone for reminder notification", {
+      timeZone,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * Returns a cached formatter that renders an instant in a given time zone.
+ * @param {string} timeZone IANA time zone id.
+ * @return {Intl.DateTimeFormat} Formatter for that zone.
+ */
+function zoneFormatter(timeZone: string): Intl.DateTimeFormat {
+  const cached = zoneFormatters.get(timeZone);
+  if (cached) return cached;
+
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  zoneFormatters.set(timeZone, formatter);
+  return formatter;
+}
+
+/**
+ * Records which users already got the due notification for a given due value.
+ * Runs after sending: if the write fails the next pass resends, and Android
+ * collapses the repeat because both notifications share the same tag.
+ * @param {DueNotificationMark[]} marks Notifications already delivered.
+ * @return {Promise<void>} Resolves when every batch is committed.
+ */
+async function markRemindersNotified(
+  marks: DueNotificationMark[],
+): Promise<void> {
+  if (marks.length === 0) return;
+
+  const byPath = new Map<string, {
+    ref: admin.firestore.DocumentReference;
+    dueNotified: Record<string, string>;
+  }>();
+  for (const mark of marks) {
+    const entry = byPath.get(mark.ref.path) ??
+      { ref: mark.ref, dueNotified: {} };
+    entry.dueNotified[mark.userId] = mark.signature;
+    byPath.set(mark.ref.path, entry);
+  }
+
+  const entries = [...byPath.values()];
+  for (let start = 0; start < entries.length; start += MAX_BATCH_WRITES) {
+    const batch = db.batch();
+    for (const entry of entries.slice(start, start + MAX_BATCH_WRITES)) {
+      // `merge` hace merge profundo del mapa: no pisa las firmas de otros uids.
+      batch.set(entry.ref, { dueNotified: entry.dueNotified }, { merge: true });
+    }
+    await batch.commit();
+  }
 }
 
 /**

@@ -5,6 +5,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.tasks.await
+import kotlinx.datetime.TimeZone
 
 class FirestoreFcmTokenRegister(
     private val authRepository: AuthRepository,
@@ -24,6 +25,9 @@ class FirestoreFcmTokenRegister(
                     mapOf(
                         "token" to token,
                         "platform" to "android",
+                        // El vencimiento de un recordatorio es una fecha flotante: el servidor
+                        // necesita la zona del dispositivo para saber cuando enviar el aviso.
+                        "timeZoneId" to TimeZone.currentSystemDefault().id,
                         "updatedAt" to FieldValue.serverTimestamp(),
                     )
                 )

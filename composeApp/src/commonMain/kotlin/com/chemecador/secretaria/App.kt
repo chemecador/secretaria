@@ -87,6 +87,8 @@ fun App(
     googleServerClientId: String? = null,
     openListRequest: OpenListRequest? = null,
     onOpenListRequestConsumed: () -> Unit = {},
+    openRemindersRequest: Boolean = false,
+    onOpenRemindersRequestConsumed: () -> Unit = {},
 ) {
     val inspectionMode = LocalInspectionMode.current
     val modules = remember(inspectionMode) {
@@ -139,6 +141,13 @@ fun App(
                 )
             }
             onOpenListRequestConsumed()
+        }
+
+        /** El aviso de vencimiento no apunta a un recordatorio concreto, solo a la pantalla. */
+        fun openRequestedReminders() {
+            utilityBackStack = emptyList()
+            screen = Screen.Reminders
+            onOpenRemindersRequestConsumed()
         }
 
         fun openUtilityScreen(destination: Screen) {
@@ -214,6 +223,12 @@ fun App(
             val request = openListRequest ?: return@LaunchedEffect
             if (screen is Screen.Restoring || screen is Screen.Login) return@LaunchedEffect
             openRequestedList(request)
+        }
+
+        LaunchedEffect(openRemindersRequest, screen) {
+            if (!openRemindersRequest) return@LaunchedEffect
+            if (screen is Screen.Restoring || screen is Screen.Login) return@LaunchedEffect
+            openRequestedReminders()
         }
 
         SecretariaTheme {

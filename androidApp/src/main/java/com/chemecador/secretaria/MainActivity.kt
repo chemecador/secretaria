@@ -14,11 +14,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import com.chemecador.secretaria.messaging.NotificationOpenListIntent.toOpenListRequest
+import com.chemecador.secretaria.messaging.NotificationOpenRemindersIntent.isOpenRemindersRequest
 import com.chemecador.secretaria.messaging.SecretariaNotificationChannels
 
 class MainActivity : ComponentActivity() {
 
     private var pendingOpenListRequest by mutableStateOf<OpenListRequest?>(null)
+    private var pendingOpenRemindersRequest by mutableStateOf(false)
 
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* result ignored */ }
@@ -30,12 +32,15 @@ class MainActivity : ComponentActivity() {
         SecretariaNotificationChannels.ensureCreated(this)
         maybeRequestNotificationPermission()
         pendingOpenListRequest = intent.toOpenListRequest()
+        pendingOpenRemindersRequest = intent.isOpenRemindersRequest()
 
         setContent {
             App(
                 googleServerClientId = getString(R.string.default_web_client_id),
                 openListRequest = pendingOpenListRequest,
                 onOpenListRequestConsumed = { pendingOpenListRequest = null },
+                openRemindersRequest = pendingOpenRemindersRequest,
+                onOpenRemindersRequestConsumed = { pendingOpenRemindersRequest = false },
             )
         }
     }
@@ -44,6 +49,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         pendingOpenListRequest = intent.toOpenListRequest()
+        pendingOpenRemindersRequest = intent.isOpenRemindersRequest()
     }
 
     private fun maybeRequestNotificationPermission() {

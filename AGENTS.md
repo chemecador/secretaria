@@ -42,7 +42,7 @@
 ## Current Product State
 
 - Shared flows implemented: login -> lists -> notes -> note detail, plus friends.
-- Android push notifications already cover shared lists, incoming friend requests, new notes in shared lists, and shared reminders.
+- Android push notifications already cover shared lists, incoming friend requests, new notes in shared lists, shared reminders, and reminder due dates.
 - Lists support:
   - read, create, delete
   - sort by name/date
@@ -65,7 +65,7 @@
   - manual completion only; completed reminders move to a separate "Completados" screen reachable from the overflow menu
   - long press opens an options dialog: owner gets Compartir/Eliminar, invited users get "Dejar de compartir conmigo"
   - completed reminders are deleted 30 days after completion, client-side, in a single batch on screen load
-  - sharing pushes a notification; due dates still do not (see "Pending: Reminder Notifications")
+  - sharing pushes a notification, and so does the due date (see "Reminder Due Notifications")
 - Note detail supports editing title/content and delete confirmation.
 - Logout has confirmation and clears auth session on all platforms.
 - Settings screen shows account email, user code, version, author, contact, and project info.
@@ -140,11 +140,13 @@
 - iOS reads Firebase config from `iosApp/iosApp/GoogleService-Info.plist`; Google Sign-In also needs the reversed client id in `iosApp/iosApp/Info.plist` under `CFBundleURLTypes`.
 - Browser Firebase config is intentionally public; security must come from Firebase rules.
 - Firebase projects with email enumeration protection may return `INVALID_LOGIN_CREDENTIALS`; non-Android auth maps that to `WRONG_PASSWORD` to keep shared UI behavior stable.
-- `collectionGroup("noteslist").whereArrayContains("contributors", userId)` needs a composite index. Indexes live in `firebase/firestore.indexes.json`.
-- Deploy indexes with `cd firebase && firebase deploy --only firestore:indexes --project <projectId>`.
+- `whereArrayContains` over a collection group needs a single-field `fieldOverrides` entry with `queryScope: COLLECTION_GROUP`, NOT an `indexes` entry. A composite index with one `arrayConfig` field is rejected by the API with "this index is not necessary, configure using single field index controls", and that error aborts the whole index deploy. `noteslist.contributors`, `noteslist.contributorsIds` and `reminders.contributors` are declared that way in `firebase/firestore.indexes.json`.
+- Deploy indexes with `cd firebase && firebase deploy --only firestore:indexes --project <projectId>`. Never pass `--force` without checking the diff: it deletes every index in the project that is missing from the file.
 - List deletion uses a batch for notes + list document. Partial failure can leave orphaned notes; acceptable for now.
-- Reminders live under `users/{uid}/reminders`. The rules are not in this repo, so confirm they allow: the owner full access, and any uid inside `contributors` to read and to update `text`, `dueDate`, `dueTime`, `completed`, `completedAt`, `order` and `contributors` (to leave the share). Without that, sharing fails silently at write time.
-- `collectionGroup("reminders").whereArrayContains("contributors", userId)` needs its own composite index, already declared in `firebase/firestore.indexes.json`.
+- Security rules live in `firebase/firestore.rules` and are wired in `firebase.json`. That file is the source of truth: a deploy overwrites whatever the console has.
+- Reminders live under `users/{uid}/reminders`. The owner rule must NOT depend on `resource`: a list query over the whole collection is evaluated document by document, so a single pre-sharing reminder without `contributors` would deny the entire read, and `create` has a null `resource`.
+- A recursive wildcard nested inside `/users/{userId}` does not apply to collection group queries. `collectionGroup("reminders")` needs `match /{path=**}/reminders/{reminderId}` at the root of the rules file. Same for `noteslist`.
+- `collectionGroup("reminders").whereArrayContains("contributors", userId)` needs its own `fieldOverrides` entry, already declared in `firebase/firestore.indexes.json` and deployed.
 
 ## Reminders
 
@@ -175,21 +177,25 @@
 - The reminders feature reuses `noteslists.ListCollaborator` instead of duplicating it; the sharing dialog is a copy of `ShareListDialog` because the Compose bodies are private to their screens.
 - `onReminderShared` in `firebase/functions/src/index.ts` pushes to newly added contributors on the `reminder_shared` Android channel. Reminders have no `creator` field, so the notification shows the reminder text rather than the sharer's name; add a `creator` field first if that ever matters.
 - Deploy after touching this: `firebase deploy --only firestore:indexes,functions --project <projectId>`.
+- `sendPushToUser` is now `loadUserTokens` + `sendPushToTokens`. The split exists so the due-date sweep can read a user's tokens once per pass (it needs the timezone before deciding whether to send) and reuse them; the event-driven functions are unaffected.
 
-## Pending: Reminder Notifications
+## Reminder Due Notifications
 
-- This section is about DUE-DATE notifications only. Share notifications already exist (`onReminderShared`); what is missing is "avisame a las 09:00".
-- Phase 1 of reminders shipped deliberately without them: no local alarms, no scheduling, no permissions.
-- When notifications are added:
-  - Use LOCAL scheduling per platform, not server-side FCM fan-out. A personal reminder has exactly one recipient, so the existing Cloud Functions in `firebase/functions/src/index.ts` (shared lists, friend requests, notes in shared lists) are not a template here.
-  - Android: `AlarmManager` (or WorkManager) + `POST_NOTIFICATIONS` runtime permission on API 33+ + reschedule on `BOOT_COMPLETED`.
-  - iOS: `UNUserNotificationCenter` local notifications.
-  - JVM/JS/Wasm: out of scope; use a no-op.
-  - Resolve the floating `dueDate`/`dueTime` against the DEVICE timezone at scheduling time. That is the desired "remind me at 09:00 wherever I am" semantics and the reason no `timeZoneId` is stored.
-  - Reminders with no `due` are never schedulable.
-  - Reschedule triggers: create, edit due, complete, restore, delete, session restore on app start, timezone change, Android reboot.
-  - Suggested shape: a `ReminderScheduler` interface in `commonMain` with a `NoopReminderScheduler`, wired per platform in `di/PlatformModule.*.kt` and called from `RemindersViewModel` after successful mutations. This mirrors `FcmTokenRegister` / `NoopFcmTokenRegister`.
-  - If "notify at the timezone where I created it" is ever required, add a nullable `dueTimeZoneId` field; existing documents default to the device timezone. It is an additive change.
+- Implemented as PUSH, not as local alarms. An earlier draft of this file planned `AlarmManager` / `UNUserNotificationCenter`; that was dropped on purpose. Push works with the app closed, needs no `BOOT_COMPLETED` receiver and no per-platform scheduler, and delivers to every contributor of a shared reminder. The cost is that it only reaches targets that register an FCM token: today that is Android only, because JVM/JS/Wasm/iOS still use `NoopFcmTokenRegister`. Wiring a token register on iOS is what would extend this to iOS; nothing else has to change.
+- `onReminderDue` in `firebase/functions/src/index.ts` is a `onSchedule("every 5 minutes")` sweep, not a Firestore trigger. It has to be a sweep: `dueDate`/`dueTime` are FLOATING, so the document never says at which absolute instant it is due and there is nothing to schedule ahead of time.
+- Each pass queries the `reminders` collection group with `completed == false` and `dueDate` inside `[utcToday - 1d, utcToday + 1d]`. Real UTC offsets run from -12 to +14, so a local calendar day is never more than one day away from the UTC one and that window provably covers every timezone. This is what keeps the sweep from reading the whole collection.
+- The floating due is resolved against the timezone of EACH recipient, which preserves the "avisame a las 09:00 este donde este" semantics and is why no `timeZoneId` is stored on the reminder.
+- The device timezone lives on the FCM token document (`users/{uid}/fcm_tokens/{token}.timeZoneId`), not on the user or the reminder: it describes a device, and a push is delivered to a device. Written by `FirestoreFcmTokenRegister` (login / session restore) and by `SecretariaMessagingService.onNewToken`. If a user has several devices, the most recently updated token wins. Missing or unknown zone falls back to `Europe/Madrid`.
+- A reminder with `dueTime == null` ("todo el dia") notifies at `ALL_DAY_DUE_TIME` (09:00 local). That constant is the single point of change if it ever becomes a user setting.
+- Delivery bookkeeping is a map on the reminder document: `dueNotified: { uid: signature }`, where `signature` is `"yyyy-MM-ddTHH:mm"` or `"yyyy-MM-ddTall-day"`. Editing the due date changes the signature, so the reminder notifies again; completing it drops out of the query; restoring one whose due already passed does NOT re-notify, because the signature is already recorded.
+- Sending happens BEFORE marking. If the mark write fails the next pass resends, and Android collapses the repeat because both notifications carry the same `tag`. Losing a reminder is worse than a duplicate that cannot actually duplicate on screen.
+- `MAX_LATE_MS` (1 hour) drops avisos that are already stale. It also caps the burst on first deploy, when the window is full of reminders that were due before the feature existed.
+- The `dueNotified` write re-triggers `onReminderShared` on the same path. That is harmless: contributors are unchanged, so it returns immediately.
+- Needs a composite index (`completed` ASC + `dueDate` ASC, `COLLECTION_GROUP` scope), already declared in `firebase/firestore.indexes.json`. Scheduled functions also need Cloud Scheduler enabled on the project.
+- Android side: own channel `reminder_due` with `IMPORTANCE_HIGH` so due avisos can be silenced without losing the sharing ones. Tapping opens the Reminders screen through `com.chemecador.secretaria.OPEN_REMINDERS` -> `NotificationOpenRemindersIntent` -> `App(openRemindersRequest = ...)`, mirroring the `OPEN_LIST` path.
+- A notification intent extra arrives with TWO different types depending on who painted the notification: a real `Boolean` when `SecretariaMessagingService` builds it in the foreground, and a `String` when the system paints it in the background, because there the extras come straight from the FCM `data` payload. `getBooleanExtra` silently returns the default in the background case, so any boolean extra read from a notification intent must accept both.
+- The timezone helpers in `index.ts` (`floatingDueToEpochMs` / `timeZoneOffsetMs`) use `Intl` with a two-pass offset correction instead of a date library, so `functions/package.json` keeps zero extra dependencies. Verified against DST transitions, sub-hour offsets (+05:30, +05:45, +12:45) and the extremes (+14, -11).
+- If "notify at the timezone where I created it" is ever required, add a nullable `dueTimeZoneId` field on the reminder and prefer it over the device zone; existing documents keep the current behavior. It is an additive change.
 
 ## Build And Test Pitfalls
 
@@ -241,7 +247,7 @@
 ## Near-Term Roadmap
 
 - notifications expansion
-- reminder notifications (see "Pending: Reminder Notifications")
+- FCM token registration on iOS, which is all that reminder due notifications need to reach iOS
 
 ## Notes For Future Agents
 

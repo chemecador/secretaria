@@ -12,6 +12,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import java.util.TimeZone
 
 class SecretariaMessagingService : FirebaseMessagingService() {
 
@@ -32,7 +33,14 @@ class SecretariaMessagingService : FirebaseMessagingService() {
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            // En API 26+ manda el canal; esto solo cubre los dispositivos anteriores.
+            .setPriority(
+                if (channelId == SecretariaNotificationChannels.REMINDER_DUE_CHANNEL_ID) {
+                    NotificationCompat.PRIORITY_HIGH
+                } else {
+                    NotificationCompat.PRIORITY_DEFAULT
+                },
+            )
 
         createContentIntent(context, message)?.let(builder::setContentIntent)
 
@@ -54,6 +62,9 @@ class SecretariaMessagingService : FirebaseMessagingService() {
                 mapOf(
                     "token" to token,
                     "platform" to "android",
+                    // Mismo documento que escribe FirestoreFcmTokenRegister: el aviso de
+                    // vencimiento resuelve la fecha flotante contra esta zona horaria.
+                    "timeZoneId" to TimeZone.getDefault().id,
                     "updatedAt" to FieldValue.serverTimestamp(),
                 ),
             )
@@ -78,6 +89,9 @@ class SecretariaMessagingService : FirebaseMessagingService() {
                     NotificationOpenListIntent.EXTRA_LIST_ORDERED,
                     message.data[DATA_OPEN_LIST_ORDERED].toBoolean(),
                 )
+            } else if (message.data[DATA_OPEN_REMINDERS].toBoolean()) {
+                action = NotificationOpenRemindersIntent.ACTION_OPEN_REMINDERS
+                putExtra(NotificationOpenRemindersIntent.EXTRA_OPEN_REMINDERS, true)
             }
         }
         return PendingIntent.getActivity(
@@ -104,6 +118,7 @@ class SecretariaMessagingService : FirebaseMessagingService() {
         const val DATA_OPEN_LIST_NAME = "openListName"
         const val DATA_OPEN_LIST_ORDERED = "openListOrdered"
         const val DATA_OPEN_LIST_OWNER_ID = "openListOwnerId"
+        const val DATA_OPEN_REMINDERS = "openReminders"
         const val DATA_TITLE = "title"
         const val FCM_TOKENS = "fcm_tokens"
         const val USERS = "users"
