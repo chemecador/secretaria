@@ -223,6 +223,9 @@
     <string name="reminder_due_add_time">Añadir hora</string>
     <string name="reminder_due_clear_time">Quitar hora</string>
     <string name="reminder_due_with_time">%1$s · %2$s</string>
+    <string name="notifications_disabled_title">Notificaciones desactivadas</string>
+    <string name="notifications_disabled_message">Tienes las notificaciones desactivadas, así que no podremos avisarte cuando llegue la fecha. El recordatorio se guardará igual y seguirás viendo la fecha en la lista.</string>
+    <string name="notifications_disabled_enable">Activar</string>
     <string name="reminder_completed_on">Completado el %1$s</string>
     <string name="reminder_completed_retention">Los recordatorios completados se eliminan a los 30 días.</string>
     <string name="reorder_reminder_handle">Mantén pulsado para reordenar el recordatorio</string>

@@ -92,6 +92,7 @@ import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.notes.NotesReorderState
 import com.chemecador.secretaria.noteslists.ListCollaborator
 import com.chemecador.secretaria.noteslists.formatNotesListDate
+import com.chemecador.secretaria.rememberNotificationPermissionController
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -114,6 +115,9 @@ import secretaria.composeapp.generated.resources.leave_shared_reminder_error
 import secretaria.composeapp.generated.resources.leave_shared_reminder_message
 import secretaria.composeapp.generated.resources.leave_shared_reminder_success
 import secretaria.composeapp.generated.resources.leave_shared_reminder_title
+import secretaria.composeapp.generated.resources.notifications_disabled_enable
+import secretaria.composeapp.generated.resources.notifications_disabled_message
+import secretaria.composeapp.generated.resources.notifications_disabled_title
 import secretaria.composeapp.generated.resources.reminder_complete_action
 import secretaria.composeapp.generated.resources.reminder_completed_error
 import secretaria.composeapp.generated.resources.reminder_completed_feedback
@@ -735,6 +739,9 @@ internal fun ReminderCard(
  *
  * El vencimiento esta detras de un interruptor: la mayoria de recordatorios no lo llevan, asi que
  * los botones de fecha y hora solo aparecen cuando el usuario los pide.
+ *
+ * Encender el interruptor es el momento de comprobar el permiso de notificaciones: es justo cuando
+ * el usuario espera un aviso, y el estado se consulta entonces porque pudo cambiarlo en ajustes.
  */
 @Composable
 private fun ReminderEditorDialog(
@@ -750,6 +757,18 @@ private fun ReminderEditorDialog(
     var isDueEnabled by remember { mutableStateOf(initialDue != null) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    var showNotificationsDisabled by remember { mutableStateOf(false) }
+    val notificationPermission = rememberNotificationPermissionController()
+
+    if (showNotificationsDisabled) {
+        NotificationsDisabledDialog(
+            onDismiss = { showNotificationsDisabled = false },
+            onEnable = {
+                showNotificationsDisabled = false
+                notificationPermission?.requestNotifications()
+            },
+        )
+    }
 
     if (showDatePicker) {
         ReminderDatePickerDialog(
@@ -810,7 +829,11 @@ private fun ReminderEditorDialog(
                         onCheckedChange = { enabled ->
                             isDueEnabled = enabled
                             // Apagar el interruptor es la forma de quitar el vencimiento.
-                            if (!enabled) due = null
+                            if (!enabled) {
+                                due = null
+                            } else if (notificationPermission?.areNotificationsEnabled() == false) {
+                                showNotificationsDisabled = true
+                            }
                         },
                     )
                 }
@@ -832,6 +855,35 @@ private fun ReminderEditorDialog(
                 enabled = text.isNotBlank(),
             ) {
                 Text(confirmLabel)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
+}
+
+/**
+ * Solo informa: el vencimiento se guarda de todas formas. Sin permiso se pierde el aviso, no la
+ * fecha, que se sigue viendo en la lista y se sigue resaltando al vencer.
+ */
+@Composable
+private fun NotificationsDisabledDialog(
+    onDismiss: () -> Unit,
+    onEnable: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        title = { Text(stringResource(Res.string.notifications_disabled_title)) },
+        text = { Text(stringResource(Res.string.notifications_disabled_message)) },
+        confirmButton = {
+            TextButton(onClick = onEnable) {
+                Text(stringResource(Res.string.notifications_disabled_enable))
             }
         },
         dismissButton = {
