@@ -100,8 +100,36 @@
 - Typed UI errors should live in state, usually alongside `Result<T>`.
 - Reuse `noteslists/formatNotesListDate()` instead of adding new date formatters.
 - Do not hardcode user-facing strings in shared UI; use `composeApp/src/commonMain/composeResources/values/strings.xml`.
-- App language is Spanish.
+- Never hardcode a user-facing message in a ViewModel either. Typed errors resolved in the screen
+  are the pattern: `login.AuthError` and `noteslists.NotesListsError`, both mapped by a private
+  `toStringRes()` in their screen. Raw `throwable.message` is only for repository failures.
 - Use Material icons, not text-character substitutes.
+
+## Localization
+
+- English is the DEFAULT locale: `composeResources/values/strings.xml` is English and
+  `values-es/strings.xml` is Spanish. Any device whose language is not Spanish gets English.
+  Adding a language means adding `values-<lang>/`, never editing the default into another language.
+- Both files must keep the same keys, the same order, and the same `%1$s` placeholders.
+- Compose resources only unescape `\n`, `\t`, `\uXXXX` and `\` (see `handleSpecialCharacters` in
+  the Compose Gradle plugin). `\'` is NOT unescaped, so apostrophes go in raw: write `don't`, not
+  the escaped form, or the backslash shows up on screen. Real Android resources under `res/values*`
+  are the opposite and still need the escape.
+- Android host resources are separate and also split by locale: `androidApp/src/main/res/values`
+  (English) and `values-es` hold the four notification channel names and descriptions.
+- Dates and clock times are not fixed: `format/DateTimeFormat.kt` resolves them from two tokens in
+  strings.xml, `format_date_order` (`month_first` / anything else) and `format_clock` (`12h` /
+  anything else), and travels via `LocalDateTimeFormat` provided once in `App.kt`. The resolution
+  is resource-driven because kotlinx-datetime has no locale support and Compose resources expose
+  no locale API, so the app language is the only signal available. Unknown token values fall back
+  to the Spanish original, `dd/MM/yyyy` and 24h.
+- `formatNotesListDate` and `formatReminderTime` are `@Composable` now; the pure logic they wrap is
+  `DateTimeFormat.formatDate` / `formatTime`, which is what the tests exercise.
+- Push notification texts live in `NOTIFICATION_TEXTS` in `firebase/functions/src/index.ts`, not at
+  the call sites: `sendPushToUser` / `sendPushToTokens` take a builder that receives the recipient's
+  texts. The language comes from `users/{uid}/fcm_tokens/{token}.language`, written next to
+  `timeZoneId`. A token without that field falls back to Spanish (`LEGACY_LANGUAGE`), because those
+  are pre-existing devices of the Spanish user base; an unknown language falls back to English.
 
 ## Platform Snapshot
 
