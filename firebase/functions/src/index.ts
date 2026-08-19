@@ -6,6 +6,15 @@ import {
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions";
 import * as admin from "firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
+
+export {
+  cleanupExpiredNotePhotoReservations,
+  deleteNotePhoto,
+  onNotePhotoMetadataDeleted,
+  onNoteWithPhotosDeleted,
+  uploadNotePhoto,
+} from "./notePhotos";
 
 admin.initializeApp();
 
@@ -553,7 +562,7 @@ function asStringMap(value: unknown): Record<string, string> {
  * @return {number} Epoch millis or zero.
  */
 function asEpochMillis(value: unknown): number {
-  if (value instanceof admin.firestore.Timestamp) return value.toMillis();
+  if (value instanceof Timestamp) return value.toMillis();
   return 0;
 }
 

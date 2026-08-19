@@ -1,0 +1,42 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function permanentUser() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function listMember(ownerId, listId) {
+      return request.auth.uid == ownerId
+        || request.auth.uid in firestore.get(
+          /databases/(default)/documents/users/$(ownerId)/noteslist/$(listId)
+        ).data.get('contributors', []);
+    }
+
+    function photoMatchesObject(ownerId, listId, noteId, photoId, fileName) {
+      let photo = firestore.get(
+        /databases/(default)/documents/users/$(ownerId)/noteslist/$(listId)/notes/$(noteId)/photos/$(photoId)
+      ).data;
+      let prefix = 'note-images/' + ownerId + '/' + listId + '/' + noteId + '/' + photoId + '/';
+      return photo.status == 'ready'
+        && (
+          (fileName == 'original.jpg'
+            && photo.storagePath == prefix + fileName)
+          || (fileName == 'thumbnail.jpg'
+            && photo.thumbnailPath == prefix + fileName)
+        );
+    }
+
+    match /note-images/{ownerId}/{listId}/{noteId}/{photoId}/{fileName} {
+      allow get: if permanentUser()
+        && (fileName == 'original.jpg' || fileName == 'thumbnail.jpg')
+        && listMember(ownerId, listId)
+        && photoMatchesObject(ownerId, listId, noteId, photoId, fileName);
+      allow list, create, update, delete: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

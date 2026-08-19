@@ -3,6 +3,7 @@ agp = "9.2.0"
 androidx-credentials = "1.6.0"
 androidx-activity = "1.13.0"
 androidx-core = "1.18.0"
+androidx-exifinterface = "1.4.2"
 androidx-lifecycle = "2.10.0"
 composeHotReload = "1.0.0"
 composeMultiplatform = "1.10.3"
@@ -10,6 +11,7 @@ kotlin = "2.3.20"
 google-services = "4.4.4"
 googleid = "1.2.0"
 google-mobile-ads = "24.9.0"
+firebase-appcheck = "19.3.0"
 koin = "4.2.1"
 kotlinx-coroutines = "1.10.2"
 kotlinx-datetime = "0.7.1"
@@ -21,6 +23,7 @@ kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotl
 androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "androidx-credentials" }
 androidx-credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "androidx-credentials" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
+androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "androidx-exifinterface" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 compose-uiTooling = { module = "org.jetbrains.compose.ui:ui-tooling", version.ref = "composeMultiplatform" }
 compose-materialIconsExtended = { module = "org.jetbrains.compose.material:material-icons-extended", version = "1.7.3" }
@@ -39,8 +42,12 @@ kotlinx-coroutinesTest = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-te
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 firebase-auth = { module = "com.google.firebase:firebase-auth", version = "24.0.1" }
+firebase-appcheck-debug = { module = "com.google.firebase:firebase-appcheck-debug", version.ref = "firebase-appcheck" }
+firebase-appcheck-playintegrity = { module = "com.google.firebase:firebase-appcheck-playintegrity", version.ref = "firebase-appcheck" }
 firebase-firestore = { module = "com.google.firebase:firebase-firestore", version = "26.2.0" }
+firebase-functions = { module = "com.google.firebase:firebase-functions", version = "22.1.1" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging", version = "24.1.2" }
+firebase-storage = { module = "com.google.firebase:firebase-storage", version = "22.0.1" }
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 google-mobile-ads = { module = "com.google.android.gms:play-services-ads", version.ref = "google-mobile-ads" }
 koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }

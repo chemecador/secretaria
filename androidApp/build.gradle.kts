@@ -96,5 +96,7 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.messaging)
 
+    debugImplementation(libs.firebase.appcheck.debug)
     debugImplementation(libs.compose.uiTooling)
+    releaseImplementation(libs.firebase.appcheck.playintegrity)
 }

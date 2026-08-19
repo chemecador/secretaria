@@ -32,6 +32,7 @@ import com.chemecador.secretaria.login.rememberGoogleSignInController
 import com.chemecador.secretaria.messaging.FcmTokenRegister
 import com.chemecador.secretaria.notes.Note
 import com.chemecador.secretaria.notes.NoteDetailScreen
+import com.chemecador.secretaria.notes.NotePhotosViewModel
 import com.chemecador.secretaria.notes.NotesScreen
 import com.chemecador.secretaria.notes.NotesViewModel
 import com.chemecador.secretaria.noteslists.NotesListsScreen
@@ -436,6 +437,11 @@ private fun AppContent(
                                 koinViewModel<NotesViewModel>(key = "${current.ownerId}:${current.listId}") {
                                     parametersOf(current.ownerId, current.listId)
                                 }
+                            val photosViewModel = koinViewModel<NotePhotosViewModel>(
+                                key = "${current.ownerId}:${current.listId}:${current.note.id}:photos",
+                            ) {
+                                parametersOf(current.ownerId, current.listId, current.note.id)
+                            }
                             val backToNotes = Screen.Notes(
                                 current.ownerId,
                                 current.listId,
@@ -445,6 +451,7 @@ private fun AppContent(
                             )
                             NoteDetailScreen(
                                 note = current.note,
+                                photosViewModel = photosViewModel,
                                 onSave = { title, content, completed, color ->
                                     notesViewModel.updateNote(
                                         noteId = current.note.id,

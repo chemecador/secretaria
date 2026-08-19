@@ -86,6 +86,7 @@ import secretaria.composeapp.generated.resources.note_detail_unsaved_title
 @Composable
 fun NoteDetailScreen(
     note: Note,
+    photosViewModel: NotePhotosViewModel,
     onSave: (title: String, content: String, completed: Boolean, color: Long) -> Unit,
     onDelete: () -> Unit,
     onBack: () -> Unit,
@@ -279,6 +280,10 @@ fun NoteDetailScreen(
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                 ),
                 modifier = Modifier.fillMaxWidth(),
+            )
+            NotePhotosSection(
+                viewModel = photosViewModel,
+                modifier = Modifier.padding(top = 16.dp),
             )
             Spacer(Modifier.height(16.dp))
             Row(

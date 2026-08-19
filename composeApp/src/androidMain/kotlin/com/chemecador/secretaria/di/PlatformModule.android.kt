@@ -7,6 +7,8 @@ import com.chemecador.secretaria.login.FirebaseAuthRepository
 import com.chemecador.secretaria.messaging.FcmTokenRegister
 import com.chemecador.secretaria.messaging.FirestoreFcmTokenRegister
 import com.chemecador.secretaria.notes.FirestoreNotesRepository
+import com.chemecador.secretaria.notes.FirebaseNotePhotosRepository
+import com.chemecador.secretaria.notes.NotePhotosRepository
 import com.chemecador.secretaria.notes.NotesRepository
 import com.chemecador.secretaria.noteslists.FirestoreNotesListsRepository
 import com.chemecador.secretaria.noteslists.NotesListsRepository
@@ -21,6 +23,7 @@ internal actual fun platformModule(): Module = module {
     single<AuthRepository> { FirebaseAuthRepository() }
     single<NotesListsRepository> { FirestoreNotesListsRepository(get()) }
     single<NotesRepository> { FirestoreNotesRepository(get()) }
+    single<NotePhotosRepository> { FirebaseNotePhotosRepository() }
     single<RemindersRepository> { FirestoreRemindersRepository(get()) }
     single<FriendsRepository> { FirestoreFriendsRepository(get()) }
     single<AccountSettingsRepository> { FirestoreAccountSettingsRepository(get()) }

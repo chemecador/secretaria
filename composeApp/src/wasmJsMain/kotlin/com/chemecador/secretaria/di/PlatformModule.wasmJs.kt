@@ -7,6 +7,8 @@ import com.chemecador.secretaria.login.FakeAuthRepository
 import com.chemecador.secretaria.messaging.FcmTokenRegister
 import com.chemecador.secretaria.messaging.NoopFcmTokenRegister
 import com.chemecador.secretaria.notes.FakeNotesRepository
+import com.chemecador.secretaria.notes.NoopNotePhotosRepository
+import com.chemecador.secretaria.notes.NotePhotosRepository
 import com.chemecador.secretaria.notes.NotesRepository
 import com.chemecador.secretaria.noteslists.FakeNotesListsRepository
 import com.chemecador.secretaria.noteslists.NotesListsRepository
@@ -21,6 +23,7 @@ internal actual fun platformModule(): Module = module {
     single<AuthRepository> { FakeAuthRepository() }
     single<NotesListsRepository> { FakeNotesListsRepository() }
     single<NotesRepository> { FakeNotesRepository() }
+    single<NotePhotosRepository> { NoopNotePhotosRepository() }
     single<RemindersRepository> { FakeRemindersRepository() }
     single<FriendsRepository> { FakeFriendsRepository() }
     single<AccountSettingsRepository> { FakeAccountSettingsRepository() }

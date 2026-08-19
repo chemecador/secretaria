@@ -5,6 +5,8 @@
     "lint": "eslint --ext .js,.ts .",
     "build": "tsc",
     "build:watch": "tsc --watch",
+    "test:rules": "node --test test/security-rules.test.js",
+    "test:integration:note-photos": "npm run build && firebase emulators:exec --config ../firebase.note-photos.emulators.json --project demo-secretaria --only auth,firestore,storage,functions \"node --test test/note-photos.integration.test.js\"",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
@@ -17,9 +19,11 @@
   "main": "lib/index.js",
   "dependencies": {
     "firebase-admin": "^13.0.0",
-    "firebase-functions": "^6.1.0"
+    "firebase-functions": "^6.1.0",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.57.0",

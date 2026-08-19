@@ -6,12 +6,14 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.login.FakeAuthRepository
 import com.chemecador.secretaria.notes.NotesViewModel
+import com.chemecador.secretaria.notes.NotePhotosViewModel
 import com.chemecador.secretaria.noteslists.NotesListsViewModel
 import com.chemecador.secretaria.reminders.RemindersViewModel
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
@@ -82,6 +84,18 @@ class AppModulesTest : KoinTest {
 
         assertTrue(viewModel.state.value.notes.isNotEmpty())
         assertEquals("work-1", viewModel.state.value.notes.first().id)
+    }
+
+    @Test
+    fun resolvesParameterizedNotePhotosViewModelWithUnsupportedPreviewRepository() {
+        val viewModel = resolveTestViewModel(
+            NotePhotosViewModel::class,
+            key = "Alex:work:work-1:photos",
+        ) {
+            parametersOf("Alex", "work", "work-1")
+        }
+
+        assertFalse(viewModel.state.value.isSupported)
     }
 
     private fun <T : ViewModel> resolveTestViewModel(

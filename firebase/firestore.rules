@@ -1,56 +1,270 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function permanentUser() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function owns(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function listMember(ownerId, listId) {
+      return signedIn()
+        && (
+          request.auth.uid == ownerId
+          || request.auth.uid in get(
+            /databases/$(database)/documents/users/$(ownerId)/noteslist/$(listId)
+          ).data.get('contributors', [])
+        );
+    }
+
+    function friendshipParticipant(data) {
+      return signedIn()
+        && (
+          data.senderId == request.auth.uid
+          || data.receiverId == request.auth.uid
+        );
+    }
+
+    function changedOnly(fields) {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly(fields);
+    }
+
+    function directContributors(data) {
+      return data.get(
+        'directContributors',
+        data.get('contributors', [])
+      );
+    }
+
+    function inheritedContributors(data) {
+      return data.get('inheritedGroupContributors', []);
+    }
+
+    function validEffectiveContributors(ownerId, data) {
+      let contributors = data.get('contributors', []);
+      let expected = [ownerId].toSet()
+        .union(directContributors(data).toSet())
+        .union(inheritedContributors(data).toSet());
+      return contributors is list
+        && contributors.toSet() == expected
+        && contributors.size() == contributors.toSet().size();
+    }
+
+    function ownArchiveUpdate() {
+      let uid = request.auth.uid;
+      let oldArchived = resource.data.get('archivedBy', []);
+      let newArchived = request.resource.data.get('archivedBy', []);
+      let oldDates = resource.data.get('archivedAtBy', {});
+      let newDates = request.resource.data.get('archivedAtBy', {});
+      let addsOwnArchive = newArchived.toSet()
+        == oldArchived.toSet().union([uid].toSet())
+        && uid in newDates
+        && newDates[uid] is timestamp;
+      let removesOwnArchive = newArchived.toSet()
+        == oldArchived.toSet().difference([uid].toSet())
+        && !(uid in newDates);
+      return changedOnly(['archivedBy', 'archivedAtBy'])
+        && newArchived is list
+        && newArchived.size() == newArchived.toSet().size()
+        && newDates is map
+        && newDates.diff(oldDates).affectedKeys().hasOnly([uid])
+        && (addsOwnArchive || removesOwnArchive);
+    }
+
+    function leavesDirectShare(ownerId) {
+      let uid = request.auth.uid;
+      let oldDirect = directContributors(resource.data);
+      let newDirect = directContributors(request.resource.data);
+      return uid in oldDirect
+        && changedOnly(['directContributors', 'contributors'])
+        && newDirect.toSet()
+          == oldDirect.toSet().difference([uid].toSet())
+        && inheritedContributors(request.resource.data).toSet()
+          == inheritedContributors(resource.data).toSet()
+        && validEffectiveContributors(ownerId, request.resource.data);
+    }
+
+    function leavesInheritedShare(ownerId) {
+      let uid = request.auth.uid;
+      let oldInherited = inheritedContributors(resource.data);
+      let newInherited = inheritedContributors(request.resource.data);
+      return uid in oldInherited
+        && changedOnly([
+          'directContributors',
+          'inheritedGroupContributors',
+          'contributors'
+        ])
+        && directContributors(request.resource.data).toSet()
+          == directContributors(resource.data).toSet()
+        && newInherited.toSet()
+          == oldInherited.toSet().difference([uid].toSet())
+        && validEffectiveContributors(ownerId, request.resource.data);
+    }
+
+    function managesOwnGroup(ownerId) {
+      let uid = request.auth.uid;
+      let oldGroupOwner = resource.data.get('groupOwnerId', null);
+      let newGroupOwner = request.resource.data.get('groupOwnerId', null);
+      let newGroupId = request.resource.data.get('groupId', null);
+      let newInherited = inheritedContributors(request.resource.data);
+      let assignsOwnGroup = (oldGroupOwner == null || oldGroupOwner == uid)
+        && newGroupOwner == uid
+        && newGroupId is string
+        && getAfter(
+          /databases/$(database)/documents/users/$(uid)/noteslist/$(newGroupId)
+        ).data.get('isGroup', false) == true
+        && newInherited.toSet() == directContributors(getAfter(
+          /databases/$(database)/documents/users/$(uid)/noteslist/$(newGroupId)
+        ).data).toSet();
+      let removesOwnGroup = oldGroupOwner == uid
+        && newGroupOwner == null
+        && newGroupId == null
+        && newInherited.size() == 0;
+      return changedOnly([
+          'directContributors',
+          'groupId',
+          'groupOwnerId',
+          'groupOrder',
+          'inheritedGroupContributors',
+          'contributors'
+        ])
+        && directContributors(request.resource.data).toSet()
+          == directContributors(resource.data).toSet()
+        && validEffectiveContributors(ownerId, request.resource.data)
+        && (assignsOwnGroup || removesOwnGroup);
+    }
+
+    function validMemberListUpdate(ownerId) {
+      return signedIn()
+        && request.auth.uid in resource.data.get('contributors', [])
+        && (
+          ownArchiveUpdate()
+          || leavesDirectShare(ownerId)
+          || leavesInheritedShare(ownerId)
+          || managesOwnGroup(ownerId)
+        );
+    }
+
+    function validSharedReminderUpdate(ownerId) {
+      let uid = request.auth.uid;
+      let oldContributors = resource.data.get('contributors', []);
+      let newContributors = request.resource.data.get('contributors', []);
+      let editsContent = changedOnly([
+        'text',
+        'dueDate',
+        'dueTime',
+        'completed',
+        'completedAt',
+        'order'
+      ]);
+      let leavesReminder = changedOnly(['contributors'])
+        && newContributors.toSet()
+          == oldContributors.toSet().difference([uid].toSet())
+        && ownerId in newContributors;
+      return signedIn()
+        && uid in oldContributors
+        && (editsContent || leavesReminder);
+    }
+
     match /users/{userId} {
-      allow read, write: if request.auth != null;
+      // Los perfiles se consultan por usercode para localizar amigos.
+      allow read: if signedIn();
+      allow create, update, delete: if owns(userId);
 
       match /noteslist/{listId} {
-        allow read, write: if request.auth != null;
+        allow read: if owns(userId)
+          || (signedIn() && request.auth.uid in resource.data.get('contributors', []));
+        allow create: if owns(userId);
+
+        allow update: if owns(userId) || validMemberListUpdate(userId);
+        allow delete: if owns(userId);
 
         match /notes/{noteId} {
-          allow read, write: if request.auth != null;
+          allow read, create, update, delete: if listMember(userId, listId);
+
+          match /photos/{photoId} {
+            allow read: if permanentUser() && listMember(userId, listId);
+            allow write: if false;
+          }
+
+          match /_photoInternal/{documentId} {
+            allow read, write: if false;
+          }
         }
       }
 
       match /fcm_tokens/{tokenId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if owns(userId);
       }
 
-      // El dueno manda por ruta: sin condiciones sobre `resource` para que la lectura
-      // de la coleccion completa no dependa de que cada documento tenga `contributors`,
-      // y para que `create` (donde `resource` es null) funcione.
+      // El dueno manda por ruta. Un invitado puede leer y editar el recordatorio,
+      // pero no borrarlo.
       match /reminders/{reminderId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-
-        // Un invitado puede leer y editar el documento compartido, pero no borrarlo.
-        allow read, update: if request.auth != null
+        allow read, write: if owns(userId);
+        allow read: if signedIn()
           && resource != null
           && request.auth.uid in resource.data.get('contributors', []);
+        allow update: if validSharedReminderUpdate(userId);
       }
     }
 
-    // Comodin recursivo en la raiz: unico sitio donde una regla aplica a
-    // `collectionGroup("reminders").whereArrayContains("contributors", uid)`.
+    // Las consultas collectionGroup no heredan el match anidado.
+    match /{path=**}/noteslist/{listId} {
+      allow read: if signedIn()
+        && request.auth.uid in resource.data.get('contributors', []);
+    }
+
     match /{path=**}/reminders/{reminderId} {
-      allow read: if request.auth != null
+      allow read: if signedIn()
         && resource != null
         && request.auth.uid in resource.data.get('contributors', []);
     }
 
-    match /{document=**}/noteslist/{listId} {
-      allow read, write: if request.auth != null;
-    }
-
-    match /users {
-      allow read: if request.auth != null;
-    }
-
     match /friendships/{friendshipId} {
-      allow read, write: if request.auth != null;
+      allow read: if friendshipParticipant(resource.data);
+      allow create: if signedIn()
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.receiverId != request.auth.uid
+        && request.resource.data.acceptanceDate == null;
+      allow update: if signedIn()
+        && resource.data.receiverId == request.auth.uid
+        && resource.data.acceptanceDate == null
+        && request.resource.data.senderId == resource.data.senderId
+        && request.resource.data.receiverId == resource.data.receiverId
+        && changedOnly(['acceptanceDate', 'receiverName'])
+        && request.resource.data.acceptanceDate is timestamp
+        && request.resource.data.receiverName is string;
+      allow delete: if friendshipParticipant(resource.data);
     }
 
     match /usercodes/{dateKey} {
-      allow read, write: if request.auth != null;
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.counter == 1;
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['counter'])
+        && request.resource.data.counter == resource.data.counter + 1;
+    }
+
+    // Solo Admin SDK/Cloud Functions puede escribir metadatos y contadores.
+    match /notePhotoUploadRequests/{documentId} {
+      allow read, write: if false;
+    }
+
+    match /notePhotoQuotas/{userId} {
+      allow read, write: if false;
+    }
+
+    match /notePhotoSystem/{documentId} {
+      allow read, write: if false;
     }
   }
 }
