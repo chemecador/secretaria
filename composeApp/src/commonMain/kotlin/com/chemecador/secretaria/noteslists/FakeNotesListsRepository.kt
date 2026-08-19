@@ -187,6 +187,23 @@ class FakeNotesListsRepository(
     companion object {
         private const val CURRENT_USER_ID = "Alex"
 
+        fun seedListsFor(languageCode: String): List<NotesListSummary> =
+            if (languageCode.startsWith("es", ignoreCase = true)) {
+                seedLists
+            } else {
+                seedLists.map { list ->
+                    list.copy(
+                        name = when (list.id) {
+                            "shopping" -> "Weekly groceries"
+                            "work" -> "Work"
+                            "travel" -> "Trip to Japan"
+                            "books" -> "Books to read"
+                            else -> list.name
+                        },
+                    )
+                }
+            }
+
         val seedLists = listOf(
             NotesListSummary(
                 id = "shopping",

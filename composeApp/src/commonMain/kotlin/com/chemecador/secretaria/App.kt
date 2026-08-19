@@ -44,12 +44,15 @@ import com.chemecador.secretaria.reminders.RemindersViewModel
 import com.chemecador.secretaria.settings.SettingsScreen
 import com.chemecador.secretaria.settings.SupportCreatorScreen
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.KoinApplication
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import org.koin.dsl.KoinConfiguration
 import org.koin.dsl.koinConfiguration
+import secretaria.composeapp.generated.resources.Res
+import secretaria.composeapp.generated.resources.preview_language_code
 
 private sealed class Screen {
     data object Restoring : Screen()
@@ -95,8 +98,9 @@ fun App(
     onOpenRemindersRequestConsumed: () -> Unit = {},
 ) {
     val inspectionMode = LocalInspectionMode.current
-    val modules = remember(inspectionMode) {
-        if (inspectionMode) previewAppModules() else appModules()
+    val previewLanguageCode = stringResource(Res.string.preview_language_code)
+    val modules = remember(inspectionMode, previewLanguageCode) {
+        if (inspectionMode) previewAppModules(previewLanguageCode) else appModules()
     }
     val koinConfig = remember(modules) {
         koinConfiguration {

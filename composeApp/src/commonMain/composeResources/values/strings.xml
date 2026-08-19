@@ -4,6 +4,7 @@
          format_clock: "12h" for a 12-hour clock with AM/PM, anything else for 24h. -->
     <string name="format_date_order">month_first</string>
     <string name="format_clock">12h</string>
+    <string name="preview_language_code">en</string>
 
     <string name="app_name">Secretaria</string>
     <string name="order_by">Sort by</string>

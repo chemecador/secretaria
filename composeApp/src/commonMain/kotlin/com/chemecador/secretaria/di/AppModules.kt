@@ -42,13 +42,20 @@ internal fun appModules(
     platformModule: Module = platformModule(),
 ): List<Module> = listOf(sharedAppModule, platformModule)
 
-internal fun previewAppModules(): List<Module> = appModules(previewPlatformModule())
+internal fun previewAppModules(languageCode: String = "en"): List<Module> =
+    appModules(previewPlatformModule(languageCode))
 
-private fun previewPlatformModule(): Module = module {
+private fun previewPlatformModule(languageCode: String): Module = module {
     single<AuthRepository> { FakeAuthRepository() }
-    single<NotesListsRepository> { FakeNotesListsRepository() }
-    single<NotesRepository> { FakeNotesRepository() }
-    single<RemindersRepository> { FakeRemindersRepository() }
+    single<NotesListsRepository> {
+        FakeNotesListsRepository {
+            Result.success(FakeNotesListsRepository.seedListsFor(languageCode))
+        }
+    }
+    single<NotesRepository> {
+        FakeNotesRepository(FakeNotesRepository.seedNotesFor(languageCode))
+    }
+    single<RemindersRepository> { FakeRemindersRepository(languageCode = languageCode) }
     single<FriendsRepository> { FakeFriendsRepository() }
     single<AccountSettingsRepository> { FakeAccountSettingsRepository() }
     single<FcmTokenRegister> { NoopFcmTokenRegister() }

@@ -12,6 +12,7 @@ import kotlin.time.Instant
 
 class FakeRemindersRepository(
     private val nowProvider: () -> Instant = { Clock.System.now() },
+    private val languageCode: String = "es",
 ) : RemindersRepository {
 
     private val reminders = mutableListOf<Reminder>()
@@ -135,11 +136,12 @@ class FakeRemindersRepository(
      */
     private fun seedReminders(now: Instant): List<Reminder> {
         val today = now.toLocalDateTime(TimeZone.currentSystemDefault()).date
+        val english = !languageCode.startsWith("es", ignoreCase = true)
         return listOf(
             Reminder(
                 id = "reminder-1",
                 ownerId = CURRENT_USER_ID,
-                text = "Llamar al fontanero",
+                text = if (english) "Call the plumber" else "Llamar al fontanero",
                 createdAt = now - 2.days,
                 due = ReminderDue(today, LocalTime.parse("18:00")),
                 order = 0,
@@ -147,14 +149,14 @@ class FakeRemindersRepository(
             Reminder(
                 id = "reminder-2",
                 ownerId = CURRENT_USER_ID,
-                text = "Comprar pilas AA",
+                text = if (english) "Buy AA batteries" else "Comprar pilas AA",
                 createdAt = now - 3.days,
                 order = 1,
             ),
             Reminder(
                 id = "reminder-3",
                 ownerId = CURRENT_USER_ID,
-                text = "Leche, huevos y pan",
+                text = if (english) "Milk, eggs and bread" else "Leche, huevos y pan",
                 createdAt = now - 1.days,
                 order = 2,
                 contributors = listOf(CURRENT_USER_ID, "Marta"),
@@ -163,7 +165,7 @@ class FakeRemindersRepository(
             Reminder(
                 id = "reminder-4",
                 ownerId = CURRENT_USER_ID,
-                text = "Renovar el DNI",
+                text = if (english) "Renew my ID" else "Renovar el DNI",
                 createdAt = now - 10.days,
                 due = ReminderDue(today.plus(9, DateTimeUnit.DAY)),
                 order = 3,
@@ -171,7 +173,11 @@ class FakeRemindersRepository(
             Reminder(
                 id = "reminder-5",
                 ownerId = CURRENT_USER_ID,
-                text = "Devolver el libro a la biblioteca",
+                text = if (english) {
+                    "Return the book to the library"
+                } else {
+                    "Devolver el libro a la biblioteca"
+                },
                 createdAt = now - 20.days,
                 due = ReminderDue(today.minus(8, DateTimeUnit.DAY)),
                 order = 4,
@@ -179,7 +185,11 @@ class FakeRemindersRepository(
             Reminder(
                 id = "reminder-8",
                 ownerId = "Marta",
-                text = "Recoger las entradas del concierto",
+                text = if (english) {
+                    "Pick up the concert tickets"
+                } else {
+                    "Recoger las entradas del concierto"
+                },
                 createdAt = now - 4.days,
                 due = ReminderDue(today.plus(2, DateTimeUnit.DAY)),
                 order = 5,
@@ -189,7 +199,7 @@ class FakeRemindersRepository(
             Reminder(
                 id = "reminder-6",
                 ownerId = CURRENT_USER_ID,
-                text = "Recoger el paquete",
+                text = if (english) "Pick up the parcel" else "Recoger el paquete",
                 createdAt = now - 5.days,
                 completed = true,
                 completedAt = now - 2.days,
@@ -198,7 +208,7 @@ class FakeRemindersRepository(
             Reminder(
                 id = "reminder-7",
                 ownerId = CURRENT_USER_ID,
-                text = "Pagar el seguro del coche",
+                text = if (english) "Pay car insurance" else "Pagar el seguro del coche",
                 createdAt = now - 60.days,
                 completed = true,
                 completedAt = now - 40.days,

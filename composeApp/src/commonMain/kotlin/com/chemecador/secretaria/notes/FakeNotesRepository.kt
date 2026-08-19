@@ -3,14 +3,16 @@ package com.chemecador.secretaria.notes
 import kotlin.time.Clock
 import kotlin.time.Instant
 
-class FakeNotesRepository : NotesRepository {
+class FakeNotesRepository(
+    private val initialNotes: Map<String, List<Note>> = seedNotes,
+) : NotesRepository {
 
     private val notes = mutableMapOf<String, MutableList<Note>>()
     private var seeded = false
 
     override suspend fun getNotesForList(ownerId: String, listId: String): Result<List<Note>> {
         if (!seeded) {
-            seedNotes.forEach { (id, list) ->
+            initialNotes.forEach { (id, list) ->
                 notes[id] = list.toMutableList()
             }
             seeded = true
@@ -81,6 +83,36 @@ class FakeNotesRepository : NotesRepository {
     }
 
     companion object {
+        fun seedNotesFor(languageCode: String): Map<String, List<Note>> =
+            if (languageCode.startsWith("es", ignoreCase = true)) {
+                seedNotes
+            } else {
+                seedNotes.mapValues { (_, notes) ->
+                    notes.map { note ->
+                        val (title, content) = when (note.id) {
+                            "shopping-1" -> "Milk" to "2 litres, semi-skimmed"
+                            "shopping-2" -> "Bread" to "Rustic loaf from the bakery around the corner"
+                            "shopping-3" -> "Eggs" to "A dozen free-range eggs"
+                            "shopping-4" -> "Tomatoes" to "1 kg for salads"
+                            "work-1" -> "Email Client X" to
+                                "Confirm the sprint scope and request repository access"
+                            "work-2" -> "Prepare Monday's meeting" to
+                                "Agenda, shared module demo and open questions"
+                            "work-3" -> "Review pull request" to
+                                "Authentication refactor, comment before Thursday"
+                            "travel-1" -> "Book a hotel in Tokyo" to "Shinjuku, 4 nights"
+                            "travel-2" -> "Get a JR Pass" to "7 days, buy it before travelling"
+                            "travel-3" -> "Travel insurance" to "Medical and cancellation cover"
+                            "books-1" -> "The Pillars of the Earth" to "Ken Follett"
+                            "books-2" -> "The Name of the Wind" to "Patrick Rothfuss"
+                            "books-3" -> "Dune" to "Frank Herbert"
+                            else -> note.title to note.content
+                        }
+                        note.copy(title = title, content = content)
+                    }
+                }
+            }
+
         val seedNotes: Map<String, List<Note>> = mapOf(
             notesKey("Alex", "shopping") to listOf(
                 Note(

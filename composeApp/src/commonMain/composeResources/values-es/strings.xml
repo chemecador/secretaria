@@ -2,6 +2,7 @@
     <!-- Locale format tokens, not visible text. See values/strings.xml. -->
     <string name="format_date_order">day_first</string>
     <string name="format_clock">24h</string>
+    <string name="preview_language_code">es</string>
 
     <string name="app_name">Secretaria</string>
     <string name="order_by">Ordenar por</string>
