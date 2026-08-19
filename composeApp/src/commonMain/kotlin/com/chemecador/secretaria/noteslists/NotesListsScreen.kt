@@ -105,17 +105,17 @@ import com.chemecador.secretaria.notes.NotesReorderState
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import secretaria.composeapp.generated.resources.Res
+import secretaria.composeapp.generated.resources.add_list_to_group
 import secretaria.composeapp.generated.resources.app_name
 import secretaria.composeapp.generated.resources.archive_list
 import secretaria.composeapp.generated.resources.archive_list_error
 import secretaria.composeapp.generated.resources.archive_list_success
 import secretaria.composeapp.generated.resources.archived_lists_title
 import secretaria.composeapp.generated.resources.cancel
-import secretaria.composeapp.generated.resources.add_list_to_group
 import secretaria.composeapp.generated.resources.create_group_button
 import secretaria.composeapp.generated.resources.create_group_inline_title
-import secretaria.composeapp.generated.resources.create_list_group
 import secretaria.composeapp.generated.resources.create_list_button
+import secretaria.composeapp.generated.resources.create_list_group
 import secretaria.composeapp.generated.resources.create_list_name_hint
 import secretaria.composeapp.generated.resources.create_list_ordered
 import secretaria.composeapp.generated.resources.create_list_title
@@ -125,20 +125,25 @@ import secretaria.composeapp.generated.resources.delete_list_title
 import secretaria.composeapp.generated.resources.edit_list
 import secretaria.composeapp.generated.resources.edit_list_button
 import secretaria.composeapp.generated.resources.edit_list_title
+import secretaria.composeapp.generated.resources.error_group_inside_group
+import secretaria.composeapp.generated.resources.error_list_no_access
+import secretaria.composeapp.generated.resources.error_list_not_group_owner
+import secretaria.composeapp.generated.resources.error_list_not_owner
+import secretaria.composeapp.generated.resources.error_target_is_not_a_group
+import secretaria.composeapp.generated.resources.group_lists_empty
 import secretaria.composeapp.generated.resources.leave_shared_list
 import secretaria.composeapp.generated.resources.leave_shared_list_error
 import secretaria.composeapp.generated.resources.leave_shared_list_message
 import secretaria.composeapp.generated.resources.leave_shared_list_success
 import secretaria.composeapp.generated.resources.leave_shared_list_title
-import secretaria.composeapp.generated.resources.list_created_by
-import secretaria.composeapp.generated.resources.list_created_by_you
 import secretaria.composeapp.generated.resources.list_archived_on
 import secretaria.composeapp.generated.resources.list_archived_on_unknown
+import secretaria.composeapp.generated.resources.list_created_by
+import secretaria.composeapp.generated.resources.list_created_by_you
 import secretaria.composeapp.generated.resources.list_group_badge
 import secretaria.composeapp.generated.resources.list_options
 import secretaria.composeapp.generated.resources.list_ordered_badge
 import secretaria.composeapp.generated.resources.list_shared_badge
-import secretaria.composeapp.generated.resources.group_lists_empty
 import secretaria.composeapp.generated.resources.notes_lists_empty
 import secretaria.composeapp.generated.resources.notes_lists_empty_active_mine
 import secretaria.composeapp.generated.resources.notes_lists_empty_active_shared
@@ -151,6 +156,10 @@ import secretaria.composeapp.generated.resources.notes_lists_search_empty
 import secretaria.composeapp.generated.resources.notes_lists_search_hint
 import secretaria.composeapp.generated.resources.notes_lists_shared_tab
 import secretaria.composeapp.generated.resources.order_by
+import secretaria.composeapp.generated.resources.remove_list_from_group
+import secretaria.composeapp.generated.resources.reorder_list_handle
+import secretaria.composeapp.generated.resources.select_group_empty
+import secretaria.composeapp.generated.resources.select_group_title
 import secretaria.composeapp.generated.resources.share_list
 import secretaria.composeapp.generated.resources.share_list_available_friends
 import secretaria.composeapp.generated.resources.share_list_current_access
@@ -163,19 +172,15 @@ import secretaria.composeapp.generated.resources.share_list_shared_with_many
 import secretaria.composeapp.generated.resources.share_list_shared_with_one
 import secretaria.composeapp.generated.resources.share_list_shared_with_you
 import secretaria.composeapp.generated.resources.share_list_success
-import secretaria.composeapp.generated.resources.remove_list_from_group
-import secretaria.composeapp.generated.resources.reorder_list_handle
-import secretaria.composeapp.generated.resources.select_group_empty
-import secretaria.composeapp.generated.resources.select_group_title
 import secretaria.composeapp.generated.resources.sort_date_asc
 import secretaria.composeapp.generated.resources.sort_date_desc
 import secretaria.composeapp.generated.resources.sort_name_asc
 import secretaria.composeapp.generated.resources.sort_name_desc
-import secretaria.composeapp.generated.resources.unshare_list
-import secretaria.composeapp.generated.resources.unshare_list_success
 import secretaria.composeapp.generated.resources.unarchive_list
 import secretaria.composeapp.generated.resources.unarchive_list_error
 import secretaria.composeapp.generated.resources.unarchive_list_success
+import secretaria.composeapp.generated.resources.unshare_list
+import secretaria.composeapp.generated.resources.unshare_list_success
 import kotlin.time.Instant
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -505,7 +510,8 @@ fun NotesListsScreen(
                 friends = state.shareableFriends,
                 isLoading = state.isLoadingShareableFriends,
                 isUpdatingSharing = state.isUpdatingSharing,
-                errorMessage = state.shareErrorMessage,
+                errorMessage = state.shareValidationError?.let { stringResource(it.toStringRes()) }
+                    ?: state.shareErrorMessage,
                 onShare = { friend ->
                     viewModel.shareList(list, friend)
                 },
@@ -588,8 +594,9 @@ fun NotesListsScreen(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     when {
-                        state.errorMessage != null -> ScrollableCenteredMessage {
-                            val errorMessage = state.errorMessage?.takeIf { it.isNotBlank() }
+                        state.errorMessage != null || state.validationError != null -> ScrollableCenteredMessage {
+                            val errorMessage = state.validationError?.let { stringResource(it.toStringRes()) }
+                                ?: state.errorMessage?.takeIf { it.isNotBlank() }
                                 ?: stringResource(Res.string.notes_lists_error_generic)
                             Text(
                                 text = errorMessage,
@@ -1831,4 +1838,12 @@ private fun NotesListSummary.canLeaveSharedList(currentUserId: String?): Boolean
 enum class NotesListsSection {
     MINE,
     SHARED,
+}
+
+private fun NotesListsError.toStringRes() = when (this) {
+    NotesListsError.NOT_OWNER -> Res.string.error_list_not_owner
+    NotesListsError.NOT_GROUP_OWNER -> Res.string.error_list_not_group_owner
+    NotesListsError.NO_ACCESS -> Res.string.error_list_no_access
+    NotesListsError.GROUP_INSIDE_GROUP -> Res.string.error_group_inside_group
+    NotesListsError.TARGET_IS_NOT_A_GROUP -> Res.string.error_target_is_not_a_group
 }

@@ -63,7 +63,7 @@ class NotesListsViewModel(
             repository.createList(name, ordered, isGroup)
                 .onSuccess { fetchLists() }
                 .onFailure { throwable ->
-                    _state.update { it.copy(errorMessage = throwable.message) }
+                    _state.update { it.withError(throwable) }
                 }
         }
     }
@@ -74,7 +74,7 @@ class NotesListsViewModel(
                 .fold(
                     onSuccess = { currentList ->
                         if (currentList.isGroup) {
-                            Result.failure(IllegalStateException(GROUPING_GROUP_ERROR_MESSAGE))
+                            Result.failure(NotesListsValidationException(NotesListsError.GROUP_INSIDE_GROUP))
                         } else {
                             repository.createList(groupName, ordered, isGroup = true)
                                 .onSuccess { group ->
@@ -87,7 +87,7 @@ class NotesListsViewModel(
                                         .onSuccess { fetchLists() }
                                         .onFailure { throwable ->
                                             fetchLists()
-                                            _state.update { it.copy(errorMessage = throwable.message) }
+                                            _state.update { it.withError(throwable) }
                                         }
                                 }
                         }
@@ -95,7 +95,7 @@ class NotesListsViewModel(
                     onFailure = { Result.failure(it) },
                 )
                 .onFailure { throwable ->
-                    _state.update { it.copy(errorMessage = throwable.message) }
+                    _state.update { it.withError(throwable) }
                 }
         }
     }
@@ -110,6 +110,7 @@ class NotesListsViewModel(
                                 isLoadingShareableFriends = true,
                                 shareableFriends = emptyList(),
                                 shareErrorMessage = null,
+                                shareValidationError = null,
                                 shareFeedback = null,
                             )
                         }
@@ -127,6 +128,7 @@ class NotesListsViewModel(
                                             collaborators = buildCollaborators(currentList),
                                         ),
                                         shareErrorMessage = null,
+                                        shareValidationError = null,
                                     )
                                 }
                             }
@@ -143,12 +145,13 @@ class NotesListsViewModel(
                                             ),
                                         ),
                                         shareErrorMessage = throwable.message,
+                                        shareValidationError = null,
                                     )
                                 }
                             }
                     },
                     onFailure = { throwable ->
-                        _state.update { it.copy(shareErrorMessage = throwable.message) }
+                        _state.update { it.withShareError(throwable) }
                     },
                 )
         }
@@ -164,6 +167,7 @@ class NotesListsViewModel(
                             it.copy(
                                 isUpdatingSharing = true,
                                 shareErrorMessage = null,
+                                shareValidationError = null,
                                 shareFeedback = null,
                             )
                         }
@@ -191,6 +195,7 @@ class NotesListsViewModel(
                                             action = ListSharingAction.SHARED,
                                         ),
                                         shareErrorMessage = null,
+                                        shareValidationError = null,
                                     )
                                 }
                             }
@@ -199,12 +204,13 @@ class NotesListsViewModel(
                                     it.copy(
                                         isUpdatingSharing = false,
                                         shareErrorMessage = throwable.message,
+                                        shareValidationError = null,
                                     )
                                 }
                             }
                     },
                     onFailure = { throwable ->
-                        _state.update { it.copy(shareErrorMessage = throwable.message) }
+                        _state.update { it.withShareError(throwable) }
                     },
                 )
         }
@@ -219,6 +225,7 @@ class NotesListsViewModel(
                             it.copy(
                                 isUpdatingSharing = true,
                                 shareErrorMessage = null,
+                                shareValidationError = null,
                                 shareFeedback = null,
                             )
                         }
@@ -254,6 +261,7 @@ class NotesListsViewModel(
                                             action = ListSharingAction.UNSHARED,
                                         ),
                                         shareErrorMessage = null,
+                                        shareValidationError = null,
                                     )
                                 }
                             }
@@ -262,12 +270,13 @@ class NotesListsViewModel(
                                     it.copy(
                                         isUpdatingSharing = false,
                                         shareErrorMessage = throwable.message,
+                                        shareValidationError = null,
                                     )
                                 }
                             }
                     },
                     onFailure = { throwable ->
-                        _state.update { it.copy(shareErrorMessage = throwable.message) }
+                        _state.update { it.withShareError(throwable) }
                     },
                 )
         }
@@ -346,7 +355,7 @@ class NotesListsViewModel(
                 .fold(
                     onSuccess = { currentList ->
                         if (currentList.isGroup) {
-                            Result.failure(IllegalStateException(GROUPING_GROUP_ERROR_MESSAGE))
+                            Result.failure(NotesListsValidationException(NotesListsError.GROUP_INSIDE_GROUP))
                         } else {
                             val currentGroup = group?.let(::findCurrentList)
                             val currentUserId = authRepository.currentUserId
@@ -354,17 +363,17 @@ class NotesListsViewModel(
                             when {
                                 currentGroup == null && existingGroupOwnerId != null &&
                                     existingGroupOwnerId != currentUserId -> {
-                                    Result.failure(IllegalStateException(GROUP_OWNERSHIP_ERROR_MESSAGE))
+                                    Result.failure(NotesListsValidationException(NotesListsError.NOT_GROUP_OWNER))
                                 }
                                 currentGroup == null -> Result.success(currentList to null)
                                 !currentGroup.isGroup -> {
-                                    Result.failure(IllegalStateException(GROUPING_TARGET_ERROR_MESSAGE))
+                                    Result.failure(NotesListsValidationException(NotesListsError.TARGET_IS_NOT_A_GROUP))
                                 }
                                 currentGroup.ownerId != currentUserId -> {
-                                    Result.failure(IllegalStateException(GROUP_OWNERSHIP_ERROR_MESSAGE))
+                                    Result.failure(NotesListsValidationException(NotesListsError.NOT_GROUP_OWNER))
                                 }
                                 existingGroupOwnerId != null && existingGroupOwnerId != currentUserId -> {
-                                    Result.failure(IllegalStateException(GROUP_OWNERSHIP_ERROR_MESSAGE))
+                                    Result.failure(NotesListsValidationException(NotesListsError.NOT_GROUP_OWNER))
                                 }
                                 else -> Result.success(currentList to currentGroup)
                             }
@@ -393,11 +402,11 @@ class NotesListsViewModel(
                                 publishCurrentItems()
                             }
                             .onFailure { throwable ->
-                                _state.update { it.copy(errorMessage = throwable.message) }
+                                _state.update { it.withError(throwable) }
                             }
                     },
                     onFailure = { throwable ->
-                        _state.update { it.copy(errorMessage = throwable.message) }
+                        _state.update { it.withError(throwable) }
                     },
                 )
         }
@@ -406,7 +415,7 @@ class NotesListsViewModel(
     fun reorderGroupedLists(group: NotesListSummary, listKeysInOrder: List<NotesListKey>) {
         val currentGroup = findCurrentList(group)
         if (!currentGroup.isGroup || currentGroup.ownerId != authRepository.currentUserId) {
-            _state.update { it.copy(errorMessage = GROUP_OWNERSHIP_ERROR_MESSAGE) }
+            _state.update { it.copy(validationError = NotesListsError.NOT_GROUP_OWNER, errorMessage = null) }
             return
         }
 
@@ -426,10 +435,9 @@ class NotesListsViewModel(
                 .onFailure { throwable ->
                     replaceLocalLists(currentChildren)
                     _state.update {
-                        it.copy(
-                            items = allItems.filteredBySearch(it.searchQuery).sortedByOption(it.sortOption),
-                            errorMessage = throwable.message,
-                        )
+                        it
+                            .copy(items = allItems.filteredBySearch(it.searchQuery).sortedByOption(it.sortOption))
+                            .withError(throwable)
                     }
                 }
         }
@@ -444,7 +452,7 @@ class NotesListsViewModel(
                 )
                 .onSuccess { fetchLists() }
                 .onFailure { throwable ->
-                    _state.update { it.copy(errorMessage = throwable.message) }
+                    _state.update { it.withError(throwable) }
                 }
         }
     }
@@ -458,7 +466,7 @@ class NotesListsViewModel(
                 )
                 .onSuccess { fetchLists() }
                 .onFailure { throwable ->
-                    _state.update { it.copy(errorMessage = throwable.message) }
+                    _state.update { it.withError(throwable) }
                 }
         }
     }
@@ -470,6 +478,7 @@ class NotesListsViewModel(
                 isLoadingShareableFriends = false,
                 isUpdatingSharing = false,
                 shareErrorMessage = null,
+                shareValidationError = null,
             )
         }
     }
@@ -489,9 +498,9 @@ class NotesListsViewModel(
     private suspend fun fetchLists(isRefresh: Boolean = false) {
         _state.update { currentState ->
             if (isRefresh) {
-                currentState.copy(isRefreshing = true, errorMessage = null)
+                currentState.copy(isRefreshing = true, errorMessage = null, validationError = null)
             } else {
-                currentState.copy(isLoading = true, errorMessage = null)
+                currentState.copy(isLoading = true, errorMessage = null, validationError = null)
             }
         }
 
@@ -505,6 +514,7 @@ class NotesListsViewModel(
                         .filteredBySearch(_state.value.searchQuery)
                         .sortedByOption(_state.value.sortOption),
                     errorMessage = null,
+                    validationError = null,
                     collaboratorsByListId = emptyMap(),
                 )
                 refreshCollaborators(items)
@@ -514,6 +524,7 @@ class NotesListsViewModel(
                     _state.value = _state.value.copy(
                         isRefreshing = false,
                         errorMessage = throwable.message,
+                        validationError = null,
                     )
                 } else {
                     allItems = emptyList()
@@ -521,6 +532,7 @@ class NotesListsViewModel(
                         isLoading = false,
                         items = emptyList(),
                         errorMessage = throwable.message,
+                        validationError = null,
                         collaboratorsByListId = emptyMap(),
                     )
                 }
@@ -559,7 +571,7 @@ class NotesListsViewModel(
         return if (currentList.ownerId == currentUserId) {
             Result.success(currentList)
         } else {
-            Result.failure(IllegalStateException(OWNERSHIP_ERROR_MESSAGE))
+            Result.failure(NotesListsValidationException(NotesListsError.NOT_OWNER))
         }
     }
 
@@ -621,7 +633,7 @@ class NotesListsViewModel(
         return if (currentUserId != null && currentUserId in currentList.contributors) {
             Result.success(currentList)
         } else {
-            Result.failure(IllegalStateException(ACCESS_ERROR_MESSAGE))
+            Result.failure(NotesListsValidationException(NotesListsError.NO_ACCESS))
         }
     }
 
@@ -727,11 +739,6 @@ class NotesListsViewModel(
     }
 
     private companion object {
-        const val OWNERSHIP_ERROR_MESSAGE = "Solo el propietario puede modificar esta lista"
-        const val GROUP_OWNERSHIP_ERROR_MESSAGE = "Solo el propietario del grupo puede modificar esta agrupación"
-        const val ACCESS_ERROR_MESSAGE = "No tienes acceso a esta lista"
-        const val GROUPING_GROUP_ERROR_MESSAGE = "Un grupo no puede agregarse a otro grupo"
-        const val GROUPING_TARGET_ERROR_MESSAGE = "Selecciona un grupo de listas"
         const val SEARCH_DEBOUNCE_MS = 250L
     }
 }

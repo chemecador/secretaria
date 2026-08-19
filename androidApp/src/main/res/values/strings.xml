@@ -1,11 +1,11 @@
 <resources>
     <string name="app_name">Secretaria</string>
-    <string name="channel_list_shared_name">Listas compartidas</string>
-    <string name="channel_list_shared_desc">Avisos cuando comparten una lista o añaden notas en una lista compartida.</string>
-    <string name="channel_friend_requests_name">Solicitudes de amistad</string>
-    <string name="channel_friend_requests_desc">Avisos cuando te llega una nueva solicitud de amistad.</string>
-    <string name="channel_reminder_shared_name">Recordatorios compartidos</string>
-    <string name="channel_reminder_shared_desc">Avisos cuando alguien comparte un recordatorio contigo.</string>
-    <string name="channel_reminder_due_name">Vencimiento de recordatorios</string>
-    <string name="channel_reminder_due_desc">Avisos cuando llega la fecha y hora de un recordatorio.</string>
+    <string name="channel_list_shared_name">Shared lists</string>
+    <string name="channel_list_shared_desc">Alerts when someone shares a list with you or adds notes to a shared list.</string>
+    <string name="channel_friend_requests_name">Friend requests</string>
+    <string name="channel_friend_requests_desc">Alerts when a new friend request arrives.</string>
+    <string name="channel_reminder_shared_name">Shared reminders</string>
+    <string name="channel_reminder_shared_desc">Alerts when someone shares a reminder with you.</string>
+    <string name="channel_reminder_due_name">Reminder due dates</string>
+    <string name="channel_reminder_due_desc">Alerts when a reminder\'s date and time arrive.</string>
 </resources>

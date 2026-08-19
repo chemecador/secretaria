@@ -314,7 +314,7 @@ class NotesListsViewModelTest {
         viewModel.deleteList(sharedList)
         advanceUntilIdle()
 
-        assertEquals("Solo el propietario puede modificar esta lista", viewModel.state.value.errorMessage)
+        assertEquals(NotesListsError.NOT_OWNER, viewModel.state.value.validationError)
         assertEquals(0, repository.deleteCalls)
         assertEquals(1, viewModel.state.value.items.size)
     }
@@ -441,7 +441,7 @@ class NotesListsViewModelTest {
         viewModel.updateList(sharedList, "Editada", false)
         advanceUntilIdle()
 
-        assertEquals("Solo el propietario puede modificar esta lista", viewModel.state.value.errorMessage)
+        assertEquals(NotesListsError.NOT_OWNER, viewModel.state.value.validationError)
         assertEquals(0, repository.updateCalls)
         assertEquals("Compartida", viewModel.state.value.items.single().name)
     }
@@ -849,7 +849,7 @@ class NotesListsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(0, repository.shareCalls)
-        assertEquals("Solo el propietario puede modificar esta lista", viewModel.state.value.shareErrorMessage)
+        assertEquals(NotesListsError.NOT_OWNER, viewModel.state.value.shareValidationError)
     }
 
     @Test
