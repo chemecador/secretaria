@@ -12,6 +12,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import java.util.Locale
 import java.util.TimeZone
 
 class SecretariaMessagingService : FirebaseMessagingService() {
@@ -65,6 +66,7 @@ class SecretariaMessagingService : FirebaseMessagingService() {
                     // Mismo documento que escribe FirestoreFcmTokenRegister: el aviso de
                     // vencimiento resuelve la fecha flotante contra esta zona horaria.
                     "timeZoneId" to TimeZone.getDefault().id,
+                    "language" to Locale.getDefault().language,
                     "updatedAt" to FieldValue.serverTimestamp(),
                 ),
             )

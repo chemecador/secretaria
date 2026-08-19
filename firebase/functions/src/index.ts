@@ -26,6 +26,70 @@ const CLICK_ACTION_OPEN_REMINDERS =
 
 /** Zona horaria usada cuando el dispositivo no ha registrado la suya todavia. */
 const DEFAULT_TIME_ZONE = "Europe/Madrid";
+
+/**
+ * Textos de las notificaciones. El servidor compone el cuerpo del aviso, asi que
+ * necesita saber el idioma del destinatario: viene del campo `language` del
+ * documento de token FCM, que escribe la app. Un idioma sin traduccion cae a
+ * ingles, que es tambien el locale por defecto de la app.
+ */
+type NotificationTexts = {
+  listSharedTitle: string;
+  listSharedBody: (creator: string, listName: string) => string;
+  reminderSharedTitle: string;
+  reminderDueTitle: string;
+  friendRequestTitle: string;
+  friendRequestBody: (senderName: string) => string;
+  sharedListNoteTitle: (listName: string) => string;
+  untitledReminder: string;
+  untitledNote: string;
+  unnamedList: string;
+};
+
+const NOTIFICATION_TEXTS: Record<string, NotificationTexts> = {
+  en: {
+    listSharedTitle: "New list available",
+    listSharedBody: (creator: string, listName: string) =>
+      creator ?
+        `${creator} shared the list "${listName}" with you.` :
+        `The list "${listName}" was shared with you.`,
+    reminderSharedTitle: "New shared reminder",
+    reminderDueTitle: "Reminder",
+    friendRequestTitle: "New friend request",
+    friendRequestBody: (senderName: string) =>
+      `${senderName} sent you a friend request.`,
+    sharedListNoteTitle: (listName: string) => `New note in ${listName}`,
+    untitledReminder: "Reminder with no text",
+    untitledNote: "Untitled note",
+    unnamedList: "shared list",
+  },
+  es: {
+    listSharedTitle: "Nueva lista disponible",
+    listSharedBody: (creator: string, listName: string) =>
+      creator ?
+        `El usuario ${creator} te ha compartido la lista "${listName}".` :
+        `Te han compartido la lista "${listName}".`,
+    reminderSharedTitle: "Nuevo recordatorio compartido",
+    reminderDueTitle: "Recordatorio",
+    friendRequestTitle: "Nueva solicitud de amistad",
+    friendRequestBody: (senderName: string) =>
+      `${senderName} te ha enviado una solicitud de amistad.`,
+    sharedListNoteTitle: (listName: string) => `Nueva nota en ${listName}`,
+    untitledReminder: "Recordatorio sin texto",
+    untitledNote: "Nota sin titulo",
+    unnamedList: "lista compartida",
+  },
+};
+
+/** Idioma usado cuando el del dispositivo no esta traducido. */
+const DEFAULT_LANGUAGE = "en";
+/**
+ * Idioma de los tokens registrados ANTES de que existiera el campo `language`.
+ * La app era solo en espanol, asi que esos dispositivos son de usuarios que hoy
+ * reciben los avisos en espanol y no deben cambiar de idioma solos al desplegar.
+ * Se puede quitar cuando ya no queden tokens sin `language`.
+ */
+const LEGACY_LANGUAGE = "es";
 /**
  * Hora local a la que se avisa de un recordatorio sin hora ("todo el dia").
  * Punto unico de cambio si algun dia se hace configurable por usuario.
@@ -55,6 +119,7 @@ type UserTokens = {
   tokens: string[];
   docs: admin.firestore.QueryDocumentSnapshot[];
   timeZoneId: string;
+  texts: NotificationTexts;
 };
 
 type DueNotificationMark = {
@@ -83,9 +148,9 @@ export const onListShared = onDocumentUpdated(
 
     await Promise.all(
       added.map(async (uid) => {
-        await sendPushToUser(uid, {
-          title: "Nueva lista disponible",
-          body: `El usuario ${creator} te ha compartido la lista "${listName}".`,
+        await sendPushToUser(uid, (texts) => ({
+          title: texts.listSharedTitle,
+          body: texts.listSharedBody(creator, listName),
           channelId: CHANNEL_LIST_SHARED,
           type: "list_shared",
           tag: `list_shared_${event.params.listId}`,
@@ -97,7 +162,7 @@ export const onListShared = onDocumentUpdated(
             Boolean(after.ordered),
             Boolean(after.isGroup),
           ),
-        });
+        }));
       }),
     );
   },
@@ -122,17 +187,17 @@ export const onReminderShared = onDocumentUpdated(
     );
     if (added.length === 0) return;
 
-    const reminderText = asNonBlankString(after.text) ?? "Recordatorio sin texto";
+    const reminderText = asNonBlankString(after.text);
 
     await Promise.all(
       added.map(async (uid) => {
-        await sendPushToUser(uid, {
-          title: "Nuevo recordatorio compartido",
-          body: reminderText,
+        await sendPushToUser(uid, (texts) => ({
+          title: texts.reminderSharedTitle,
+          body: reminderText ?? texts.untitledReminder,
           channelId: CHANNEL_REMINDER_SHARED,
           type: "reminder_shared",
           tag: `reminder_shared_${ownerId}_${event.params.reminderId}`,
-        });
+        }));
       }),
     );
   },
@@ -176,7 +241,7 @@ export const onReminderDue = onSchedule("every 5 minutes", async () => {
     const dueTime = asNonBlankString(reminder.dueTime);
     const signature = dueSignature(dueDate, dueTime);
     const alreadyNotified = asStringMap(reminder.dueNotified);
-    const text = asNonBlankString(reminder.text) ?? "Recordatorio sin texto";
+    const text = asNonBlankString(reminder.text);
     const recipients = [
       ...new Set([ownerId, ...asStringList(reminder.contributors)]),
     ];
@@ -194,9 +259,9 @@ export const onReminderDue = onSchedule("every 5 minutes", async () => {
       );
       if (dueAt === null || dueAt > now || now - dueAt > MAX_LATE_MS) continue;
 
-      await sendPushToTokens(userId, userTokens, {
-        title: "Recordatorio",
-        body: text,
+      await sendPushToTokens(userId, userTokens, (texts) => ({
+        title: texts.reminderDueTitle,
+        body: text ?? texts.untitledReminder,
         channelId: CHANNEL_REMINDER_DUE,
         type: "reminder_due",
         // La firma va en el tag a proposito: si se edita el vencimiento, el
@@ -204,7 +269,7 @@ export const onReminderDue = onSchedule("every 5 minutes", async () => {
         tag: `reminder_due_${ownerId}_${doc.id}_${signature}`,
         clickAction: CLICK_ACTION_OPEN_REMINDERS,
         data: { openReminders: "true" },
-      });
+      }));
       marks.push({ ref: doc.ref, userId, signature });
     }
   }
@@ -225,13 +290,13 @@ export const onFriendRequestCreated = onDocumentCreated(
 
     const senderName = asNonBlankString(friendship.senderName) ?? senderId;
 
-    await sendPushToUser(receiverId, {
-      title: "Nueva solicitud de amistad",
-      body: `${senderName} te ha enviado una solicitud de amistad.`,
+    await sendPushToUser(receiverId, (texts) => ({
+      title: texts.friendRequestTitle,
+      body: texts.friendRequestBody(senderName),
       channelId: CHANNEL_FRIEND_REQUESTS,
       type: "friend_request",
       tag: `friend_request_${event.params.requestId}`,
-    });
+    }));
   },
 );
 
@@ -274,14 +339,14 @@ export const onSharedListNoteCreated = onDocumentCreatedWithAuthContext(
     );
     if (recipients.length === 0) return;
 
-    const listName = asNonBlankString(listData.name) ?? "lista compartida";
-    const noteTitle = asNonBlankString(note.title) ?? "Nota sin titulo";
+    const listName = asNonBlankString(listData.name);
+    const noteTitle = asNonBlankString(note.title);
 
     await Promise.all(
       recipients.map(async (uid) => {
-        await sendPushToUser(uid, {
-          title: `Nueva nota en ${listName}`,
-          body: noteTitle,
+        await sendPushToUser(uid, (texts) => ({
+          title: texts.sharedListNoteTitle(listName ?? texts.unnamedList),
+          body: noteTitle ?? texts.untitledNote,
           channelId: CHANNEL_LIST_SHARED,
           type: "shared_list_note",
           tag: `shared_list_note_${event.params.ownerId}_${event.params.listId}_${event.params.noteId}`,
@@ -289,11 +354,11 @@ export const onSharedListNoteCreated = onDocumentCreatedWithAuthContext(
           data: openListData(
             event.params.ownerId,
             event.params.listId,
-            listName,
+            listName ?? texts.unnamedList,
             Boolean(listData.ordered),
             Boolean(listData.isGroup),
           ),
-        });
+        }));
       }),
     );
   },
@@ -302,14 +367,24 @@ export const onSharedListNoteCreated = onDocumentCreatedWithAuthContext(
 /**
  * Sends a push notification to every active token registered for a user.
  * @param {string} userId Destination user id.
- * @param {PushPayload} payload Notification payload to deliver.
+ * @param {Function} buildPayload Builds the payload for the recipient language.
  * @return {Promise<void>} Resolves when all token sends are processed.
  */
 async function sendPushToUser(
   userId: string,
-  payload: PushPayload,
+  buildPayload: (texts: NotificationTexts) => PushPayload,
 ): Promise<void> {
-  await sendPushToTokens(userId, await loadUserTokens(userId), payload);
+  await sendPushToTokens(userId, await loadUserTokens(userId), buildPayload);
+}
+
+/**
+ * Resolves the notification texts for a device language tag.
+ * @param {string} language Language tag written by the app, e.g. "es".
+ * @return {NotificationTexts} Texts for that language, English when unknown.
+ */
+function textsFor(language: string): NotificationTexts {
+  const key = language.toLowerCase().split(/[-_]/)[0];
+  return NOTIFICATION_TEXTS[key] ?? NOTIFICATION_TEXTS[DEFAULT_LANGUAGE];
 }
 
 /**
@@ -336,7 +411,9 @@ async function loadUserTokens(
   const tokens: string[] = [];
   const docs: admin.firestore.QueryDocumentSnapshot[] = [];
   let timeZoneId = DEFAULT_TIME_ZONE;
-  let newestUpdate = Number.NEGATIVE_INFINITY;
+  let language: string = LEGACY_LANGUAGE;
+  let newestZoneUpdate = Number.NEGATIVE_INFINITY;
+  let newestLanguageUpdate = Number.NEGATIVE_INFINITY;
 
   snap.docs.forEach((doc) => {
     const data = doc.data();
@@ -345,16 +422,32 @@ async function loadUserTokens(
     tokens.push(token);
     docs.push(doc);
 
-    const zone = asNonBlankString(data.timeZoneId);
-    if (!zone) return;
+    // Zona e idioma describen un dispositivo, y una push se entrega a un
+    // dispositivo: si el usuario tiene varios, gana el registrado mas tarde.
+    // Cada campo lleva su propio maximo, para que un token escrito por una
+    // version antigua de la app, que todavia no guarda `language`, no anule
+    // la zona horaria de otro token mas viejo que si la tiene.
     const updatedAt = asEpochMillis(data.updatedAt);
-    if (updatedAt >= newestUpdate) {
-      newestUpdate = updatedAt;
+
+    const zone = asNonBlankString(data.timeZoneId);
+    if (zone && updatedAt >= newestZoneUpdate) {
+      newestZoneUpdate = updatedAt;
       timeZoneId = zone;
+    }
+
+    const deviceLanguage = asNonBlankString(data.language);
+    if (deviceLanguage && updatedAt >= newestLanguageUpdate) {
+      newestLanguageUpdate = updatedAt;
+      language = deviceLanguage;
     }
   });
 
-  const userTokens: UserTokens = { tokens, docs, timeZoneId };
+  const userTokens: UserTokens = {
+    tokens,
+    docs,
+    timeZoneId,
+    texts: textsFor(language),
+  };
   cache?.set(userId, userTokens);
   return userTokens;
 }
@@ -363,16 +456,18 @@ async function loadUserTokens(
  * Delivers a payload to already loaded tokens and prunes the stale ones.
  * @param {string} userId Destination user id.
  * @param {UserTokens} userTokens Tokens previously loaded for the user.
- * @param {PushPayload} payload Notification payload to deliver.
+ * @param {Function} buildPayload Builds the payload for the recipient language.
  * @return {Promise<void>} Resolves when all token sends are processed.
  */
 async function sendPushToTokens(
   userId: string,
   userTokens: UserTokens,
-  payload: PushPayload,
+  buildPayload: (texts: NotificationTexts) => PushPayload,
 ): Promise<void> {
   const { tokens, docs: docsByToken } = userTokens;
   if (tokens.length === 0) return;
+
+  const payload = buildPayload(userTokens.texts);
 
   const response = await messaging.sendEachForMulticast({
     tokens,
