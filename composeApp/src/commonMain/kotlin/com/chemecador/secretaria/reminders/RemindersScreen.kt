@@ -918,7 +918,7 @@ private fun ReminderDueEditor(
 
     ReminderDueRow(
         icon = Icons.Filled.Schedule,
-        label = due?.time?.let(::formatReminderTime)
+        label = due?.time?.let { time -> formatReminderTime(time) }
             ?: stringResource(Res.string.reminder_due_add_time),
         clearDescription = stringResource(Res.string.reminder_due_clear_time),
         onClick = onPickTime,

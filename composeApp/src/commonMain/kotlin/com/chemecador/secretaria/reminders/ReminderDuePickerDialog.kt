@@ -10,6 +10,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
+import com.chemecador.secretaria.format.LocalDateTimeFormat
 import androidx.compose.runtime.Composable
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
@@ -83,7 +84,7 @@ internal fun ReminderTimePickerDialog(
     val timePickerState = rememberTimePickerState(
         initialHour = initialTime?.hour ?: DEFAULT_REMINDER_HOUR,
         initialMinute = initialTime?.minute ?: 0,
-        is24Hour = true,
+        is24Hour = !LocalDateTimeFormat.current.twelveHourClock,
     )
 
     AlertDialog(

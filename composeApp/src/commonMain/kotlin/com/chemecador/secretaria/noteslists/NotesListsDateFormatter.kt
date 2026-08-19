@@ -1,16 +1,18 @@
 package com.chemecador.secretaria.noteslists
 
+import androidx.compose.runtime.Composable
+import com.chemecador.secretaria.format.LocalDateTimeFormat
+import com.chemecador.secretaria.format.formatDate
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
-fun formatNotesListDate(localDate: LocalDate): String {
-    val day = localDate.day.toString().padStart(2, '0')
-    val month = (localDate.month.ordinal + 1).toString().padStart(2, '0')
-    return "$day/$month/${localDate.year}"
-}
+@Composable
+fun formatNotesListDate(localDate: LocalDate): String =
+    LocalDateTimeFormat.current.formatDate(localDate)
 
+@Composable
 fun formatNotesListDate(
     instant: Instant,
     timeZone: TimeZone = TimeZone.currentSystemDefault(),

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +21,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.chemecador.secretaria.di.appModules
 import com.chemecador.secretaria.di.previewAppModules
+import com.chemecador.secretaria.format.LocalDateTimeFormat
+import com.chemecador.secretaria.format.rememberDateTimeFormat
 import com.chemecador.secretaria.friends.FriendsScreen
 import com.chemecador.secretaria.friends.FriendsViewModel
 import com.chemecador.secretaria.login.AuthRepository
@@ -45,6 +48,7 @@ import org.koin.compose.KoinApplication
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import org.koin.dsl.KoinConfiguration
 import org.koin.dsl.koinConfiguration
 
 private sealed class Screen {
@@ -100,6 +104,27 @@ fun App(
         }
     }
 
+    CompositionLocalProvider(LocalDateTimeFormat provides rememberDateTimeFormat()) {
+        AppContent(
+            koinConfig = koinConfig,
+            googleServerClientId = googleServerClientId,
+            openListRequest = openListRequest,
+            onOpenListRequestConsumed = onOpenListRequestConsumed,
+            openRemindersRequest = openRemindersRequest,
+            onOpenRemindersRequestConsumed = onOpenRemindersRequestConsumed,
+        )
+    }
+}
+
+@Composable
+private fun AppContent(
+    koinConfig: KoinConfiguration,
+    googleServerClientId: String?,
+    openListRequest: OpenListRequest?,
+    onOpenListRequestConsumed: () -> Unit,
+    openRemindersRequest: Boolean,
+    onOpenRemindersRequestConsumed: () -> Unit,
+) {
     KoinApplication(koinConfig) {
         val authRepository = koinInject<AuthRepository>()
         val fcmTokenRegister = koinInject<FcmTokenRegister>()
