@@ -1,0 +1,29 @@
+Todo lo que necesitas recordar, organizado en un solo lugar.
+
+Secretaria convierte tus ideas, tareas y planes cotidianos en listas claras y recordatorios útiles. Crea una lista de la compra, prepara un viaje, organiza un proyecto o anota cualquier cosa antes de que se te olvide.
+
+LISTAS Y NOTAS
+• Crea listas y añade notas con título, contenido y color.
+• Ordena los elementos cuando el orden importa.
+• Agrupa listas relacionadas y archiva las que ya no necesitas.
+• Busca y ordena para encontrar rápidamente lo que necesitas.
+
+RECORDATORIOS
+• Crea recordatorios con fecha y hora opcionales.
+• Recibe una notificación cuando llega el momento.
+• Marca tareas como completadas y consulta su historial.
+• Reordena tus pendientes según tus prioridades.
+
+COMPARTE Y COLABORA
+• Añade amigos mediante un código personal.
+• Comparte listas completas o recordatorios concretos.
+• Recibe avisos cuando alguien comparte contenido contigo.
+• Gestiona con claridad quién tiene acceso.
+
+A TU MANERA
+• Inicia sesión con correo electrónico o Google, o continúa como invitado.
+• Interfaz disponible en español e inglés.
+• Diseño moderno creado con Kotlin Multiplatform.
+• Los anuncios solo aparecen en la sección opcional «Apoyar al creador».
+
+Secretaria te ayuda a vaciar la cabeza sin perder el control de tus planes.

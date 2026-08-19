@@ -60,3 +60,6 @@ Desktop.ini
 /.idea
 *.iml
 /.claude
+
+# Local Play Store asset previews
+/play-store/screenshots/tablet/working/

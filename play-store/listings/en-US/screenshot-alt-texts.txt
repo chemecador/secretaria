@@ -1,0 +1,6 @@
+01-lists.png — Personal lists sorted by date with quick access to reminders.
+02-notes.png — Travel notes shown as cards with different colors.
+03-reminders.png — Pending reminders with dates, times and shared tasks.
+04-reminder-dialog.png — Form for creating a reminder with an optional date and time.
+05-friends.png — Pending friend request with accept and reject actions.
+06-shared.png — A list from another person displayed in the Shared section.

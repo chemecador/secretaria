@@ -1,0 +1,6 @@
+Secretaria has been completely refreshed:
+• A modern new design built with Kotlin Multiplatform.
+• Full English and Spanish interface.
+• Reminders with dates, times and notifications.
+• Share lists, notes and reminders with friends.
+• Optional ads to support the creator.

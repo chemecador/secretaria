@@ -1,0 +1,29 @@
+Everything you need to remember, organized in one place.
+
+Secretaria turns everyday ideas, tasks and plans into clear lists and useful reminders. Make a grocery list, prepare a trip, organize a project or write something down before it slips your mind.
+
+LISTS AND NOTES
+• Create lists and add notes with a title, details and color.
+• Keep items in order when sequence matters.
+• Group related lists and archive the ones you no longer need.
+• Search and sort to find what you need quickly.
+
+REMINDERS
+• Create reminders with an optional date and time.
+• Get a notification when the time comes.
+• Mark tasks as complete and review their history.
+• Reorder pending items around your priorities.
+
+SHARE AND COLLABORATE
+• Add friends with a personal code.
+• Share full lists or individual reminders.
+• Get notified when someone shares something with you.
+• See clearly who has access.
+
+YOUR ROUTINE, YOUR WAY
+• Sign in with email or Google, or continue as a guest.
+• Use the interface in English or Spanish.
+• Enjoy a modern experience built with Kotlin Multiplatform.
+• Ads only appear in the optional “Support the creator” section.
+
+Secretaria helps you clear your mind without losing control of your plans.

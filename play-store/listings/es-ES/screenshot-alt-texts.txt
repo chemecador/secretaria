@@ -1,0 +1,6 @@
+01-lists.png — Listas personales ordenadas por fecha con acceso a recordatorios.
+02-notes.png — Notas de un viaje mostradas como tarjetas con distintos colores.
+03-reminders.png — Recordatorios pendientes con fechas, horas y tareas compartidas.
+04-reminder-dialog.png — Formulario para crear un recordatorio y añadir fecha y hora.
+05-friends.png — Solicitud de amistad pendiente con opciones para aceptarla o rechazarla.
+06-shared.png — Lista compartida por otra persona dentro de la sección Compartidas.

@@ -1,0 +1,6 @@
+Secretaria se ha renovado por completo:
+• Nuevo diseño moderno con Kotlin Multiplatform.
+• Interfaz disponible en español e inglés.
+• Recordatorios con fecha, hora y notificaciones.
+• Listas, notas y recordatorios compartidos con amigos.
+• Anuncios opcionales para apoyar al creador.
