@@ -204,6 +204,12 @@
   with `IS_PENDING` so a half-written file is never scanned, and below 29 it falls back to the
   system `CreateDocument` picker, because MediaStore there would require `WRITE_EXTERNAL_STORAGE`.
   Never add that permission to make the older path look like the newer one.
+- `NotePhotoDownloadResult.Saved` carries an opaque platform `location` (an Android content Uri as
+  a String) that the same controller feeds back to `open()`. The viewer reports the outcome with a
+  real snackbar hosted inside its own `Dialog` — a Scaffold-level host would render behind it — and
+  its "Open" action fires `ACTION_VIEW`. `SnackbarHostState.showSnackbar` owns the timing, so there
+  is no hand-rolled delay; `dismissDownloadFeedback()` must stay the last statement in that
+  `LaunchedEffect`, since flipping the state cancels the coroutine running it.
 - Note photos require a non-anonymous account. Android installs App Check Debug in debug and Play Integrity in release; callable enforcement stays off during the metrics rollout, while auth, transactional quotas and `concurrency: 1` remain mandatory.
 - Security-rule regression tests are `npm --prefix firebase/functions run test:rules` under Firestore + Storage emulators. Deploy photos with the five named functions plus `firestore:rules,storage`; never grant client writes as a shortcut.
 - The end-to-end callable test is `npm --prefix firebase/functions run test:integration:note-photos`; it uses isolated emulator ports and covers upload, idempotency, quotas, anonymous rejection, Storage objects and uploader cleanup after removal.

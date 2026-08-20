@@ -296,12 +296,19 @@ class NotePhotosViewModelTest {
         advanceUntilIdle()
 
         viewModel.beginPhotoDownload()
-        viewModel.onDownloadResult(NotePhotoDownloadResult.Saved)
-        assertEquals(NotePhotoDownloadState.Saved, viewModel.state.value.downloadState)
+        viewModel.onDownloadResult(NotePhotoDownloadResult.Saved(SAVED_LOCATION))
+        // The location travels through so the snackbar can offer to open the saved file.
+        assertEquals(
+            NotePhotoDownloadState.Saved(SAVED_LOCATION),
+            viewModel.state.value.downloadState,
+        )
 
         // A result that arrives without a save in flight is ignored.
         viewModel.onDownloadResult(NotePhotoDownloadResult.Cancelled)
-        assertEquals(NotePhotoDownloadState.Saved, viewModel.state.value.downloadState)
+        assertEquals(
+            NotePhotoDownloadState.Saved(SAVED_LOCATION),
+            viewModel.state.value.downloadState,
+        )
 
         viewModel.dismissDownloadFeedback()
         assertEquals(NotePhotoDownloadState.Idle, viewModel.state.value.downloadState)
@@ -330,7 +337,7 @@ class NotePhotosViewModelTest {
         advanceUntilIdle()
 
         viewModel.beginPhotoDownload()
-        viewModel.onDownloadResult(NotePhotoDownloadResult.Saved)
+        viewModel.onDownloadResult(NotePhotoDownloadResult.Saved(SAVED_LOCATION))
         viewModel.closeViewer()
 
         assertEquals(NotePhotoDownloadState.Idle, viewModel.state.value.downloadState)
@@ -411,6 +418,9 @@ class NotePhotosViewModelTest {
     }
 
     private companion object {
+        /** Shaped like the Android content Uri the real controller hands back. */
+        const val SAVED_LOCATION = "content://media/external/images/media/42"
+
         val KEY = NotePhotosKey(
             ownerId = "shared-owner",
             listId = "shared-list",

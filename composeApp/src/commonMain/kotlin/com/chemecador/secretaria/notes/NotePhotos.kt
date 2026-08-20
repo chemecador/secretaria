@@ -65,7 +65,8 @@ sealed interface NotePhotoPickerResult {
 }
 
 sealed interface NotePhotoDownloadResult {
-    data object Saved : NotePhotoDownloadResult
+    /** [location] is an opaque platform handle; only the same platform's controller reopens it. */
+    data class Saved(val location: String) : NotePhotoDownloadResult
     data object Cancelled : NotePhotoDownloadResult
     data class Failed(val error: NotePhotosError) : NotePhotoDownloadResult
 }

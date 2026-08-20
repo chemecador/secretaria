@@ -273,7 +273,9 @@ class NotePhotosViewModel(
         _state.update {
             it.copy(
                 downloadState = when (result) {
-                    NotePhotoDownloadResult.Saved -> NotePhotoDownloadState.Saved
+                    is NotePhotoDownloadResult.Saved ->
+                        NotePhotoDownloadState.Saved(result.location)
+
                     NotePhotoDownloadResult.Cancelled -> NotePhotoDownloadState.Idle
                     is NotePhotoDownloadResult.Failed ->
                         NotePhotoDownloadState.Failed(result.error)

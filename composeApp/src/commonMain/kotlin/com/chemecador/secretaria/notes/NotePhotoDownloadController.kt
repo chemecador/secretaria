@@ -4,6 +4,12 @@ import androidx.compose.runtime.Composable
 
 interface NotePhotoDownloadController {
     fun save(photo: NotePhoto, bytes: ByteArray)
+
+    /**
+     * Hands a photo saved earlier to whatever app the device views images with. Returns false when
+     * nothing can open it, so the caller can say so instead of appearing to do nothing.
+     */
+    fun open(location: String): Boolean
 }
 
 /**

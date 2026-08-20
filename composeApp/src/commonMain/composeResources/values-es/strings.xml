@@ -75,6 +75,8 @@
     <string name="note_photo_download_saving">Guardando foto…</string>
     <string name="note_photo_download_saved">Foto guardada</string>
     <string name="note_photo_download_failed">No se pudo guardar la foto.</string>
+    <string name="note_photo_download_open">Abrir</string>
+    <string name="note_photo_download_open_failed">Ninguna aplicación de este dispositivo puede abrir la foto.</string>
     <string name="note_photo_delete">Eliminar foto</string>
     <string name="note_photo_delete_title">¿Eliminar foto?</string>
     <string name="note_photo_delete_message">La foto se eliminará permanentemente de la nota.</string>

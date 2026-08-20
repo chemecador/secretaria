@@ -35,6 +35,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,9 +54,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.decodeToImageBitmap
 import org.jetbrains.compose.resources.stringResource
 import secretaria.composeapp.generated.resources.Res
@@ -68,6 +73,8 @@ import secretaria.composeapp.generated.resources.note_photo_delete_message
 import secretaria.composeapp.generated.resources.note_photo_delete_title
 import secretaria.composeapp.generated.resources.note_photo_download
 import secretaria.composeapp.generated.resources.note_photo_download_failed
+import secretaria.composeapp.generated.resources.note_photo_download_open
+import secretaria.composeapp.generated.resources.note_photo_download_open_failed
 import secretaria.composeapp.generated.resources.note_photo_download_saved
 import secretaria.composeapp.generated.resources.note_photo_download_saving
 import secretaria.composeapp.generated.resources.note_photo_dismiss
@@ -142,6 +149,7 @@ fun NotePhotosSection(
         onDownload = { ready ->
             if (viewModel.beginPhotoDownload()) downloader?.save(ready.photo, ready.bytes)
         },
+        onOpenSaved = { location -> downloader?.open(location) == true },
         onDismissDownloadFeedback = viewModel::dismissDownloadFeedback,
     )
 
@@ -412,9 +420,49 @@ private fun NotePhotoViewer(
     onClose: () -> Unit,
     onRetry: (String) -> Unit,
     onDownload: (NotePhotoViewerState.Ready) -> Unit,
+    onOpenSaved: (String) -> Boolean,
     onDismissDownloadFeedback: () -> Unit,
 ) {
     if (state == NotePhotoViewerState.Closed) return
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val savedMessage = stringResource(Res.string.note_photo_download_saved)
+    val openLabel = stringResource(Res.string.note_photo_download_open)
+    val saveFailedMessage = stringResource(Res.string.note_photo_download_failed)
+    val openFailedMessage = stringResource(Res.string.note_photo_download_open_failed)
+
+    // The snackbar owns its own timing, so there is no hand-rolled delay here any more.
+    LaunchedEffect(downloadState) {
+        when (downloadState) {
+            NotePhotoDownloadState.Idle, NotePhotoDownloadState.Saving -> Unit
+
+            is NotePhotoDownloadState.Saved -> {
+                val result = snackbarHostState.showSnackbar(
+                    message = savedMessage,
+                    actionLabel = openLabel,
+                    duration = SnackbarDuration.Short,
+                )
+                if (result == SnackbarResult.ActionPerformed &&
+                    !onOpenSaved(downloadState.location)
+                ) {
+                    snackbarHostState.showSnackbar(
+                        message = openFailedMessage,
+                        duration = SnackbarDuration.Short,
+                    )
+                }
+                // Last, always: it flips the state and so cancels this very coroutine.
+                onDismissDownloadFeedback()
+            }
+
+            is NotePhotoDownloadState.Failed -> {
+                snackbarHostState.showSnackbar(
+                    message = saveFailedMessage,
+                    duration = SnackbarDuration.Short,
+                )
+                onDismissDownloadFeedback()
+            }
+        }
+    }
 
     Dialog(onDismissRequest = onClose) {
         Surface(
@@ -487,16 +535,29 @@ private fun NotePhotoViewer(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (canDownload && state is NotePhotoViewerState.Ready) {
+                            val isSaving = downloadState == NotePhotoDownloadState.Saving
                             IconButton(
                                 onClick = { onDownload(state) },
-                                enabled = downloadState != NotePhotoDownloadState.Saving,
+                                enabled = !isSaving,
                             ) {
-                                Icon(
-                                    Icons.Default.Download,
-                                    contentDescription = stringResource(
-                                        Res.string.note_photo_download,
-                                    ),
-                                )
+                                // Progress replaces the icon: the snackbar only reports the outcome.
+                                if (isSaving) {
+                                    val savingLabel =
+                                        stringResource(Res.string.note_photo_download_saving)
+                                    CircularProgressIndicator(
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .semantics { contentDescription = savingLabel },
+                                        strokeWidth = 2.dp,
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.Download,
+                                        contentDescription = stringResource(
+                                            Res.string.note_photo_download,
+                                        ),
+                                    )
+                                }
                             }
                         }
                         IconButton(onClick = onClose) {
@@ -508,80 +569,16 @@ private fun NotePhotoViewer(
                     }
                 }
 
-                NotePhotoDownloadFeedback(
-                    state = downloadState,
-                    onDismiss = onDismissDownloadFeedback,
+                SnackbarHost(
+                    hostState = snackbarHostState,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(16.dp),
+                        .padding(8.dp),
                 )
             }
         }
     }
 }
-
-@Composable
-private fun NotePhotoDownloadFeedback(
-    state: NotePhotoDownloadState,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    if (state == NotePhotoDownloadState.Idle) return
-
-    // A save that worked needs no acknowledgement; only a failure waits for the user.
-    LaunchedEffect(state) {
-        if (state == NotePhotoDownloadState.Saved) {
-            delay(SAVED_FEEDBACK_MILLIS)
-            onDismiss()
-        }
-    }
-
-    val isFailure = state is NotePhotoDownloadState.Failed
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        color = if (isFailure) {
-            MaterialTheme.colorScheme.errorContainer
-        } else {
-            MaterialTheme.colorScheme.secondaryContainer
-        },
-        contentColor = if (isFailure) {
-            MaterialTheme.colorScheme.onErrorContainer
-        } else {
-            MaterialTheme.colorScheme.onSecondaryContainer
-        },
-    ) {
-        Row(
-            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (state == NotePhotoDownloadState.Saving) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(12.dp))
-            }
-            Text(
-                text = stringResource(
-                    when (state) {
-                        NotePhotoDownloadState.Saving -> Res.string.note_photo_download_saving
-                        NotePhotoDownloadState.Saved -> Res.string.note_photo_download_saved
-                        else -> Res.string.note_photo_download_failed
-                    },
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            if (isFailure) {
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = stringResource(Res.string.note_photo_dismiss),
-                    )
-                }
-            }
-        }
-    }
-}
-
-private const val SAVED_FEEDBACK_MILLIS = 2500L
 
 @Composable
 private fun rememberDecodedBitmap(id: String, bytes: ByteArray?): ImageBitmap? =

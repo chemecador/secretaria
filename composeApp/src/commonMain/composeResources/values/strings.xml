@@ -77,6 +77,8 @@
     <string name="note_photo_download_saving">Saving photo…</string>
     <string name="note_photo_download_saved">Photo saved</string>
     <string name="note_photo_download_failed">Couldn't save the photo.</string>
+    <string name="note_photo_download_open">Open</string>
+    <string name="note_photo_download_open_failed">No app on this device can open the photo.</string>
     <string name="note_photo_delete">Delete photo</string>
     <string name="note_photo_delete_title">Delete photo?</string>
     <string name="note_photo_delete_message">This photo will be permanently removed from the note.</string>

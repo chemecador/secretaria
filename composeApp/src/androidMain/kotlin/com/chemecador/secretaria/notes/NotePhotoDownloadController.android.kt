@@ -2,6 +2,7 @@ package com.chemecador.secretaria.notes
 
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -63,6 +64,7 @@ actual fun rememberNotePhotoDownloadController(
                 val saved = runCatching {
                     withContext(Dispatchers.IO) {
                         context.writeBytes(uri, bytes)
+                        uri
                     }
                 }
                 if (!session.isActive) return@launch
@@ -117,6 +119,15 @@ actual fun rememberNotePhotoDownloadController(
                     }
                 }
             }
+
+            override fun open(location: String): Boolean {
+                val intent = Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(Uri.parse(location), JPEG_MIME_TYPE)
+                    .addFlags(
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK,
+                    )
+                return runCatching { context.startActivity(intent) }.isSuccess
+            }
         }
     }
 }
@@ -139,7 +150,7 @@ private class NotePhotoDownloadSession {
 }
 
 /** Publishes the file only once the bytes are on disk, so no half-written image is ever scanned. */
-private fun Context.saveToPictures(fileName: String, bytes: ByteArray) {
+private fun Context.saveToPictures(fileName: String, bytes: ByteArray): Uri {
     val values = ContentValues().apply {
         put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
         put(MediaStore.Images.Media.MIME_TYPE, JPEG_MIME_TYPE)
@@ -160,6 +171,7 @@ private fun Context.saveToPictures(fileName: String, bytes: ByteArray) {
             null,
             null,
         )
+        return uri
     } catch (error: Throwable) {
         runCatching { contentResolver.delete(uri, null, null) }
         throw error
@@ -171,9 +183,9 @@ private fun Context.writeBytes(uri: Uri, bytes: ByteArray) {
         ?: error("Could not open $uri for writing")
 }
 
-private fun Result<Unit>.toDownloadResult(): NotePhotoDownloadResult =
+private fun Result<Uri>.toDownloadResult(): NotePhotoDownloadResult =
     fold(
-        onSuccess = { NotePhotoDownloadResult.Saved },
+        onSuccess = { uri -> NotePhotoDownloadResult.Saved(uri.toString()) },
         onFailure = { error ->
             NotePhotoDownloadResult.Failed(NotePhotosError.Repository(error.message))
         },

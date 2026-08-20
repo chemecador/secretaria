@@ -34,7 +34,7 @@ sealed interface NotePhotoViewerState {
 sealed interface NotePhotoDownloadState {
     data object Idle : NotePhotoDownloadState
     data object Saving : NotePhotoDownloadState
-    data object Saved : NotePhotoDownloadState
+    data class Saved(val location: String) : NotePhotoDownloadState
     data class Failed(val error: NotePhotosError) : NotePhotoDownloadState
 }
 
