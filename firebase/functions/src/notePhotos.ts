@@ -12,7 +12,10 @@ import sharp from "sharp";
 const REGION = "europe-west1";
 const CALLABLE_OPTIONS = {
   region: REGION,
-  enforceAppCheck: false,
+  // Enforced in production once App Check metrics read 100% verified. The emulator cannot mint a
+  // valid App Check token, so the end-to-end test would fail on every call; FUNCTIONS_EMULATOR is
+  // set only inside the emulator and never during a deploy.
+  enforceAppCheck: process.env.FUNCTIONS_EMULATOR !== "true",
   maxInstances: 3,
   concurrency: 1,
   memory: "512MiB" as const,
