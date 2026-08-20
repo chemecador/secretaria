@@ -118,6 +118,7 @@ test("note photo callables account attempts and let a removed uploader delete", 
   assert.equal(afterFirst.request.status, "completed");
   assert.equal(afterFirst.request.attemptCount, 1);
   assert.equal((await firestore.doc(photoPath).get()).exists, true);
+  assert.equal((await firestore.doc(notePath(location)).get()).get("photoCount"), 1);
   await assertStorageObjectExists(firstUpload.data.storagePath, true);
   await assertStorageObjectExists(firstUpload.data.thumbnailPath, true);
 
@@ -190,6 +191,7 @@ test("note photo callables account attempts and let a removed uploader delete", 
   assert.equal(deletion.ok, true, JSON.stringify(deletion.body));
   assert.deepEqual(deletion.data, { deleted: true });
   assert.equal((await firestore.doc(photoPath).get()).exists, false);
+  assert.equal((await firestore.doc(notePath(location)).get()).get("photoCount"), 0);
 
   const afterDeleteQuota = (await firestore.doc(quotaPath).get()).data();
   assert.equal(afterDeleteQuota.dailyAttempts, 3);

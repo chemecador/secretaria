@@ -53,6 +53,7 @@ beforeEach(async () => {
       title: "Note",
       content: "Body",
       order: 0,
+      photoCount: 1,
     });
     await firestore.doc(PHOTO_PATH).set({
       status: "ready",
@@ -105,6 +106,30 @@ function context(uid, provider = "password") {
     firebase: { sign_in_provider: provider },
   });
 }
+
+test("note photo counts are written by the server only", async () => {
+  const otherNote = `${LIST_PATH}/notes/note-2`;
+
+  await assertFails(context("owner").firestore().doc(NOTE_PATH).update({
+    photoCount: 3,
+  }));
+  await assertFails(context("collaborator").firestore().doc(NOTE_PATH).update({
+    photoCount: 0,
+  }));
+  await assertSucceeds(context("collaborator").firestore().doc(NOTE_PATH).update({
+    title: "Renamed",
+  }));
+
+  await assertFails(context("owner").firestore().doc(otherNote).set({
+    title: "New",
+    order: 1,
+    photoCount: 2,
+  }));
+  await assertSucceeds(context("owner").firestore().doc(otherNote).set({
+    title: "New",
+    order: 1,
+  }));
+});
 
 test("notes are limited to the owner and current collaborators", async () => {
   await assertSucceeds(context("owner").firestore().doc(NOTE_PATH).get());

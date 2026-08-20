@@ -56,6 +56,7 @@ class NotePhotosViewModel(
                     _state.update {
                         it.copy(
                             isLoading = false,
+                            hasLoaded = true,
                             photos = items,
                             canUpload = repository.canUpload,
                         )

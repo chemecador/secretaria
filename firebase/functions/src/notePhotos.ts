@@ -946,14 +946,17 @@ async function completeUpload(args: {
       ...activateUsage(readUsage(userSnapshot.data()), storageBytes),
       updatedAt: now,
     }, { merge: true });
+    const nextNoteUsage = activateUsage(readUsage(noteUsageSnapshot.data()), storageBytes);
     transaction.set(refs.noteUsage, {
-      ...activateUsage(readUsage(noteUsageSnapshot.data()), storageBytes),
+      ...nextNoteUsage,
       updatedAt: now,
     }, { merge: true });
     transaction.set(refs.globalUsage, {
       ...activateUsage(readUsage(globalSnapshot.data()), storageBytes),
       updatedAt: now,
     }, { merge: true });
+    // Readable badge for the notes list; clients cannot write this field.
+    transaction.set(refs.note, { photoCount: nextNoteUsage.activeCount }, { merge: true });
     transaction.create(photoRef, {
       status: "ready",
       storagePath,
@@ -1043,10 +1046,12 @@ async function removePhotoRecord(
     const photoSnapshot = await transaction.get(photoRef);
     if (!photoSnapshot.exists) return null;
 
+    // The note is gone when this runs from the note deletion trigger.
+    const noteRef = noteDocument(location);
+    const noteSnapshot = await transaction.get(noteRef);
     const uploaderId = requiredStoredString(photoSnapshot.get("uploaderId"));
     if (authorizedUid && authorizedUid !== uploaderId) {
       const listSnapshot = await transaction.get(listDocument(location));
-      const noteSnapshot = await transaction.get(noteDocument(location));
       if (!listSnapshot.exists ||
           !isListMember(authorizedUid, location.ownerId, listSnapshot.data())) {
         throw new HttpsError("permission-denied", "List access denied.");
@@ -1061,7 +1066,7 @@ async function removePhotoRecord(
     const storageBytes = positiveNumber(photoSnapshot.get("storageBytes")) ||
       positiveNumber(photoSnapshot.get("byteSize"));
     const userRef = db().collection(USER_USAGE).doc(uploaderId);
-    const noteUsageRef = noteDocument(location).collection(INTERNAL).doc(NOTE_USAGE_DOCUMENT);
+    const noteUsageRef = noteRef.collection(INTERNAL).doc(NOTE_USAGE_DOCUMENT);
     const globalRef = db().collection(GLOBAL_USAGE).doc("global");
     const userSnapshot = await transaction.get(userRef);
     const noteUsageSnapshot = await transaction.get(noteUsageRef);
@@ -1083,6 +1088,9 @@ async function removePhotoRecord(
         ...nextNoteUsage,
         updatedAt: now,
       }, { merge: true });
+    }
+    if (noteSnapshot.exists) {
+      transaction.set(noteRef, { photoCount: nextNoteUsage.activeCount }, { merge: true });
     }
     transaction.set(globalRef, {
       ...removeActiveUsage(readUsage(globalSnapshot.data()), storageBytes),

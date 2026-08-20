@@ -11,4 +11,6 @@ data class Note(
     val order: Int = 0,
     val creator: String,
     val color: Long = 0xFFFFFFFFL,
+    /** Server-maintained count of ready photos; clients never write it. */
+    val photoCount: Int = 0,
 )

@@ -188,7 +188,13 @@ service cloud.firestore {
         allow delete: if owns(userId);
 
         match /notes/{noteId} {
-          allow read, create, update, delete: if listMember(userId, listId);
+          // photoCount lo mantiene el servidor: el cliente lo lee, nunca lo escribe.
+          allow read, delete: if listMember(userId, listId);
+          allow create: if listMember(userId, listId)
+            && !('photoCount' in request.resource.data);
+          allow update: if listMember(userId, listId)
+            && request.resource.data.get('photoCount', 0)
+              == resource.data.get('photoCount', 0);
 
           match /photos/{photoId} {
             allow read: if permanentUser() && listMember(userId, listId);

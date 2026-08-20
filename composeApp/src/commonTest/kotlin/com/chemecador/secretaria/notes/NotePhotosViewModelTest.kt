@@ -56,7 +56,23 @@ class NotePhotosViewModelTest {
             viewModel.state.value.photos.single().thumbnailBytes,
         )
         assertFalse(viewModel.state.value.isLoading)
+        assertTrue(viewModel.state.value.hasLoaded)
         assertNull(viewModel.state.value.error)
+    }
+
+    @Test
+    fun load_failureLeavesTheCountUnconfirmed() = runTest(dispatcher) {
+        val repository = RecordingRepository().apply {
+            photosResult = Result.failure(NotePhotosException(NotePhotosError.Network))
+        }
+        val viewModel = buildViewModel(repository)
+
+        viewModel.load()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.hasLoaded)
+        assertTrue(viewModel.state.value.photos.isEmpty())
+        assertEquals(NotePhotosError.Network, viewModel.state.value.error)
     }
 
     @Test

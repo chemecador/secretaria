@@ -92,6 +92,8 @@
     <string name="note_photo_not_found">This photo no longer exists.</string>
     <string name="note_photo_network_error">Check your connection and try again.</string>
     <string name="note_photo_error_generic">Couldn't complete the photo operation.</string>
+    <string name="note_photos_badge">%1$s photos</string>
+    <string name="note_photos_badge_single">1 photo</string>
     <string name="action_expand_colors">Show colors</string>
     <string name="action_collapse_colors">Hide colors</string>
     <string name="edit_list">Edit</string>

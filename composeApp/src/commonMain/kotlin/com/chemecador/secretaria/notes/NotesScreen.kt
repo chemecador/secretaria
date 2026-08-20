@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +63,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextAlign
@@ -87,6 +91,8 @@ import secretaria.composeapp.generated.resources.create_note_title
 import secretaria.composeapp.generated.resources.list_created_by
 import secretaria.composeapp.generated.resources.list_created_by_you
 import secretaria.composeapp.generated.resources.note_completed_badge
+import secretaria.composeapp.generated.resources.note_photos_badge
+import secretaria.composeapp.generated.resources.note_photos_badge_single
 import secretaria.composeapp.generated.resources.notes_empty
 import secretaria.composeapp.generated.resources.notes_error_generic
 import secretaria.composeapp.generated.resources.reorder_note_handle
@@ -107,6 +113,8 @@ fun NotesScreen(
     val state by viewModel.state.collectAsState()
     val authRepository = koinInject<AuthRepository>()
     val currentUserEmail = authRepository.currentUserEmail
+    // Photos are only reachable where the detail screen can show them.
+    val arePhotosSupported = koinInject<NotePhotosRepository>().isSupported
     var showCreateDialog by remember { mutableStateOf(false) }
     var noteToDelete by remember { mutableStateOf<Note?>(null) }
 
@@ -222,6 +230,7 @@ fun NotesScreen(
                                 notes = displayNotes,
                                 isOrdered = isOrdered,
                                 currentUserEmail = currentUserEmail,
+                                arePhotosSupported = arePhotosSupported,
                                 onNoteClick = onNoteClick,
                                 onNoteLongClick = { noteToDelete = it },
                                 onNotesReordered = viewModel::reorderNotes,
@@ -239,6 +248,7 @@ private fun NotesContent(
     notes: List<Note>,
     isOrdered: Boolean,
     currentUserEmail: String?,
+    arePhotosSupported: Boolean,
     onNoteClick: (Note) -> Unit,
     onNoteLongClick: (Note) -> Unit,
     onNotesReordered: (List<String>) -> Unit,
@@ -247,6 +257,7 @@ private fun NotesContent(
         OrderedNotesContent(
             notes = notes.sortedBy(Note::order),
             currentUserEmail = currentUserEmail,
+            arePhotosSupported = arePhotosSupported,
             onNoteClick = onNoteClick,
             onNoteLongClick = onNoteLongClick,
             onNotesReordered = onNotesReordered,
@@ -263,6 +274,7 @@ private fun NotesContent(
                     isOrdered = false,
                     orderIndex = index + 1,
                     currentUserEmail = currentUserEmail,
+                    arePhotosSupported = arePhotosSupported,
                     onClick = { onNoteClick(note) },
                     onLongClick = { onNoteLongClick(note) },
                 )
@@ -275,6 +287,7 @@ private fun NotesContent(
 private fun OrderedNotesContent(
     notes: List<Note>,
     currentUserEmail: String?,
+    arePhotosSupported: Boolean,
     onNoteClick: (Note) -> Unit,
     onNoteLongClick: (Note) -> Unit,
     onNotesReordered: (List<String>) -> Unit,
@@ -337,6 +350,7 @@ private fun OrderedNotesContent(
                 isOrdered = true,
                 orderIndex = index + 1,
                 currentUserEmail = currentUserEmail,
+                arePhotosSupported = arePhotosSupported,
                 modifier = Modifier
                     // El arrastrado se mueve con translationY; el resto se desliza a su hueco.
                     .then(if (isDragged) Modifier else Modifier.animateItem())
@@ -374,6 +388,7 @@ private fun NoteCard(
     isOrdered: Boolean,
     orderIndex: Int,
     currentUserEmail: String?,
+    arePhotosSupported: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -410,6 +425,12 @@ private fun NoteCard(
                     ),
                     modifier = Modifier.weight(1f),
                 )
+                if (arePhotosSupported && note.photoCount > 0) {
+                    NotePhotosBadge(
+                        photoCount = note.photoCount,
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
                 Box(
                     modifier = Modifier
                         .size(18.dp)
@@ -459,6 +480,40 @@ private fun NoteCard(
                 }
             }
         }
+    }
+}
+
+/** Tells the note apart in the list without having to open the detail. */
+@Composable
+private fun NotePhotosBadge(
+    photoCount: Int,
+    modifier: Modifier = Modifier,
+) {
+    val label = if (photoCount == 1) {
+        stringResource(Res.string.note_photos_badge_single)
+    } else {
+        stringResource(Res.string.note_photos_badge, photoCount.toString())
+    }
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .clearAndSetSemantics { contentDescription = label },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.PhotoLibrary,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(
+            text = photoCount.toString(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+        )
     }
 }
 

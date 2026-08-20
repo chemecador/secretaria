@@ -80,6 +80,51 @@ class FirestoreRestNotesRepositoryTest {
     }
 
     @Test
+    fun getNotesForList_mapsServerPhotoCount() = kotlinx.coroutines.test.runTest {
+        val transport = RecordingFirestoreTransport(
+            responses = listOf(
+                FirebaseFirestoreHttpResponse(
+                    statusCode = 200,
+                    body = """
+                        {
+                          "documents": [
+                            {
+                              "name": "projects/project-id/databases/(default)/documents/users/owner-999/noteslist/list-1/notes/note-1",
+                              "fields": {
+                                "title": { "stringValue": "Con fotos" },
+                                "order": { "integerValue": "0" },
+                                "photoCount": { "integerValue": "2" }
+                              }
+                            },
+                            {
+                              "name": "projects/project-id/databases/(default)/documents/users/owner-999/noteslist/list-1/notes/note-2",
+                              "fields": {
+                                "title": { "stringValue": "Sin fotos" },
+                                "order": { "integerValue": "1" }
+                              }
+                            }
+                          ]
+                        }
+                    """.trimIndent(),
+                ),
+            ),
+        )
+        val repository = FirestoreRestNotesRepository(
+            authRepository = LoggedInAuthRepository("user-123"),
+            firestore = FirebaseFirestoreRestApi(
+                projectId = "project-id",
+                tokenProvider = StaticTokenProvider("desktop-token"),
+                transport = transport,
+            ),
+        )
+
+        val notes = repository.getNotesForList(ownerId = "owner-999", listId = "list-1").getOrThrow()
+
+        assertEquals(2, notes[0].photoCount)
+        assertEquals(0, notes[1].photoCount)
+    }
+
+    @Test
     fun reorderNotes_commitsOrderUpdatesAtomically() = kotlinx.coroutines.test.runTest {
         val transport = RecordingFirestoreTransport(
             responses = listOf(

@@ -58,6 +58,7 @@
   - read, create, delete
   - ordered/unordered display
   - Android note detail can attach up to 3 photos; other targets hide the section
+  - the notes list badges a note with its photo count, on the targets that support photos
   - Android Photo Picker reencodes to JPEG <=1600 px, targets 600 KiB and hard-caps at 1 MiB
 - Reminders support:
   - flat collection, not attached to any list; shareable with friends one by one
@@ -175,6 +176,13 @@
 - List deletion uses a batch for notes + list document. Partial failure can leave orphaned notes; acceptable for now.
 - Security rules live in `firebase/firestore.rules` and are wired in `firebase.json`. That file is the source of truth: a deploy overwrites whatever the console has.
 - Note photo metadata lives in `users/{ownerId}/noteslist/{listId}/notes/{noteId}/photos`; binaries live under the matching `note-images/...` Storage prefix. Clients can only read authorised objects and never write metadata or Storage directly.
+- The note document carries a server-maintained `photoCount`, written inside the same transactions
+  that create or delete the photo metadata, so the notes list can badge photos without one read per
+  note. Rules reject any client write that adds or changes it, and `removePhotoRecord` skips that
+  write when the note no longer exists, because the note-deletion trigger would otherwise resurrect
+  the document. Notes written before the field existed read as 0. `NotePhotosState.hasLoaded` is
+  what lets `App.kt` push a fresh count into `NotesViewModel.syncPhotoCount` without a refetch, and
+  keeps a failed photo read from clearing a badge that is actually correct.
 - Note photo writes use `uploadNotePhoto` / `deleteNotePhoto` callables in `europe-west1`. The server reencodes with Sharp, uses payload-bound idempotent reservations with at most 3 processing attempts, cleans stale uploads every 30 minutes and enforces: 3/note, 50 photos + 50 MiB/account, 10 uploads/day, 50 uploads/month, 100 photo calls/account/day, 250 uploads/day global, 1,000 photo calls/day global and 2 GiB global. Set `notePhotoSystem/global.uploadsEnabled = false` for an emergency stop.
 - Note photos require a non-anonymous account. Android installs App Check Debug in debug and Play Integrity in release; callable enforcement stays off during the metrics rollout, while auth, transactional quotas and `concurrency: 1` remain mandatory.
 - Security-rule regression tests are `npm --prefix firebase/functions run test:rules` under Firestore + Storage emulators. Deploy photos with the five named functions plus `firestore:rules,storage`; never grant client writes as a shortcut.

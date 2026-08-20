@@ -10,6 +10,7 @@ import com.chemecador.secretaria.firestore.firestoreLong
 import com.chemecador.secretaria.firestore.firestoreString
 import com.chemecador.secretaria.firestore.firestoreTimestamp
 import com.chemecador.secretaria.login.AuthRepository
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -36,6 +37,7 @@ internal class FirestoreIosNotesRepository(
                     order = fields.firestoreInt("order") ?: 0,
                     creator = fields.firestoreString("creator").orEmpty(),
                     color = fields.firestoreLong("color") ?: DEFAULT_NOTE_COLOR,
+                    photoCount = fields.firestorePhotoCount(),
                 )
             }
         }
@@ -76,6 +78,7 @@ internal class FirestoreIosNotesRepository(
                 order = fields.firestoreInt("order") ?: nextOrder,
                 creator = fields.firestoreString("creator").orEmpty(),
                 color = fields.firestoreLong("color") ?: DEFAULT_NOTE_COLOR,
+                photoCount = fields.firestorePhotoCount(),
             )
         }
 
@@ -133,6 +136,7 @@ internal class FirestoreIosNotesRepository(
                 order = fields.firestoreInt("order") ?: 0,
                 creator = fields.firestoreString("creator").orEmpty(),
                 color = fields.firestoreLong("color") ?: DEFAULT_NOTE_COLOR,
+                photoCount = fields.firestorePhotoCount(),
             )
         }
 
@@ -157,3 +161,7 @@ internal class FirestoreIosNotesRepository(
         const val NOTES = "notes"
     }
 }
+
+/** Server-maintained; missing on notes written before photos existed. */
+private fun JsonObject.firestorePhotoCount(): Int =
+    firestoreInt("photoCount")?.coerceAtLeast(0) ?: 0

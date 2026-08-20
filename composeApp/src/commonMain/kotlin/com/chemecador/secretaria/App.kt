@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -449,6 +450,16 @@ private fun AppContent(
                                 current.isOrdered,
                                 current.backTarget,
                             )
+                            val photosState by photosViewModel.state.collectAsState()
+                            // Keeps the list badge honest after adding or deleting a photo.
+                            LaunchedEffect(photosState.hasLoaded, photosState.photos.size) {
+                                if (photosState.hasLoaded) {
+                                    notesViewModel.syncPhotoCount(
+                                        noteId = current.note.id,
+                                        photoCount = photosState.photos.size,
+                                    )
+                                }
+                            }
                             NoteDetailScreen(
                                 note = current.note,
                                 photosViewModel = photosViewModel,

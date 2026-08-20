@@ -94,6 +94,22 @@ class NotesViewModel(
         }
     }
 
+    /**
+     * Mirrors photos added or removed in the detail screen without refetching the list.
+     * The server value wins again on the next load.
+     */
+    fun syncPhotoCount(noteId: String, photoCount: Int) {
+        if (_state.value.notes.none { it.id == noteId && it.photoCount != photoCount }) return
+
+        _state.update { state ->
+            state.copy(
+                notes = state.notes.map { note ->
+                    if (note.id == noteId) note.copy(photoCount = photoCount) else note
+                },
+            )
+        }
+    }
+
     private suspend fun fetchNotes(isRefresh: Boolean = false) {
         _state.update { currentState ->
             if (isRefresh) {

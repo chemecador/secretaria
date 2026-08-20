@@ -139,5 +139,6 @@ private fun com.google.firebase.firestore.DocumentSnapshot.toNote(): Note {
         order = getLong("order")?.toInt() ?: 0,
         creator = getString("creator").orEmpty(),
         color = rawColor,
+        photoCount = getLong("photoCount")?.toInt()?.coerceAtLeast(0) ?: 0,
     )
 }

@@ -335,6 +335,44 @@ class NotesViewModelTest {
         assertEquals("fallo al actualizar", viewModel.state.value.errorMessage)
     }
 
+    @Test
+    fun syncPhotoCount_updatesOnlyTheTargetNote() = runTest(dispatcher) {
+        val repository = ControlledRepository(
+            Result.success(
+                listOf(
+                    Note(
+                        id = "n1",
+                        title = "Con fotos",
+                        content = "",
+                        createdAt = Instant.parse("2026-03-28T12:05:00Z"),
+                        creator = "Alex",
+                    ),
+                    Note(
+                        id = "n2",
+                        title = "Sin fotos",
+                        content = "",
+                        createdAt = Instant.parse("2026-03-28T12:06:00Z"),
+                        creator = "Alex",
+                    ),
+                ),
+            ),
+        )
+        val viewModel = buildViewModel(repository, listId = "shopping")
+
+        viewModel.load()
+        repository.release()
+        advanceUntilIdle()
+
+        viewModel.syncPhotoCount(noteId = "n1", photoCount = 2)
+
+        assertEquals(2, viewModel.state.value.notes[0].photoCount)
+        assertEquals(0, viewModel.state.value.notes[1].photoCount)
+
+        viewModel.syncPhotoCount(noteId = "n1", photoCount = 0)
+
+        assertEquals(0, viewModel.state.value.notes[0].photoCount)
+    }
+
     private fun buildViewModel(
         repository: NotesRepository,
         accountSettingsRepository: AccountSettingsRepository = FakeAccountSettingsRepository(),

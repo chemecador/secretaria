@@ -35,6 +35,8 @@ data class NotePhotosState(
     val isSupported: Boolean = false,
     val canUpload: Boolean = false,
     val isLoading: Boolean = false,
+    /** True once a load has succeeded, so an empty list means "no photos" and not "not read yet". */
+    val hasLoaded: Boolean = false,
     val photos: List<NotePhotoItemState> = emptyList(),
     val uploadState: NotePhotoUploadState = NotePhotoUploadState.Idle,
     val deletingPhotoIds: Set<String> = emptySet(),
