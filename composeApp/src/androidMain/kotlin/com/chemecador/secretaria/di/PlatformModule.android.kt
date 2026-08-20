@@ -6,6 +6,7 @@ import com.chemecador.secretaria.login.AuthRepository
 import com.chemecador.secretaria.login.FirebaseAuthRepository
 import com.chemecador.secretaria.messaging.FcmTokenRegister
 import com.chemecador.secretaria.messaging.FirestoreFcmTokenRegister
+import com.chemecador.secretaria.notes.CachingNotePhotosRepository
 import com.chemecador.secretaria.notes.FirestoreNotesRepository
 import com.chemecador.secretaria.notes.FirebaseNotePhotosRepository
 import com.chemecador.secretaria.notes.NotePhotosRepository
@@ -23,7 +24,8 @@ internal actual fun platformModule(): Module = module {
     single<AuthRepository> { FirebaseAuthRepository() }
     single<NotesListsRepository> { FirestoreNotesListsRepository(get()) }
     single<NotesRepository> { FirestoreNotesRepository(get()) }
-    single<NotePhotosRepository> { FirebaseNotePhotosRepository() }
+    // Kept as a single so the cache survives navigating between notes.
+    single<NotePhotosRepository> { CachingNotePhotosRepository(FirebaseNotePhotosRepository()) }
     single<RemindersRepository> { FirestoreRemindersRepository(get()) }
     single<FriendsRepository> { FirestoreFriendsRepository(get()) }
     single<AccountSettingsRepository> { FirestoreAccountSettingsRepository(get()) }

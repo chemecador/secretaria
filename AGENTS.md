@@ -210,6 +210,14 @@
   its "Open" action fires `ACTION_VIEW`. `SnackbarHostState.showSnackbar` owns the timing, so there
   is no hand-rolled delay; `dismissDownloadFeedback()` must stay the last statement in that
   `LaunchedEffect`, since flipping the state cancels the coroutine running it.
+- Photo READS have no quota and never will have one cheaply: they go straight to Storage from the
+  SDK, so no callable counts them. `consumeCallBudget` and every limit next to it only guard
+  `uploadNotePhoto` / `deleteNotePhoto`. Each read also costs two `firestore.get()` calls made by
+  the Storage rules to authorise it. `CachingNotePhotosRepository` (commonMain, wraps the Android
+  repository in `platformModule`) is the defence that matters: bytes are immutable once uploaded,
+  so an in-memory LRU is always valid and only a delete evicts. The Storage SDK has no disk cache
+  of its own — verified by killing the network after a load. Enforcing App Check on Cloud Storage
+  is the other half, and it is a console setting, not code.
 - Note photos require a non-anonymous account. Android installs App Check Debug in debug and Play Integrity in release; callable enforcement stays off during the metrics rollout, while auth, transactional quotas and `concurrency: 1` remain mandatory.
 - Security-rule regression tests are `npm --prefix firebase/functions run test:rules` under Firestore + Storage emulators. Deploy photos with the five named functions plus `firestore:rules,storage`; never grant client writes as a shortcut.
 - The end-to-end callable test is `npm --prefix firebase/functions run test:integration:note-photos`; it uses isolated emulator ports and covers upload, idempotency, quotas, anonymous rejection, Storage objects and uploader cleanup after removal.
