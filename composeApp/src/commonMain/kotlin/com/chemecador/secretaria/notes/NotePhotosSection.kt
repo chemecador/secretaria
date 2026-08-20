@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.BrokenImage
@@ -51,6 +52,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.decodeToImageBitmap
 import org.jetbrains.compose.resources.stringResource
 import secretaria.composeapp.generated.resources.Res
@@ -64,6 +66,10 @@ import secretaria.composeapp.generated.resources.note_photo_global_limit
 import secretaria.composeapp.generated.resources.note_photo_delete
 import secretaria.composeapp.generated.resources.note_photo_delete_message
 import secretaria.composeapp.generated.resources.note_photo_delete_title
+import secretaria.composeapp.generated.resources.note_photo_download
+import secretaria.composeapp.generated.resources.note_photo_download_failed
+import secretaria.composeapp.generated.resources.note_photo_download_saved
+import secretaria.composeapp.generated.resources.note_photo_download_saving
 import secretaria.composeapp.generated.resources.note_photo_dismiss
 import secretaria.composeapp.generated.resources.note_photo_error_generic
 import secretaria.composeapp.generated.resources.note_photo_image_too_large
@@ -93,6 +99,7 @@ fun NotePhotosSection(
 ) {
     val state by viewModel.state.collectAsState()
     val picker = rememberNotePhotoPickerController(viewModel::onPickerResult)
+    val downloader = rememberNotePhotoDownloadController(viewModel::onDownloadResult)
     var photoPendingDelete by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(viewModel) {
@@ -128,8 +135,14 @@ fun NotePhotosSection(
 
     NotePhotoViewer(
         state = state.viewerState,
+        downloadState = state.downloadState,
+        canDownload = downloader != null,
         onClose = viewModel::closeViewer,
         onRetry = { photoId -> viewModel.openPhoto(photoId) },
+        onDownload = { ready ->
+            if (viewModel.beginPhotoDownload()) downloader?.save(ready.photo, ready.bytes)
+        },
+        onDismissDownloadFeedback = viewModel::dismissDownloadFeedback,
     )
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -394,8 +407,12 @@ private fun ErrorCard(
 @Composable
 private fun NotePhotoViewer(
     state: NotePhotoViewerState,
+    downloadState: NotePhotoDownloadState,
+    canDownload: Boolean,
     onClose: () -> Unit,
     onRetry: (String) -> Unit,
+    onDownload: (NotePhotoViewerState.Ready) -> Unit,
+    onDismissDownloadFeedback: () -> Unit,
 ) {
     if (state == NotePhotoViewerState.Closed) return
 
@@ -468,17 +485,103 @@ private fun NotePhotoViewer(
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
                 ) {
-                    IconButton(onClick = onClose) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = stringResource(Res.string.note_photo_close),
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (canDownload && state is NotePhotoViewerState.Ready) {
+                            IconButton(
+                                onClick = { onDownload(state) },
+                                enabled = downloadState != NotePhotoDownloadState.Saving,
+                            ) {
+                                Icon(
+                                    Icons.Default.Download,
+                                    contentDescription = stringResource(
+                                        Res.string.note_photo_download,
+                                    ),
+                                )
+                            }
+                        }
+                        IconButton(onClick = onClose) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = stringResource(Res.string.note_photo_close),
+                            )
+                        }
                     }
+                }
+
+                NotePhotoDownloadFeedback(
+                    state = downloadState,
+                    onDismiss = onDismissDownloadFeedback,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotePhotoDownloadFeedback(
+    state: NotePhotoDownloadState,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (state == NotePhotoDownloadState.Idle) return
+
+    // A save that worked needs no acknowledgement; only a failure waits for the user.
+    LaunchedEffect(state) {
+        if (state == NotePhotoDownloadState.Saved) {
+            delay(SAVED_FEEDBACK_MILLIS)
+            onDismiss()
+        }
+    }
+
+    val isFailure = state is NotePhotoDownloadState.Failed
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = if (isFailure) {
+            MaterialTheme.colorScheme.errorContainer
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer
+        },
+        contentColor = if (isFailure) {
+            MaterialTheme.colorScheme.onErrorContainer
+        } else {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        },
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (state == NotePhotoDownloadState.Saving) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(12.dp))
+            }
+            Text(
+                text = stringResource(
+                    when (state) {
+                        NotePhotoDownloadState.Saving -> Res.string.note_photo_download_saving
+                        NotePhotoDownloadState.Saved -> Res.string.note_photo_download_saved
+                        else -> Res.string.note_photo_download_failed
+                    },
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (isFailure) {
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = stringResource(Res.string.note_photo_dismiss),
+                    )
                 }
             }
         }
     }
 }
+
+private const val SAVED_FEEDBACK_MILLIS = 2500L
 
 @Composable
 private fun rememberDecodedBitmap(id: String, bytes: ByteArray?): ImageBitmap? =

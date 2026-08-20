@@ -31,6 +31,13 @@ sealed interface NotePhotoViewerState {
     ) : NotePhotoViewerState
 }
 
+sealed interface NotePhotoDownloadState {
+    data object Idle : NotePhotoDownloadState
+    data object Saving : NotePhotoDownloadState
+    data object Saved : NotePhotoDownloadState
+    data class Failed(val error: NotePhotosError) : NotePhotoDownloadState
+}
+
 data class NotePhotosState(
     val isSupported: Boolean = false,
     val canUpload: Boolean = false,
@@ -41,6 +48,7 @@ data class NotePhotosState(
     val uploadState: NotePhotoUploadState = NotePhotoUploadState.Idle,
     val deletingPhotoIds: Set<String> = emptySet(),
     val viewerState: NotePhotoViewerState = NotePhotoViewerState.Closed,
+    val downloadState: NotePhotoDownloadState = NotePhotoDownloadState.Idle,
     val error: NotePhotosError? = null,
 ) {
     val canAddPhoto: Boolean

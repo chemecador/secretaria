@@ -269,6 +269,82 @@ class NotePhotosViewModelTest {
     }
 
     @Test
+    fun beginPhotoDownload_needsTheFullSizeBytesOnScreen() = runTest(dispatcher) {
+        val photo = photo("1")
+        val viewModel = buildViewModel(readyViewerRepository(photo))
+        viewModel.load()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.beginPhotoDownload())
+        assertEquals(NotePhotoDownloadState.Idle, viewModel.state.value.downloadState)
+
+        viewModel.openPhoto(photo.id)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.beginPhotoDownload())
+        assertEquals(NotePhotoDownloadState.Saving, viewModel.state.value.downloadState)
+        assertFalse(viewModel.beginPhotoDownload())
+    }
+
+    @Test
+    fun downloadResult_reportsSuccessFailureAndCancellation() = runTest(dispatcher) {
+        val photo = photo("1")
+        val viewModel = buildViewModel(readyViewerRepository(photo))
+        viewModel.load()
+        advanceUntilIdle()
+        viewModel.openPhoto(photo.id)
+        advanceUntilIdle()
+
+        viewModel.beginPhotoDownload()
+        viewModel.onDownloadResult(NotePhotoDownloadResult.Saved)
+        assertEquals(NotePhotoDownloadState.Saved, viewModel.state.value.downloadState)
+
+        // A result that arrives without a save in flight is ignored.
+        viewModel.onDownloadResult(NotePhotoDownloadResult.Cancelled)
+        assertEquals(NotePhotoDownloadState.Saved, viewModel.state.value.downloadState)
+
+        viewModel.dismissDownloadFeedback()
+        assertEquals(NotePhotoDownloadState.Idle, viewModel.state.value.downloadState)
+
+        viewModel.beginPhotoDownload()
+        viewModel.onDownloadResult(NotePhotoDownloadResult.Cancelled)
+        assertEquals(NotePhotoDownloadState.Idle, viewModel.state.value.downloadState)
+
+        viewModel.beginPhotoDownload()
+        viewModel.onDownloadResult(
+            NotePhotoDownloadResult.Failed(NotePhotosError.Network),
+        )
+        assertEquals(
+            NotePhotoDownloadState.Failed(NotePhotosError.Network),
+            viewModel.state.value.downloadState,
+        )
+    }
+
+    @Test
+    fun closingTheViewer_dropsStaleDownloadFeedback() = runTest(dispatcher) {
+        val photo = photo("1")
+        val viewModel = buildViewModel(readyViewerRepository(photo))
+        viewModel.load()
+        advanceUntilIdle()
+        viewModel.openPhoto(photo.id)
+        advanceUntilIdle()
+
+        viewModel.beginPhotoDownload()
+        viewModel.onDownloadResult(NotePhotoDownloadResult.Saved)
+        viewModel.closeViewer()
+
+        assertEquals(NotePhotoDownloadState.Idle, viewModel.state.value.downloadState)
+    }
+
+    private fun readyViewerRepository(photo: NotePhoto): RecordingRepository =
+        RecordingRepository().apply {
+            photosResult = Result.success(listOf(photo))
+            bytesHandler = { _, fullSize ->
+                Result.success(if (fullSize) byteArrayOf(8, 8) else byteArrayOf(1))
+            }
+        }
+
+    @Test
     fun noopRepository_isSafeOnUnsupportedTargets() = runTest(dispatcher) {
         val repository = NoopNotePhotosRepository()
         val viewModel = buildViewModel(repository)

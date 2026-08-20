@@ -209,7 +209,12 @@ class NotePhotosViewModel(
     fun openPhoto(photoId: String) {
         val photo = _state.value.photos.firstOrNull { it.photo.id == photoId }?.photo ?: return
         viewerJob?.cancel()
-        _state.update { it.copy(viewerState = NotePhotoViewerState.Loading(photo)) }
+        _state.update {
+            it.copy(
+                viewerState = NotePhotoViewerState.Loading(photo),
+                downloadState = NotePhotoDownloadState.Idle,
+            )
+        }
         viewerJob = viewModelScope.launch {
             repository.getPhotoBytes(photo, fullSize = true)
                 .onSuccess { bytes ->
@@ -241,7 +246,45 @@ class NotePhotosViewModel(
     fun closeViewer() {
         viewerJob?.cancel()
         viewerJob = null
-        _state.update { it.copy(viewerState = NotePhotoViewerState.Closed) }
+        _state.update {
+            it.copy(
+                viewerState = NotePhotoViewerState.Closed,
+                downloadState = NotePhotoDownloadState.Idle,
+            )
+        }
+    }
+
+    /**
+     * Returns true only when the platform saver should actually be launched. Saving reuses the
+     * bytes the viewer already holds, so it never costs another download.
+     */
+    fun beginPhotoDownload(): Boolean {
+        val current = _state.value
+        if (current.viewerState !is NotePhotoViewerState.Ready) return false
+        if (current.downloadState == NotePhotoDownloadState.Saving) return false
+
+        _state.update { it.copy(downloadState = NotePhotoDownloadState.Saving) }
+        return true
+    }
+
+    fun onDownloadResult(result: NotePhotoDownloadResult) {
+        if (_state.value.downloadState != NotePhotoDownloadState.Saving) return
+
+        _state.update {
+            it.copy(
+                downloadState = when (result) {
+                    NotePhotoDownloadResult.Saved -> NotePhotoDownloadState.Saved
+                    NotePhotoDownloadResult.Cancelled -> NotePhotoDownloadState.Idle
+                    is NotePhotoDownloadResult.Failed ->
+                        NotePhotoDownloadState.Failed(result.error)
+                },
+            )
+        }
+    }
+
+    fun dismissDownloadFeedback() {
+        if (_state.value.downloadState == NotePhotoDownloadState.Saving) return
+        _state.update { it.copy(downloadState = NotePhotoDownloadState.Idle) }
     }
 
     fun clearError() {

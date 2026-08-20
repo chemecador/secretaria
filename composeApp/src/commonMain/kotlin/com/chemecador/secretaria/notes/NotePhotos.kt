@@ -64,6 +64,12 @@ sealed interface NotePhotoPickerResult {
     data object Cancelled : NotePhotoPickerResult
 }
 
+sealed interface NotePhotoDownloadResult {
+    data object Saved : NotePhotoDownloadResult
+    data object Cancelled : NotePhotoDownloadResult
+    data class Failed(val error: NotePhotosError) : NotePhotoDownloadResult
+}
+
 sealed interface NotePhotosError {
     data object Unsupported : NotePhotosError
     data object UploadNotAllowed : NotePhotosError

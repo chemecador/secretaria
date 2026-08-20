@@ -59,6 +59,7 @@
   - ordered/unordered display
   - Android note detail can attach up to 3 photos; other targets hide the section
   - the notes list badges a note with its photo count, on the targets that support photos
+  - the full-size viewer can save the photo to the device; Android only, no permission asked
   - Android Photo Picker reencodes to JPEG <=1600 px, targets 600 KiB and hard-caps at 1 MiB
 - Reminders support:
   - flat collection, not attached to any list; shareable with friends one by one
@@ -184,6 +185,13 @@
   what lets `App.kt` push a fresh count into `NotesViewModel.syncPhotoCount` without a refetch, and
   keeps a failed photo read from clearing a badge that is actually correct.
 - Note photo writes use `uploadNotePhoto` / `deleteNotePhoto` callables in `europe-west1`. The server reencodes with Sharp, uses payload-bound idempotent reservations with at most 3 processing attempts, cleans stale uploads every 30 minutes and enforces: 3/note, 50 photos + 50 MiB/account, 10 uploads/day, 50 uploads/month, 100 photo calls/account/day, 250 uploads/day global, 1,000 photo calls/day global and 2 GiB global. Set `notePhotoSystem/global.uploadsEnabled = false` for an emergency stop.
+- Saving a photo to the device goes through `rememberNotePhotoDownloadController`, the same
+  `@Composable expect` shape as the picker, and is null everywhere except Android. It reuses the
+  bytes the viewer already holds, so a save never re-downloads. Android takes one of two
+  permission-free paths by API level: from 29 it inserts into `Pictures/Secretaria` via MediaStore
+  with `IS_PENDING` so a half-written file is never scanned, and below 29 it falls back to the
+  system `CreateDocument` picker, because MediaStore there would require `WRITE_EXTERNAL_STORAGE`.
+  Never add that permission to make the older path look like the newer one.
 - Note photos require a non-anonymous account. Android installs App Check Debug in debug and Play Integrity in release; callable enforcement stays off during the metrics rollout, while auth, transactional quotas and `concurrency: 1` remain mandatory.
 - Security-rule regression tests are `npm --prefix firebase/functions run test:rules` under Firestore + Storage emulators. Deploy photos with the five named functions plus `firestore:rules,storage`; never grant client writes as a shortcut.
 - The end-to-end callable test is `npm --prefix firebase/functions run test:integration:note-photos`; it uses isolated emulator ports and covers upload, idempotency, quotas, anonymous rejection, Storage objects and uploader cleanup after removal.

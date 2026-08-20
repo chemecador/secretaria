@@ -72,6 +72,10 @@
     <string name="note_photo_open">Open photo %1$s</string>
     <string name="note_photo_viewer">Full-size note photo</string>
     <string name="note_photo_close">Close photo</string>
+    <string name="note_photo_download">Save photo to your device</string>
+    <string name="note_photo_download_saving">Saving photo…</string>
+    <string name="note_photo_download_saved">Photo saved</string>
+    <string name="note_photo_download_failed">Couldn't save the photo.</string>
     <string name="note_photo_delete">Delete photo</string>
     <string name="note_photo_delete_title">Delete photo?</string>
     <string name="note_photo_delete_message">This photo will be permanently removed from the note.</string>
