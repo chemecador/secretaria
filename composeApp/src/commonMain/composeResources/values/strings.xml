@@ -22,7 +22,6 @@
     <string name="notes_lists_empty_archived">You don't have any archived lists.</string>
     <string name="notes_lists_search_hint">Search lists</string>
     <string name="notes_lists_search_clear">Clear search</string>
-    <string name="notes_lists_search_close">Close search</string>
     <string name="notes_lists_search_empty">No lists match your search.</string>
     <string name="notes_lists_error_generic">Couldn't load your lists.</string>
     <string name="list_created_by">Created by %1$s</string>
@@ -44,6 +43,8 @@
     <string name="create_note_content_hint">Content</string>
     <string name="create_note_button">Create</string>
     <string name="notes_empty">This list doesn't have any notes yet.</string>
+    <string name="notes_search_hint">Search notes</string>
+    <string name="notes_search_empty">No notes match your search.</string>
     <string name="notes_error_generic">Couldn't load the notes.</string>
     <string name="reorder_note_handle">Press and hold to reorder the note</string>
     <string name="note_completed_badge">Completed</string>

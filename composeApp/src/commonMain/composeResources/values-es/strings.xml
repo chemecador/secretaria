@@ -20,7 +20,6 @@
     <string name="notes_lists_empty_archived">No tienes listas archivadas.</string>
     <string name="notes_lists_search_hint">Buscar listas</string>
     <string name="notes_lists_search_clear">Limpiar búsqueda</string>
-    <string name="notes_lists_search_close">Cerrar búsqueda</string>
     <string name="notes_lists_search_empty">No hay listas que coincidan con la búsqueda.</string>
     <string name="notes_lists_error_generic">No se han podido cargar las listas.</string>
     <string name="list_created_by">Creada por %1$s</string>
@@ -42,6 +41,8 @@
     <string name="create_note_content_hint">Contenido</string>
     <string name="create_note_button">Crear</string>
     <string name="notes_empty">Esta lista todavía no tiene notas.</string>
+    <string name="notes_search_hint">Buscar notas</string>
+    <string name="notes_search_empty">No hay notas que coincidan con la búsqueda.</string>
     <string name="notes_error_generic">No se han podido cargar las notas.</string>
     <string name="reorder_note_handle">Mantén pulsado para reordenar la nota</string>
     <string name="note_completed_badge">Completada</string>

@@ -76,6 +76,8 @@ import com.chemecador.secretaria.SecretariaOverflowMenu
 import com.chemecador.secretaria.SecretariaTopBarColor
 import com.chemecador.secretaria.SecretariaTopBarContentColor
 import com.chemecador.secretaria.login.AuthRepository
+import com.chemecador.secretaria.noteslists.PersistentSearchField
+import com.chemecador.secretaria.noteslists.SortMenuButton
 import com.chemecador.secretaria.noteslists.formatNotesListDate
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -95,6 +97,8 @@ import secretaria.composeapp.generated.resources.note_photos_badge
 import secretaria.composeapp.generated.resources.note_photos_badge_single
 import secretaria.composeapp.generated.resources.notes_empty
 import secretaria.composeapp.generated.resources.notes_error_generic
+import secretaria.composeapp.generated.resources.notes_search_empty
+import secretaria.composeapp.generated.resources.notes_search_hint
 import secretaria.composeapp.generated.resources.reorder_note_handle
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -117,6 +121,15 @@ fun NotesScreen(
     val arePhotosSupported = koinInject<NotePhotosRepository>().isSupported
     var showCreateDialog by remember { mutableStateOf(false) }
     var noteToDelete by remember { mutableStateOf<Note?>(null) }
+    val visibleNotes = remember(state.notes, state.searchQuery, state.sortOption, isOrdered) {
+        if (isOrdered) {
+            state.notes.sortedBy(Note::order).filteredBySearch(state.searchQuery)
+        } else {
+            state.notes.filteredBySearch(state.searchQuery).sortedByOption(state.sortOption)
+        }
+    }
+    // Dragging a filtered list would reorder the wrong notes, so searching turns it off.
+    val isReorderable = isOrdered && state.searchQuery.isBlank()
 
     LaunchedEffect(viewModel) {
         viewModel.load()
@@ -190,6 +203,32 @@ fun NotesScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 8.dp, top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Una lista ordenada se ordena a mano: no hay otro criterio que ofrecer.
+                if (!isOrdered) {
+                    SortMenuButton(
+                        selected = state.sortOption,
+                        onSortSelected = viewModel::setSort,
+                    )
+                }
+            }
+
+            PersistentSearchField(
+                query = state.searchQuery,
+                hint = stringResource(Res.string.notes_search_hint),
+                onQueryChange = viewModel::setSearchQuery,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+
             if (state.isLoading) {
                 CenteredMessage {
                     CircularProgressIndicator()
@@ -220,15 +259,18 @@ fun NotesScreen(
                             )
                         }
 
+                        visibleNotes.isEmpty() -> ScrollableCenteredMessage {
+                            Text(
+                                text = stringResource(Res.string.notes_search_empty),
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+
                         else -> {
-                            val displayNotes = if (isOrdered) {
-                                state.notes.sortedBy { it.order }
-                            } else {
-                                state.notes
-                            }
                             NotesContent(
-                                notes = displayNotes,
-                                isOrdered = isOrdered,
+                                notes = visibleNotes,
+                                isOrdered = isReorderable,
                                 currentUserEmail = currentUserEmail,
                                 arePhotosSupported = arePhotosSupported,
                                 onNoteClick = onNoteClick,

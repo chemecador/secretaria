@@ -60,6 +60,7 @@
   - Android note detail can attach up to 3 photos; other targets hide the section
   - the notes list badges a note with its photo count, on the targets that support photos
   - the full-size viewer can save the photo to the device; Android only, no permission asked
+  - search by title or content, and sort by name/date on unordered lists
   - Android Photo Picker reencodes to JPEG <=1600 px, targets 600 KiB and hard-caps at 1 MiB
 - Reminders support:
   - flat collection, not attached to any list; shareable with friends one by one
@@ -103,6 +104,17 @@
 - Use `kotlin.time.Instant` for timestamps and `Long` ARGB for colors.
 - Typed UI errors should live in state, usually alongside `Result<T>`.
 - Reuse `noteslists/formatNotesListDate()` instead of adding new date formatters.
+- The lists and notes screens share one header: chips (lists only) and a sort icon on the top row,
+  with an always-visible search field underneath. Both controls live in
+  `noteslists/ListHeaderControls.kt` next to `SortOption`, the same way `reminders` reuses
+  `noteslists.ListCollaborator`. The search field is deliberately persistent and never grabs focus:
+  hiding it behind a magnifier made it easy to miss, and auto-focus would pop the keyboard on every
+  screen open.
+- Anything manually ordered hides the sort control, because `order` is the only criterion there:
+  ordered note lists and ordered groups. Filtering an ordered list also disables dragging, since a
+  drag over a subset would send `reorderNotes` a partial id list, which `applyNoteOrder` rejects.
+- Note search and sort are pure helpers in `notes/NotesSearch.kt`; `NotesState.notes` always holds
+  the full list, because reordering and the photo-count sync both address notes by id.
 - Do not hardcode user-facing strings in shared UI; use `composeApp/src/commonMain/composeResources/values/strings.xml`.
 - Never hardcode a user-facing message in a ViewModel either. Typed errors resolved in the screen
   are the pattern: `login.AuthError` and `noteslists.NotesListsError`, both mapped by a private

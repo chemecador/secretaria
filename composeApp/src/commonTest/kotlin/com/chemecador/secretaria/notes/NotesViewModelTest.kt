@@ -1,5 +1,6 @@
 package com.chemecador.secretaria.notes
 
+import com.chemecador.secretaria.noteslists.SortOption
 import com.chemecador.secretaria.settings.AccountSettingsRepository
 import com.chemecador.secretaria.settings.FakeAccountSettingsRepository
 import kotlin.test.AfterTest
@@ -371,6 +372,40 @@ class NotesViewModelTest {
         viewModel.syncPhotoCount(noteId = "n1", photoCount = 0)
 
         assertEquals(0, viewModel.state.value.notes[0].photoCount)
+    }
+
+    @Test
+    fun searchAndSort_areHeldInStateWithoutTouchingTheLoadedNotes() = runTest(dispatcher) {
+        val repository = ControlledRepository(
+            Result.success(
+                listOf(
+                    Note(
+                        id = "n1",
+                        title = "Leche",
+                        content = "2 litros",
+                        createdAt = Instant.parse("2026-03-28T12:05:00Z"),
+                        creator = "Alex",
+                    ),
+                ),
+            ),
+        )
+        val viewModel = buildViewModel(repository, listId = "shopping")
+
+        viewModel.load()
+        repository.release()
+        advanceUntilIdle()
+
+        // Oldest first is the default so unordered lists keep looking as they always did.
+        assertEquals(SortOption.DATE_ASC, viewModel.state.value.sortOption)
+        assertEquals("", viewModel.state.value.searchQuery)
+
+        viewModel.setSearchQuery("lec")
+        viewModel.setSort(SortOption.NAME_DESC)
+
+        assertEquals("lec", viewModel.state.value.searchQuery)
+        assertEquals(SortOption.NAME_DESC, viewModel.state.value.sortOption)
+        // Filtering is a view concern: the loaded notes stay whole for reordering and photo sync.
+        assertEquals(1, viewModel.state.value.notes.size)
     }
 
     private fun buildViewModel(

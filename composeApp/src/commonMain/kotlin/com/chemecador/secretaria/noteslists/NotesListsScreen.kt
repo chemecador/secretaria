@@ -28,7 +28,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -37,22 +36,18 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Archive
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOff
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
@@ -84,8 +79,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -150,12 +143,9 @@ import secretaria.composeapp.generated.resources.notes_lists_empty_active_shared
 import secretaria.composeapp.generated.resources.notes_lists_empty_archived
 import secretaria.composeapp.generated.resources.notes_lists_error_generic
 import secretaria.composeapp.generated.resources.notes_lists_mine_tab
-import secretaria.composeapp.generated.resources.notes_lists_search_clear
-import secretaria.composeapp.generated.resources.notes_lists_search_close
 import secretaria.composeapp.generated.resources.notes_lists_search_empty
 import secretaria.composeapp.generated.resources.notes_lists_search_hint
 import secretaria.composeapp.generated.resources.notes_lists_shared_tab
-import secretaria.composeapp.generated.resources.order_by
 import secretaria.composeapp.generated.resources.remove_list_from_group
 import secretaria.composeapp.generated.resources.reorder_list_handle
 import secretaria.composeapp.generated.resources.select_group_empty
@@ -172,10 +162,6 @@ import secretaria.composeapp.generated.resources.share_list_shared_with_many
 import secretaria.composeapp.generated.resources.share_list_shared_with_one
 import secretaria.composeapp.generated.resources.share_list_shared_with_you
 import secretaria.composeapp.generated.resources.share_list_success
-import secretaria.composeapp.generated.resources.sort_date_asc
-import secretaria.composeapp.generated.resources.sort_date_desc
-import secretaria.composeapp.generated.resources.sort_name_asc
-import secretaria.composeapp.generated.resources.sort_name_desc
 import secretaria.composeapp.generated.resources.unarchive_list
 import secretaria.composeapp.generated.resources.unarchive_list_error
 import secretaria.composeapp.generated.resources.unarchive_list_success
@@ -214,8 +200,6 @@ fun NotesListsScreen(
     var listToShare by remember { mutableStateOf<NotesListSummary?>(null) }
     var listToGroup by remember { mutableStateOf<NotesListSummary?>(null) }
     var showArchivedLists by remember { mutableStateOf(false) }
-    var showSearchInput by remember { mutableStateOf(false) }
-    val isSearchInputVisible = showSearchInput || state.searchQuery.isNotBlank()
     val isGroupScreen = groupId != null
     val currentGroup = state.items.firstOrNull { item ->
         item.ownerId == groupOwnerId && item.id == groupId && item.isGroup
@@ -563,24 +547,38 @@ fun NotesListsScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            if (!showArchivedLists && !isGroupScreen) {
-                ListsSectionChips(
-                    selectedSection = selectedSection,
-                    onSectionSelected = onSectionSelected,
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 8.dp, top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (!showArchivedLists && !isGroupScreen) {
+                    ListsSectionChips(
+                        selectedSection = selectedSection,
+                        onSectionSelected = onSectionSelected,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+
+                // Un grupo ordenado se ordena a mano: no hay otro criterio que ofrecer.
+                if (!currentGroupIsOrdered) {
+                    SortMenuButton(
+                        selected = state.sortOption,
+                        onSortSelected = viewModel::setSort,
+                    )
+                }
             }
 
-            SortSelector(
-                selected = state.sortOption,
-                searchQuery = state.searchQuery,
-                isSearchInputVisible = isSearchInputVisible,
-                onSearchClick = { showSearchInput = true },
-                onSearchQueryChange = viewModel::setSearchQuery,
-                onCloseSearch = {
-                    showSearchInput = false
-                    viewModel.setSearchQuery("")
-                },
-                onSortSelected = viewModel::setSort,
+            PersistentSearchField(
+                query = state.searchQuery,
+                hint = stringResource(Res.string.notes_lists_search_hint),
+                onQueryChange = viewModel::setSearchQuery,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
             )
 
             if (state.isLoading) {
@@ -658,11 +656,10 @@ fun NotesListsScreen(
 private fun ListsSectionChips(
     selectedSection: NotesListsSection,
     onSectionSelected: (NotesListsSection) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+        modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         listOf(NotesListsSection.MINE, NotesListsSection.SHARED).forEach { section ->
@@ -678,151 +675,6 @@ private fun ListsSectionChips(
                         style = MaterialTheme.typography.labelLarge,
                     )
                 },
-            )
-        }
-    }
-}
-
-@Composable
-private fun SortSelector(
-    selected: SortOption,
-    searchQuery: String,
-    isSearchInputVisible: Boolean,
-    onSearchClick: () -> Unit,
-    onSearchQueryChange: (String) -> Unit,
-    onCloseSearch: () -> Unit,
-    onSortSelected: (SortOption) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val searchFocusRequester = remember { FocusRequester() }
-    val visibleOptions = listOf(
-        SortOption.NAME_ASC,
-        SortOption.NAME_DESC,
-        SortOption.DATE_ASC,
-        SortOption.DATE_DESC,
-    )
-
-    LaunchedEffect(isSearchInputVisible) {
-        if (isSearchInputVisible) {
-            searchFocusRequester.requestFocus()
-        }
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 4.dp)
-            .height(48.dp)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onSearchClick) {
-            Icon(
-                imageVector = Icons.Outlined.Search,
-                contentDescription = stringResource(Res.string.notes_lists_search_hint),
-            )
-        }
-
-        if (isSearchInputVisible) {
-            SearchInput(
-                query = searchQuery,
-                focusRequester = searchFocusRequester,
-                onQueryChange = onSearchQueryChange,
-                onClose = onCloseSearch,
-                modifier = Modifier.weight(1f),
-            )
-        } else {
-            Spacer(modifier = Modifier.weight(1f))
-
-            Text(
-                text = stringResource(Res.string.order_by),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Box {
-                TextButton(onClick = { expanded = true }) {
-                    Text(selected.label())
-                }
-
-                DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false },
-                ) {
-                    visibleOptions.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option.label()) },
-                            onClick = {
-                                onSortSelected(option)
-                                expanded = false
-                            },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchInput(
-    query: String,
-    focusRequester: FocusRequester,
-    onQueryChange: (String) -> Unit,
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val shape = RoundedCornerShape(10.dp)
-
-    Row(
-        modifier = modifier
-            .height(40.dp)
-            .clip(shape)
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant,
-                shape = shape,
-            )
-            .padding(start = 12.dp, end = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        BasicTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                color = MaterialTheme.colorScheme.onSurface,
-            ),
-            modifier = Modifier
-                .weight(1f)
-                .focusRequester(focusRequester),
-            decorationBox = { innerTextField ->
-                Box(contentAlignment = Alignment.CenterStart) {
-                    if (query.isEmpty()) {
-                        Text(
-                            text = stringResource(Res.string.notes_lists_search_hint),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    innerTextField()
-                }
-            },
-        )
-        IconButton(
-            onClick = onClose,
-            modifier = Modifier.size(36.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Close,
-                contentDescription = if (query.isBlank()) {
-                    stringResource(Res.string.notes_lists_search_close)
-                } else {
-                    stringResource(Res.string.notes_lists_search_clear)
-                },
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp),
             )
         }
     }
@@ -1788,17 +1640,6 @@ private fun EditListDialog(
             }
         },
     )
-}
-
-@Composable
-private fun SortOption.label(): String {
-    return when (this) {
-        SortOption.NAME_ASC -> stringResource(Res.string.sort_name_asc)
-        SortOption.NAME_DESC -> stringResource(Res.string.sort_name_desc)
-        SortOption.DATE_ASC -> stringResource(Res.string.sort_date_asc)
-        SortOption.DATE_DESC,
-        SortOption.CUSTOM -> stringResource(Res.string.sort_date_desc)
-    }
 }
 
 private fun NotesListSummary.isVisibleInRoot(

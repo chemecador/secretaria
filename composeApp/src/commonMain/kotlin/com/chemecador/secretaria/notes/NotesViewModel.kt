@@ -2,6 +2,7 @@ package com.chemecador.secretaria.notes
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chemecador.secretaria.noteslists.SortOption
 import com.chemecador.secretaria.settings.AccountSettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,16 @@ class NotesViewModel(
         viewModelScope.launch {
             fetchNotes(isRefresh = true)
         }
+    }
+
+    fun setSearchQuery(query: String) {
+        if (query == _state.value.searchQuery) return
+        _state.update { it.copy(searchQuery = query) }
+    }
+
+    fun setSort(sortOption: SortOption) {
+        if (sortOption == _state.value.sortOption) return
+        _state.update { it.copy(sortOption = sortOption) }
     }
 
     fun createNote(title: String, content: String) {
