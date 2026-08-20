@@ -1,6 +1,6 @@
-Secretaria has been completely refreshed:
-• A modern new design built with Kotlin Multiplatform.
-• Full English and Spanish interface.
-• Reminders with dates, times and notifications.
-• Share lists, notes and reminders with friends.
-• Optional ads to support the creator.
+Photos in your notes, and search:
+• Attach up to 3 photos to any note, protected and visible only to people you share the list with.
+• Notes with photos stand out at a glance in the list.
+• Save a photo to your gallery and open it straight from the app.
+• The search box is now always visible in lists and notes.
+• Sort notes by name or by date.

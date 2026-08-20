@@ -1,6 +1,6 @@
-Secretaria se ha renovado por completo:
-• Nuevo diseño moderno con Kotlin Multiplatform.
-• Interfaz disponible en español e inglés.
-• Recordatorios con fecha, hora y notificaciones.
-• Listas, notas y recordatorios compartidos con amigos.
-• Anuncios opcionales para apoyar al creador.
+Fotos en tus notas y búsqueda:
+• Adjunta hasta 3 fotos a cada nota, protegidas y solo visibles para quien comparte la lista.
+• Las notas con fotos se distinguen en la lista de un vistazo.
+• Guarda una foto en tu galería y ábrela desde la propia app.
+• Buscador siempre a la vista en listas y notas.
+• Ordena las notas por nombre o por fecha.
