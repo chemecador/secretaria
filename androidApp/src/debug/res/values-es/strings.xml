@@ -1,0 +1,6 @@
+<resources>
+    <!-- El override de debug tiene que existir en cada locale que traiga `main`: la fusion de
+         recursos es por cualificador, asi que sin este fichero un movil en espanol resolveria
+         values-es y las dos apps se llamarian igual. -->
+    <string name="app_name">Secretaria-debug</string>
+</resources>

@@ -37,7 +37,11 @@
 - Base package: `com.chemecador.secretaria`
 - Android app id: `com.chemecador.secretaria`
 - Shared Android namespace: `com.chemecador.secretaria.shared`
-- Debug Android builds use `applicationIdSuffix = ".debug"` so they can coexist with production.
+- Debug Android builds use `applicationIdSuffix = ".debug"` so they can coexist with production,
+  and `androidApp/src/debug/res/values*/strings.xml` renames them to `Secretaria-debug` on the
+  launcher. That override must exist in EVERY locale `main` ships, not only the default one: the
+  resource merge is per qualifier, so a `values/` override alone leaves a Spanish phone resolving
+  `values-es` from `main` and both apps end up with the same name.
 
 ## Current Product State
 
