@@ -248,7 +248,7 @@
     <!-- Reminders -->
     <string name="reminders_title">Recordatorios</string>
     <string name="mode_reminders">Recordatorios</string>
-    <string name="mode_lists">Listas</string>
+    <string name="mode_lists">Listas y notas</string>
     <string name="menu_completed_reminders">Completados</string>
     <string name="completed_reminders_title">Completados</string>
     <string name="reminders_empty">No tienes recordatorios pendientes. Apunta lo primero que se te ocurra.</string>

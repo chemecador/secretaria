@@ -250,7 +250,7 @@
     <!-- Reminders -->
     <string name="reminders_title">Reminders</string>
     <string name="mode_reminders">Reminders</string>
-    <string name="mode_lists">Lists</string>
+    <string name="mode_lists">Lists &amp; Notes</string>
     <string name="menu_completed_reminders">Completed</string>
     <string name="completed_reminders_title">Completed</string>
     <string name="reminders_empty">You don't have any pending reminders. Jot down the first thing that comes to mind.</string>
