@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -96,6 +97,7 @@ import com.chemecador.secretaria.rememberNotificationPermissionController
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import secretaria.composeapp.generated.resources.Res
@@ -107,6 +109,7 @@ import secretaria.composeapp.generated.resources.create_reminder_title
 import secretaria.composeapp.generated.resources.delete
 import secretaria.composeapp.generated.resources.delete_reminder_message
 import secretaria.composeapp.generated.resources.delete_reminder_title
+import secretaria.composeapp.generated.resources.done
 import secretaria.composeapp.generated.resources.edit_reminder_button
 import secretaria.composeapp.generated.resources.edit_reminder_text_hint
 import secretaria.composeapp.generated.resources.edit_reminder_title
@@ -134,6 +137,7 @@ import secretaria.composeapp.generated.resources.reminder_options
 import secretaria.composeapp.generated.resources.reminder_restore_action
 import secretaria.composeapp.generated.resources.reminder_restored_error
 import secretaria.composeapp.generated.resources.reminder_restored_feedback
+import secretaria.composeapp.generated.resources.reminder_share_with
 import secretaria.composeapp.generated.resources.reminder_shared_badge
 import secretaria.composeapp.generated.resources.reminders_empty
 import secretaria.composeapp.generated.resources.reminders_error_generic
@@ -149,6 +153,7 @@ import secretaria.composeapp.generated.resources.share_list_shared_with_one
 import secretaria.composeapp.generated.resources.share_list_shared_with_you
 import secretaria.composeapp.generated.resources.share_reminder_current_access
 import secretaria.composeapp.generated.resources.share_reminder_empty_friends
+import secretaria.composeapp.generated.resources.share_reminder_error
 import secretaria.composeapp.generated.resources.share_reminder_no_available_friends
 import secretaria.composeapp.generated.resources.share_reminder_success
 import secretaria.composeapp.generated.resources.share_reminder_title
@@ -185,6 +190,10 @@ fun RemindersScreen(
     var reminderForOptions by remember { mutableStateOf<Reminder?>(null) }
     var reminderToShare by remember { mutableStateOf<Reminder?>(null) }
     var reminderToLeave by remember { mutableStateOf<Reminder?>(null) }
+    // Al crear no hay documento sobre el que escribir `contributors`, asi que la seleccion vive
+    // aqui hasta que el recordatorio existe y el ViewModel la reparte.
+    var newReminderShareWith by remember { mutableStateOf<List<FriendSummary>>(emptyList()) }
+    var isPickingFriendsForNewReminder by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         viewModel.load()
@@ -263,25 +272,54 @@ fun RemindersScreen(
     ) { innerPadding ->
 
         if (showCreateDialog) {
+            val closeCreateDialog = {
+                showCreateDialog = false
+                isPickingFriendsForNewReminder = false
+                newReminderShareWith = emptyList()
+                viewModel.clearShareState()
+            }
             ReminderEditorDialog(
                 title = stringResource(Res.string.create_reminder_title),
                 confirmLabel = stringResource(Res.string.create_reminder_button),
                 initialText = "",
                 initialDue = null,
-                onDismiss = { showCreateDialog = false },
+                sharingSummary = editorSharingSummary(
+                    collaborators = newReminderShareWith.asCollaborators(),
+                    sharedCount = newReminderShareWith.size,
+                ),
+                onOpenSharing = {
+                    isPickingFriendsForNewReminder = true
+                    viewModel.loadShareableFriendsForNewReminder()
+                },
+                onDismiss = closeCreateDialog,
                 onConfirm = { text, due ->
-                    viewModel.createReminder(text, due)
-                    showCreateDialog = false
+                    viewModel.createReminder(text, due, newReminderShareWith)
+                    closeCreateDialog()
                 },
             )
         }
 
         reminderToEdit?.let { reminder ->
+            // El recordatorio abierto es una foto del momento del toque: el reparto se lee del
+            // estado para que la fila se actualice segun se comparte, sin cerrar el editor.
+            val liveReminder = state.reminders.firstOrNull { it.key == reminder.key } ?: reminder
+            val isOwnReminder = currentUserId != null && liveReminder.ownerId == currentUserId
             ReminderEditorDialog(
                 title = stringResource(Res.string.edit_reminder_title),
                 confirmLabel = stringResource(Res.string.edit_reminder_button),
                 initialText = reminder.text,
                 initialDue = reminder.due,
+                sharingSummary = editorSharingSummary(
+                    collaborators = state.collaboratorsByReminderId[reminder.id].orEmpty(),
+                    sharedCount = liveReminder.sharedWithUserIds.size,
+                ),
+                // Solo el propietario reparte. El dialogo de compartir se abre encima del editor,
+                // que sigue compuesto: el texto y la fecha a medio escribir no se pierden.
+                onOpenSharing = if (isOwnReminder) {
+                    { reminderToShare = reminder }
+                } else {
+                    null
+                },
                 onDismiss = { reminderToEdit = null },
                 onConfirm = { text, due ->
                     viewModel.updateReminder(reminder.key, text, due)
@@ -346,6 +384,29 @@ fun RemindersScreen(
                     viewModel.leaveSharedReminder(reminder)
                     reminderToLeave = null
                 },
+            )
+        }
+
+        if (isPickingFriendsForNewReminder) {
+            // Mismo dialogo que al compartir uno existente, pero contra una seleccion en memoria:
+            // aqui todavia no hay documento, asi que no se escribe nada hasta pulsar "Crear".
+            ShareReminderDialog(
+                reminderText = null,
+                collaborators = newReminderShareWith.asCollaborators(),
+                friends = state.shareableFriends.filterNot { friend ->
+                    newReminderShareWith.any { selected -> selected.userId == friend.userId }
+                },
+                isLoading = state.isLoadingShareableFriends,
+                isUpdatingSharing = false,
+                errorMessage = state.shareErrorMessage,
+                dismissLabel = Res.string.done,
+                onShare = { friend -> newReminderShareWith = newReminderShareWith + friend },
+                onUnshare = { collaborator ->
+                    newReminderShareWith = newReminderShareWith.filterNot { friend ->
+                        friend.userId == collaborator.userId
+                    }
+                },
+                onDismiss = { isPickingFriendsForNewReminder = false },
             )
         }
 
@@ -754,6 +815,9 @@ internal fun ReminderCard(
  *
  * Encender el interruptor es el momento de comprobar el permiso de notificaciones: es justo cuando
  * el usuario espera un aviso, y el estado se consulta entonces porque pudo cambiarlo en ajustes.
+ *
+ * Compartir vive aqui, junto al vencimiento, y no solo en la pulsacion larga sobre la tarjeta:
+ * una accion escondida detras de un gesto no la encuentra nadie.
  */
 @Composable
 private fun ReminderEditorDialog(
@@ -761,8 +825,11 @@ private fun ReminderEditorDialog(
     confirmLabel: String,
     initialText: String,
     initialDue: ReminderDue?,
+    sharingSummary: String,
     onDismiss: () -> Unit,
     onConfirm: (String, ReminderDue?) -> Unit,
+    /** Nulo cuando el recordatorio no es propio: solo el propietario puede repartirlo. */
+    onOpenSharing: (() -> Unit)? = null,
 ) {
     var text by remember { mutableStateOf(initialText) }
     var due by remember { mutableStateOf(initialDue) }
@@ -835,7 +902,11 @@ private fun ReminderEditorDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(stringResource(Res.string.reminder_due_switch))
+                    ReminderOptionLabel(
+                        icon = Icons.Outlined.Notifications,
+                        text = stringResource(Res.string.reminder_due_switch),
+                        modifier = Modifier.weight(1f),
+                    )
                     Switch(
                         checked = isDueEnabled,
                         onCheckedChange = { enabled ->
@@ -858,6 +929,28 @@ private fun ReminderEditorDialog(
                         onClearDate = { due = null },
                         onClearTime = { due = due?.copy(time = null) },
                     )
+                }
+
+                onOpenSharing?.let { openSharing ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = openSharing)
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        ReminderOptionLabel(
+                            icon = Icons.Outlined.Share,
+                            text = stringResource(Res.string.reminder_share_with),
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = sharingSummary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
             }
         },
@@ -936,6 +1029,31 @@ private fun ReminderDueEditor(
         onClick = onPickTime,
         onClear = onClearTime.takeIf { due?.time != null },
     )
+}
+
+/**
+ * Etiqueta con icono de las opciones del editor: se distinguen de un vistazo en lugar de leerse
+ * como texto suelto dentro del dialogo.
+ */
+@Composable
+private fun ReminderOptionLabel(
+    icon: ImageVector,
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(text)
+    }
 }
 
 @Composable
@@ -1134,10 +1252,11 @@ private fun ReminderSharingFeedbackHost(
 ) {
     val message = feedback?.let { current ->
         when (current.action) {
-            ReminderSharingAction.SHARED -> stringResource(
-                Res.string.share_reminder_success,
-                current.friendName,
-            )
+            ReminderSharingAction.SHARED -> if (current.isSuccess) {
+                stringResource(Res.string.share_reminder_success, current.friendName)
+            } else {
+                stringResource(Res.string.share_reminder_error, current.friendName)
+            }
 
             ReminderSharingAction.UNSHARED -> stringResource(
                 Res.string.unshare_reminder_success,
@@ -1245,7 +1364,8 @@ private fun ReminderOptionRow(
 /** Calcado de `ShareListDialog`: compartir un recordatorio funciona igual que compartir una lista. */
 @Composable
 private fun ShareReminderDialog(
-    reminderText: String,
+    /** Nulo mientras se elige con quien nacera un recordatorio que todavia no existe. */
+    reminderText: String?,
     collaborators: List<ListCollaborator>,
     friends: List<FriendSummary>,
     isLoading: Boolean,
@@ -1254,6 +1374,8 @@ private fun ShareReminderDialog(
     onShare: (FriendSummary) -> Unit,
     onUnshare: (ListCollaborator) -> Unit,
     onDismiss: () -> Unit,
+    /** Sobre una seleccion en memoria no se cancela nada: se termina de elegir. */
+    dismissLabel: StringResource = Res.string.cancel,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1263,13 +1385,15 @@ private fun ShareReminderDialog(
         title = { Text(stringResource(Res.string.share_reminder_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = reminderText,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                HorizontalDivider(
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                )
+                reminderText?.let { text ->
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                    )
+                }
 
                 if (!errorMessage.isNullOrBlank()) {
                     Text(
@@ -1351,7 +1475,7 @@ private fun ShareReminderDialog(
                 enabled = !isUpdatingSharing,
                 onClick = onDismiss,
             ) {
-                Text(stringResource(Res.string.cancel))
+                Text(stringResource(dismissLabel))
             }
         },
     )
@@ -1447,8 +1571,32 @@ private fun reminderSharingSummary(
     if (reminder.ownerId != currentUserId) {
         return if (reminder.isShared) stringResource(Res.string.share_list_shared_with_you) else null
     }
+    return sharedWithSummary(collaborators, reminder.sharedWithUserIds.size)
+}
 
-    val sharedCount = reminder.sharedWithUserIds.size
+/** La fila del editor siempre dice algo: sin nadie con quien compartir se lee "Nadie". */
+@Composable
+private fun editorSharingSummary(
+    collaborators: List<ListCollaborator>,
+    sharedCount: Int,
+): String = sharedWithSummary(collaborators, sharedCount)
+    ?: stringResource(Res.string.share_list_private)
+
+/** La seleccion previa a crear se pinta con el mismo modelo que el acceso ya concedido. */
+private fun List<FriendSummary>.asCollaborators(): List<ListCollaborator> =
+    map { friend ->
+        ListCollaborator(userId = friend.userId, name = friend.name, isResolvedName = true)
+    }
+
+/**
+ * [sharedCount] manda sobre el tamano de [collaborators]: los nombres se resuelven en una segunda
+ * lectura, asi que puede haber acceso concedido y todavia ningun nombre que mostrar.
+ */
+@Composable
+private fun sharedWithSummary(
+    collaborators: List<ListCollaborator>,
+    sharedCount: Int,
+): String? {
     if (sharedCount == 0) return null
 
     val firstResolvedCollaborator = collaborators.firstOrNull { it.isResolvedName }

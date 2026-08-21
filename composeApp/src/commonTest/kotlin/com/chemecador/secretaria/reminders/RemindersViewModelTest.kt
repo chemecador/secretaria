@@ -301,6 +301,49 @@ class RemindersViewModelTest {
     }
 
     @Test
+    fun createReminder_sharesWithTheFriendsPickedWhileCreating() = runTest(dispatcher) {
+        val repository = TestRemindersRepository()
+        val viewModel = buildViewModel(repository)
+
+        viewModel.createReminder("Comprar pan", shareWith = listOf(FRIEND))
+        advanceUntilIdle()
+
+        assertEquals(listOf("created-1" to "marta"), repository.shareCalls)
+        assertEquals(listOf("marta"), viewModel.state.value.reminders.single().sharedWithUserIds)
+    }
+
+    @Test
+    fun createReminder_keepsTheReminderWhenTheShareFails() = runTest(dispatcher) {
+        val repository = TestRemindersRepository(
+            shareFailure = IllegalStateException("sin permiso"),
+        )
+        val viewModel = buildViewModel(repository)
+
+        viewModel.createReminder("Comprar pan", shareWith = listOf(FRIEND))
+        advanceUntilIdle()
+
+        val created = viewModel.state.value.reminders.single()
+        assertEquals("Comprar pan", created.text)
+        assertTrue(created.sharedWithUserIds.isEmpty())
+        assertEquals(ReminderSharingAction.SHARED, viewModel.state.value.shareFeedback?.action)
+        assertFalse(viewModel.state.value.shareFeedback?.isSuccess == true)
+    }
+
+    @Test
+    fun loadShareableFriendsForNewReminder_offersEveryFriend() = runTest(dispatcher) {
+        val viewModel = buildViewModel(TestRemindersRepository())
+
+        viewModel.loadShareableFriendsForNewReminder()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("marta"),
+            viewModel.state.value.shareableFriends.map(FriendSummary::userId),
+        )
+        assertFalse(viewModel.state.value.isLoadingShareableFriends)
+    }
+
+    @Test
     fun shareReminder_addsTheContributorAndReportsIt() = runTest(dispatcher) {
         val reminder = pending("r1", order = 0)
         val repository = TestRemindersRepository(initial = listOf(reminder))

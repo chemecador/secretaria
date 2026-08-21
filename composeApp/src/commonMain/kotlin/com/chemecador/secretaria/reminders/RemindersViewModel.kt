@@ -38,15 +38,48 @@ class RemindersViewModel(
         }
     }
 
-    fun createReminder(text: String, due: ReminderDue? = null) {
+    /**
+     * [shareWith] llega del propio dialogo de creacion: el reparto no puede ir en la misma
+     * escritura porque `contributors` necesita el documento ya creado, asi que se aplica despues.
+     */
+    fun createReminder(
+        text: String,
+        due: ReminderDue? = null,
+        shareWith: List<FriendSummary> = emptyList(),
+    ) {
         val trimmedText = text.trim()
         if (trimmedText.isEmpty()) return
 
         viewModelScope.launch {
             repository.createReminder(trimmedText, due)
-                .onSuccess { fetchReminders() }
+                .onSuccess { created ->
+                    shareNewReminder(created.id, shareWith)
+                    fetchReminders()
+                }
                 .onFailure { throwable ->
                     _state.update { it.copy(errorMessage = throwable.message) }
+                }
+        }
+    }
+
+    /**
+     * Un fallo aqui no deshace nada: el recordatorio ya existe y solo se ha quedado sin repartir,
+     * asi que se avisa por el snackbar de compartir en lugar de dar la creacion por fallida.
+     */
+    private suspend fun shareNewReminder(reminderId: String, friends: List<FriendSummary>) {
+        friends.distinctBy(FriendSummary::userId).forEach { friend ->
+            knownFriendsByUserId = knownFriendsByUserId + (friend.userId to friend)
+            repository.shareReminder(reminderId, friend.userId)
+                .onFailure {
+                    _state.update {
+                        it.copy(
+                            shareFeedback = ReminderSharingFeedback(
+                                friendName = friend.name,
+                                action = ReminderSharingAction.SHARED,
+                                isSuccess = false,
+                            ),
+                        )
+                    }
                 }
         }
     }
@@ -157,6 +190,43 @@ class RemindersViewModel(
                                 action = ReminderFeedbackAction.DELETED,
                                 isSuccess = false,
                             ),
+                        )
+                    }
+                }
+        }
+    }
+
+    /**
+     * Al crear todavia no hay documento contra el que filtrar, asi que se ofrecen todos los
+     * amigos y la seleccion la guarda la pantalla hasta que el recordatorio existe.
+     */
+    fun loadShareableFriendsForNewReminder() {
+        viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    isLoadingShareableFriends = true,
+                    shareableFriends = emptyList(),
+                    shareErrorMessage = null,
+                    shareFeedback = null,
+                )
+            }
+            friendsRepository.getFriends()
+                .onSuccess { friends ->
+                    cacheFriends(friends)
+                    _state.update {
+                        it.copy(
+                            isLoadingShareableFriends = false,
+                            shareableFriends = friends.sortedByName(),
+                            shareErrorMessage = null,
+                        )
+                    }
+                }
+                .onFailure { throwable ->
+                    _state.update {
+                        it.copy(
+                            isLoadingShareableFriends = false,
+                            shareableFriends = emptyList(),
+                            shareErrorMessage = throwable.message,
                         )
                     }
                 }

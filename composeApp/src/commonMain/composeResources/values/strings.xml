@@ -38,6 +38,7 @@
     <string name="create_list_group">List group</string>
     <string name="create_list_button">Create</string>
     <string name="cancel">Cancel</string>
+    <string name="done">Done</string>
     <string name="create_note_title">New note</string>
     <string name="create_note_name_hint">Title</string>
     <string name="create_note_content_hint">Content</string>
@@ -276,6 +277,7 @@
     <string name="reminder_due_add_time">Add time</string>
     <string name="reminder_due_clear_time">Remove time</string>
     <string name="reminder_due_with_time">%1$s · %2$s</string>
+    <string name="reminder_share_with">Share with…</string>
     <string name="notifications_disabled_title">Notifications are off</string>
     <string name="notifications_disabled_message">Notifications are turned off, so we won't be able to alert you when the date arrives. The reminder will still be saved and you'll keep seeing the date in the list.</string>
     <string name="notifications_disabled_enable">Turn on</string>
@@ -288,6 +290,7 @@
     <string name="share_reminder_empty_friends">You don't have any friends to share this reminder with yet.</string>
     <string name="share_reminder_no_available_friends">There are no more friends available to share this reminder with.</string>
     <string name="share_reminder_success">Reminder shared with %1$s.</string>
+    <string name="share_reminder_error">Couldn't share the reminder with %1$s.</string>
     <string name="unshare_reminder_success">The reminder is no longer shared with %1$s.</string>
     <string name="reminder_shared_badge">Shared</string>
     <string name="leave_shared_reminder">Stop sharing with me</string>

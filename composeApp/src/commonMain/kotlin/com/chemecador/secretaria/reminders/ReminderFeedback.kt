@@ -15,6 +15,7 @@ enum class ReminderFeedbackAction {
 data class ReminderSharingFeedback(
     val friendName: String,
     val action: ReminderSharingAction,
+    val isSuccess: Boolean = true,
 )
 
 enum class ReminderSharingAction {

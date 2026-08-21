@@ -36,6 +36,7 @@
     <string name="create_list_group">Grupo de listas</string>
     <string name="create_list_button">Crear</string>
     <string name="cancel">Cancelar</string>
+    <string name="done">Listo</string>
     <string name="create_note_title">Nueva nota</string>
     <string name="create_note_name_hint">Título</string>
     <string name="create_note_content_hint">Contenido</string>
@@ -274,6 +275,7 @@
     <string name="reminder_due_add_time">Añadir hora</string>
     <string name="reminder_due_clear_time">Quitar hora</string>
     <string name="reminder_due_with_time">%1$s · %2$s</string>
+    <string name="reminder_share_with">Compartir con…</string>
     <string name="notifications_disabled_title">Notificaciones desactivadas</string>
     <string name="notifications_disabled_message">Tienes las notificaciones desactivadas, así que no podremos avisarte cuando llegue la fecha. El recordatorio se guardará igual y seguirás viendo la fecha en la lista.</string>
     <string name="notifications_disabled_enable">Activar</string>
@@ -286,6 +288,7 @@
     <string name="share_reminder_empty_friends">Todavía no tienes amigos para compartir este recordatorio.</string>
     <string name="share_reminder_no_available_friends">No hay más amigos disponibles para compartir este recordatorio.</string>
     <string name="share_reminder_success">Recordatorio compartido con %1$s.</string>
+    <string name="share_reminder_error">No se ha podido compartir el recordatorio con %1$s.</string>
     <string name="unshare_reminder_success">El recordatorio ya no está compartido con %1$s.</string>
     <string name="reminder_shared_badge">Compartido</string>
     <string name="leave_shared_reminder">Dejar de compartir conmigo</string>
