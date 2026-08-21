@@ -85,6 +85,17 @@
 - No navigation library yet. `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/App.kt` uses a sealed `Screen`.
 - Current screens: `Login`, `Lists`, `ListGroup`, `Notes`, `NoteDetail`, `Reminders`, `CompletedReminders`.
 - Keep this simple approach until navigation complexity clearly grows.
+- `SecretariaRootMode` (`REMINDERS` / `LISTS`) is the top level: the bottom bar is the only way to
+  switch, and switching empties `utilityBackStack` instead of pushing. The active mode is PERSISTED
+  (`RootModePreferenceStore`), so the app reopens where the user left it instead of always on Listas.
+  Only the mode is stored, never the concrete screen: reopening on a note detail days later would be
+  more confusing than useful. Everything that lands on a mode's screen goes through `updateRootMode`,
+  including notification and widget intents, or the stored mode would drift from what the user sees.
+- Both persisted UI preferences (the root mode and the lists section) sit on one tiny
+  `UiPreferences` string key-value `expect`/`actual` in the root package: SharedPreferences on
+  Android, a properties file under `~/.secretaria` on JVM, `NSUserDefaults` on iOS, `localStorage`
+  on JS, no-op on Wasm. Add a key and a small typed store, never a sixth `expect`/`actual`. Both are
+  cleared on logout: they describe a session, not a device.
 - Package by feature, not by technical layer. Current feature packages: `login`, `noteslists`, `notes`, `friends`, `reminders`.
 - Typical feature shape: model, repository interface, fake repository, state, ViewModel, screen.
 - Shared conventions:

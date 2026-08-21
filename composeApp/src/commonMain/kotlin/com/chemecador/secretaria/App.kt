@@ -38,8 +38,8 @@ import com.chemecador.secretaria.notes.NotesScreen
 import com.chemecador.secretaria.notes.NotesViewModel
 import com.chemecador.secretaria.noteslists.NotesListsScreen
 import com.chemecador.secretaria.noteslists.NotesListsSection
+import com.chemecador.secretaria.noteslists.NotesListsSectionPreferenceStore
 import com.chemecador.secretaria.noteslists.NotesListsViewModel
-import com.chemecador.secretaria.noteslists.rememberNotesListsSectionPreferenceStore
 import com.chemecador.secretaria.reminders.CompletedRemindersScreen
 import com.chemecador.secretaria.reminders.RemindersScreen
 import com.chemecador.secretaria.reminders.RemindersViewModel
@@ -141,7 +141,13 @@ private fun AppContent(
         val authRepository = koinInject<AuthRepository>()
         val fcmTokenRegister = koinInject<FcmTokenRegister>()
         val googleSignInController = rememberGoogleSignInController(googleServerClientId)
-        val notesListsSectionPreferenceStore = rememberNotesListsSectionPreferenceStore()
+        val uiPreferences = rememberUiPreferences()
+        val notesListsSectionPreferenceStore = remember(uiPreferences) {
+            NotesListsSectionPreferenceStore(uiPreferences)
+        }
+        val rootModePreferenceStore = remember(uiPreferences) {
+            RootModePreferenceStore(uiPreferences)
+        }
         val loginViewModel = koinViewModel<LoginViewModel>()
         val listsViewModel = koinViewModel<NotesListsViewModel>()
         val friendsViewModel = koinViewModel<FriendsViewModel>()
@@ -151,7 +157,26 @@ private fun AppContent(
         var screen by remember { mutableStateOf<Screen>(Screen.Restoring) }
         var utilityBackStack by remember { mutableStateOf<List<Screen>>(emptyList()) }
         var selectedListsSection by rememberSaveable { mutableStateOf(NotesListsSection.MINE) }
+        var rootMode by remember { mutableStateOf(SecretariaRootMode.LISTS) }
         val coroutineScope = rememberCoroutineScope()
+
+        fun homeScreenFor(mode: SecretariaRootMode): Screen = when (mode) {
+            SecretariaRootMode.REMINDERS -> Screen.Reminders
+            SecretariaRootMode.LISTS -> Screen.Lists
+        }
+
+        /**
+         * Todo lo que lleve a una pantalla de un modo pasa por aqui, no solo la barra inferior:
+         * abrir una lista o un aviso desde una notificacion tambien cambia de modo, y al volver
+         * la app tiene que reabrirse donde el usuario la dejo de verdad.
+         */
+        fun updateRootMode(mode: SecretariaRootMode) {
+            if (rootMode == mode) return
+            rootMode = mode
+            coroutineScope.launch {
+                rootModePreferenceStore.save(mode)
+            }
+        }
 
         fun selectListsSection(section: NotesListsSection) {
             selectedListsSection = section
@@ -162,6 +187,7 @@ private fun AppContent(
 
         fun openRequestedList(request: OpenListRequest) {
             utilityBackStack = emptyList()
+            updateRootMode(SecretariaRootMode.LISTS)
             screen = if (request.isGroup) {
                 Screen.ListGroup(
                     ownerId = request.ownerId,
@@ -183,6 +209,7 @@ private fun AppContent(
         /** El aviso de vencimiento no apunta a un recordatorio concreto, solo a la pantalla. */
         fun openRequestedReminders() {
             utilityBackStack = emptyList()
+            updateRootMode(SecretariaRootMode.REMINDERS)
             screen = Screen.Reminders
             onOpenRemindersRequestConsumed()
         }
@@ -218,13 +245,11 @@ private fun AppContent(
         // Los modos son destinos raiz: cambiar de modo vacia la pila, no apila.
         val selectRootMode: (SecretariaRootMode) -> Unit = { mode ->
             utilityBackStack = emptyList()
-            screen = when (mode) {
-                SecretariaRootMode.REMINDERS -> Screen.Reminders
-                SecretariaRootMode.LISTS -> Screen.Lists
-            }
+            updateRootMode(mode)
+            screen = homeScreenFor(mode)
         }
         val closeUtilityScreen = {
-            val returnScreen = utilityBackStack.lastOrNull() ?: Screen.Lists
+            val returnScreen = utilityBackStack.lastOrNull() ?: homeScreenFor(rootMode)
             utilityBackStack = utilityBackStack.dropLast(1)
             screen = returnScreen
         }
@@ -236,20 +261,27 @@ private fun AppContent(
                 loginViewModel.resetState()
                 utilityBackStack = emptyList()
                 selectedListsSection = NotesListsSection.MINE
+                rootMode = SecretariaRootMode.LISTS
                 notesListsSectionPreferenceStore.clear()
+                rootModePreferenceStore.clear()
                 screen = Screen.Login
             }
         }
 
-        LaunchedEffect(authRepository, notesListsSectionPreferenceStore) {
+        LaunchedEffect(authRepository, notesListsSectionPreferenceStore, rootModePreferenceStore) {
             val restored = authRepository.restoreSession().getOrDefault(false)
-            selectedListsSection = if (restored) {
-                notesListsSectionPreferenceStore.load()
+            val restoredMode: SecretariaRootMode
+            if (restored) {
+                selectedListsSection = notesListsSectionPreferenceStore.load()
+                restoredMode = rootModePreferenceStore.load()
             } else {
                 notesListsSectionPreferenceStore.clear()
-                NotesListsSection.MINE
+                rootModePreferenceStore.clear()
+                selectedListsSection = NotesListsSection.MINE
+                restoredMode = SecretariaRootMode.LISTS
             }
-            screen = if (restored) Screen.Lists else Screen.Login
+            rootMode = restoredMode
+            screen = if (restored) homeScreenFor(restoredMode) else Screen.Login
             utilityBackStack = emptyList()
             if (restored) {
                 fcmTokenRegister.registerCurrentToken()
@@ -295,6 +327,7 @@ private fun AppContent(
                                 onLoginSuccess = {
                                     utilityBackStack = emptyList()
                                     openListRequest?.let(::openRequestedList) ?: run {
+                                        updateRootMode(SecretariaRootMode.LISTS)
                                         screen = Screen.Lists
                                     }
                                     coroutineScope.launch {

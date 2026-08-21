@@ -1,17 +1,24 @@
 package com.chemecador.secretaria.noteslists
 
-import androidx.compose.runtime.Composable
+import com.chemecador.secretaria.UiPreferences
 
-internal interface NotesListsSectionPreferenceStore {
-    suspend fun load(): NotesListsSection
-    suspend fun save(section: NotesListsSection)
-    suspend fun clear()
-}
+/**
+ * Recuerda si el usuario estaba mirando sus listas o las compartidas. Se borra al cerrar sesion:
+ * es una preferencia de la sesion, no del dispositivo.
+ */
+internal class NotesListsSectionPreferenceStore(
+    private val preferences: UiPreferences,
+) {
+    suspend fun load(): NotesListsSection =
+        preferences.getString(KEY_SELECTED_SECTION).toNotesListsSectionOrDefault()
 
-internal object NoOpNotesListsSectionPreferenceStore : NotesListsSectionPreferenceStore {
-    override suspend fun load(): NotesListsSection = NotesListsSection.MINE
-    override suspend fun save(section: NotesListsSection) = Unit
-    override suspend fun clear() = Unit
+    suspend fun save(section: NotesListsSection) {
+        preferences.putString(KEY_SELECTED_SECTION, section.name)
+    }
+
+    suspend fun clear() {
+        preferences.remove(KEY_SELECTED_SECTION)
+    }
 }
 
 internal fun String?.toNotesListsSectionOrDefault(): NotesListsSection =
@@ -19,5 +26,4 @@ internal fun String?.toNotesListsSectionOrDefault(): NotesListsSection =
         NotesListsSection.valueOf(this ?: return NotesListsSection.MINE)
     }.getOrDefault(NotesListsSection.MINE)
 
-@Composable
-internal expect fun rememberNotesListsSectionPreferenceStore(): NotesListsSectionPreferenceStore
+private const val KEY_SELECTED_SECTION = "notes_lists.selected_section"
