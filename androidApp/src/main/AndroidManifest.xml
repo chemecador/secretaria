@@ -33,6 +33,19 @@
             </intent-filter>
         </activity>
 
+        <receiver
+            android:name=".widget.RemindersWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_reminders_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/reminders_widget_info" />
+        </receiver>
+
         <service
             android:name=".messaging.SecretariaMessagingService"
             android:exported="false">

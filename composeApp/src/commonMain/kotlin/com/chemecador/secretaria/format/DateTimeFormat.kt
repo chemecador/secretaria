@@ -26,8 +26,9 @@ data class DateTimeFormat(
         /** Matches the Spanish original, and is the fallback when a translation omits the tokens. */
         val DayFirst24h = DateTimeFormat(monthFirst = false, twelveHourClock = false)
 
-        internal const val MONTH_FIRST_TOKEN = "month_first"
-        internal const val CLOCK_12H_TOKEN = "12h"
+        /** Publicos porque el widget de Android resuelve los mismos tokens desde sus recursos. */
+        const val MONTH_FIRST_TOKEN = "month_first"
+        const val CLOCK_12H_TOKEN = "12h"
     }
 }
 

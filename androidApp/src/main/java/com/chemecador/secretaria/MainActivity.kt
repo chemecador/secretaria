@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import com.chemecador.secretaria.messaging.NotificationOpenListIntent.toOpenListRequest
 import com.chemecador.secretaria.messaging.NotificationOpenRemindersIntent.isOpenRemindersRequest
 import com.chemecador.secretaria.messaging.SecretariaNotificationChannels
+import com.chemecador.secretaria.widget.RemindersWidgetUpdater
 
 class MainActivity : ComponentActivity() {
 
@@ -43,6 +44,19 @@ class MainActivity : ComponentActivity() {
                 onOpenRemindersRequestConsumed = { pendingOpenRemindersRequest = false },
             )
         }
+    }
+
+    /**
+     * Al salir de la app es cuando el widget tiene mas posibilidades de estar desfasado: el
+     * usuario acaba de crear, editar o completar algo. Aqui no se sabe que cambio, asi que el
+     * widget vuelve a leer; es una consulta por salida, no por cada escritura.
+     *
+     * Un giro de pantalla tambien pasa por aqui y no cambia nada, asi que se descarta.
+     */
+    override fun onStop() {
+        super.onStop()
+        if (isChangingConfigurations) return
+        RemindersWidgetUpdater.refresh(this)
     }
 
     override fun onNewIntent(intent: Intent) {

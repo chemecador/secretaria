@@ -8,4 +8,21 @@
     <string name="channel_reminder_shared_desc">Alerts when someone shares a reminder with you.</string>
     <string name="channel_reminder_due_name">Reminder due dates</string>
     <string name="channel_reminder_due_desc">Alerts when a reminder\'s date and time arrive.</string>
+    <string name="widget_reminders_label">Reminders</string>
+    <string name="widget_reminders_description">Your pending reminders, in the same order as in the app.</string>
+    <string name="widget_reminders_title">Reminders (%1$d)</string>
+    <string name="widget_reminders_refresh">Refresh</string>
+    <string name="widget_reminders_empty">No pending reminders.</string>
+    <string name="widget_reminders_loading">Loading your reminders…</string>
+    <string name="widget_reminders_signed_out">Sign in to see your reminders.</string>
+    <string name="widget_reminder_complete">Mark as completed</string>
+    <string name="widget_reminder_shared">Shared</string>
+    <string name="widget_reminder_due_with_time">%1$s · %2$s</string>
+    <string name="widget_preview_title">Reminders (2)</string>
+    <string name="widget_preview_item_first">Buy bread</string>
+    <string name="widget_preview_item_second">Call the dentist</string>
+    <!-- Mismos tokens que composeResources/values*/strings.xml: el widget tiene que pintar la
+         fecha igual que la app, y los recursos del host Android son otros. -->
+    <string name="widget_format_date_order">month_first</string>
+    <string name="widget_format_clock">12h</string>
 </resources>

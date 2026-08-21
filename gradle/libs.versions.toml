@@ -4,6 +4,7 @@ androidx-credentials = "1.6.0"
 androidx-activity = "1.13.0"
 androidx-core = "1.18.0"
 androidx-exifinterface = "1.4.2"
+androidx-glance = "1.1.1"
 androidx-lifecycle = "2.10.0"
 composeHotReload = "1.0.0"
 composeMultiplatform = "1.10.3"
@@ -20,10 +21,15 @@ material3 = "1.10.0-alpha05"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+# El host Android no tiene el plugin de Kotlin multiplataforma, asi que kotlin-test no resuelve
+# solo su variante de JUnit: hay que pedirla, y JUnit con ella.
+kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
+junit = { module = "junit:junit", version = "4.13.2" }
 androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "androidx-credentials" }
 androidx-credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "androidx-credentials" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
 androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "androidx-exifinterface" }
+androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "androidx-glance" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 compose-uiTooling = { module = "org.jetbrains.compose.ui:ui-tooling", version.ref = "composeMultiplatform" }
 compose-materialIconsExtended = { module = "org.jetbrains.compose.material:material-icons-extended", version = "1.7.3" }
@@ -49,6 +55,8 @@ firebase-functions = { module = "com.google.firebase:firebase-functions", versio
 firebase-messaging = { module = "com.google.firebase:firebase-messaging", version = "24.1.2" }
 firebase-storage = { module = "com.google.firebase:firebase-storage", version = "22.0.1" }
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
+# Implementacion real de org.json para los tests unitarios: en android.jar solo hay stubs.
+json = { module = "org.json:json", version = "20260814" }
 google-mobile-ads = { module = "com.google.android.gms:play-services-ads", version.ref = "google-mobile-ads" }
 koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
 koin-compose-viewmodel = { module = "io.insert-koin:koin-compose-viewmodel", version.ref = "koin" }

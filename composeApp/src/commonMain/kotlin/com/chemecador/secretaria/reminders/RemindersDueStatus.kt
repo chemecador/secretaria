@@ -10,8 +10,11 @@ import kotlin.time.Instant
  *
  * Un vencimiento de todo el dia ([ReminderDue.time] nulo) no vence hasta que el dia entero
  * ha pasado, asi que algo fechado para hoy sin hora no cuenta como vencido.
+ *
+ * Publica porque el widget de Android la reutiliza: la regla del "todo el dia" es sutil y no
+ * merece una segunda copia en `androidApp`.
  */
-internal fun ReminderDue.isOverdue(
+fun ReminderDue.isOverdue(
     now: Instant,
     timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ): Boolean {

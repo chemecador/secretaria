@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    updatePeriodMillis a 30 minutos es el minimo que respeta el sistema; por debajo lo ignora.
+    No es el unico camino de refresco: la app al pasar a segundo plano, los avisos push de
+    recordatorios y el boton de la cabecera tambien lo actualizan.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_reminders_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minHeight="110dp"
+    android:minResizeHeight="70dp"
+    android:minResizeWidth="140dp"
+    android:minWidth="180dp"
+    android:previewImage="@drawable/ic_launcher"
+    android:previewLayout="@layout/widget_reminders_preview"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="3"
+    android:targetCellWidth="3"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

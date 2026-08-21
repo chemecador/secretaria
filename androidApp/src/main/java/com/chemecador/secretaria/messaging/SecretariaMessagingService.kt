@@ -7,6 +7,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.chemecador.secretaria.MainActivity
 import com.chemecador.secretaria.R
+import com.chemecador.secretaria.widget.RemindersWidgetUpdater
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -23,10 +24,13 @@ class SecretariaMessagingService : FirebaseMessagingService() {
         if (title.isNullOrBlank() || body.isNullOrBlank()) return
 
         val context = applicationContext
+        val channelId = channelId(message)
+        // Un aviso de recordatorio significa que la lista ha cambiado en el servidor: compartido
+        // contigo, o vencido. El widget se entera aqui sin esperar a su ciclo de 30 minutos.
+        if (channelId in REMINDER_CHANNEL_IDS) {
+            RemindersWidgetUpdater.refresh(context)
+        }
         SecretariaNotificationChannels.ensureCreated(context)
-        val channelId = message.data[DATA_CHANNEL_ID]
-            ?.takeIf { it.isNotBlank() }
-            ?: SecretariaNotificationChannels.DEFAULT_CHANNEL_ID
 
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_launcher)
@@ -104,6 +108,11 @@ class SecretariaMessagingService : FirebaseMessagingService() {
         )
     }
 
+    private fun channelId(message: RemoteMessage): String =
+        message.data[DATA_CHANNEL_ID]
+            ?.takeIf { it.isNotBlank() }
+            ?: SecretariaNotificationChannels.DEFAULT_CHANNEL_ID
+
     private fun notificationIdFor(message: RemoteMessage): Int {
         val source = message.data[DATA_NOTIFICATION_TAG]
             ?: message.messageId
@@ -112,6 +121,10 @@ class SecretariaMessagingService : FirebaseMessagingService() {
     }
 
     private companion object {
+        val REMINDER_CHANNEL_IDS = setOf(
+            SecretariaNotificationChannels.REMINDER_DUE_CHANNEL_ID,
+            SecretariaNotificationChannels.REMINDER_SHARED_CHANNEL_ID,
+        )
         const val DATA_BODY = "body"
         const val DATA_CHANNEL_ID = "channelId"
         const val DATA_NOTIFICATION_TAG = "notificationTag"

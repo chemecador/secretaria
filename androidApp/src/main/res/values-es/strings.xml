@@ -8,4 +8,19 @@
     <string name="channel_reminder_shared_desc">Avisos cuando alguien comparte un recordatorio contigo.</string>
     <string name="channel_reminder_due_name">Vencimiento de recordatorios</string>
     <string name="channel_reminder_due_desc">Avisos cuando llega la fecha y hora de un recordatorio.</string>
+    <string name="widget_reminders_label">Recordatorios</string>
+    <string name="widget_reminders_description">Tus recordatorios pendientes, en el mismo orden que en la app.</string>
+    <string name="widget_reminders_title">Recordatorios (%1$d)</string>
+    <string name="widget_reminders_refresh">Actualizar</string>
+    <string name="widget_reminders_empty">No tienes recordatorios pendientes.</string>
+    <string name="widget_reminders_loading">Cargando tus recordatorios…</string>
+    <string name="widget_reminders_signed_out">Inicia sesión para ver tus recordatorios.</string>
+    <string name="widget_reminder_complete">Marcar como completado</string>
+    <string name="widget_reminder_shared">Compartido</string>
+    <string name="widget_reminder_due_with_time">%1$s · %2$s</string>
+    <string name="widget_preview_title">Recordatorios (2)</string>
+    <string name="widget_preview_item_first">Comprar pan</string>
+    <string name="widget_preview_item_second">Llamar al dentista</string>
+    <string name="widget_format_date_order">day_first</string>
+    <string name="widget_format_clock">24h</string>
 </resources>

@@ -71,6 +71,7 @@
   - long press opens an options dialog: owner gets Compartir/Eliminar, invited users get "Dejar de compartir conmigo"
   - completed reminders are deleted 30 days after completion, client-side, in a single batch on screen load
   - sharing pushes a notification, and so does the due date (see "Reminder Due Notifications")
+- Android has a home screen widget for reminders (see "Reminders Widget").
 - Note detail supports editing title/content and delete confirmation.
 - Logout has confirmation and clears auth session on all platforms.
 - Settings screen shows account email, user code, version, author, contact, and project info.
@@ -263,6 +264,46 @@
 - Deploy after touching this: `firebase deploy --only firestore:indexes,functions --project <projectId>`.
 - `sendPushToUser` is now `loadUserTokens` + `sendPushToTokens`. The split exists so the due-date sweep can read a user's tokens once per pass (it needs the timezone before deciding whether to send) and reuse them; the event-driven functions are unaffected.
 
+## Reminders Widget
+
+- Android only, built with Glance (`androidx.glance:glance-appwidget`), and it lives entirely in
+  `androidApp/src/main/java/com/chemecador/secretaria/widget/`. iOS would need WidgetKit in Swift,
+  which is a separate slice.
+- It is a MIRROR of the Reminders screen, not an agenda: pending reminders in the user's manual
+  order, overdue highlighted but never moved. Sorting by date here would contradict the rule the
+  rest of the app follows.
+- Koin is started inside the `App()` composable, so the widget process has no container to inject
+  from. `RemindersWidgetData` builds `FirestoreRemindersRepository(FirebaseAuthRepository())`
+  directly; both classes are public for exactly that reason.
+- It paints from a local copy (`RemindersWidgetStore`, SharedPreferences + a `StateFlow`) and
+  refreshes afterwards. Never block the first paint on the network: the launcher wants a view now.
+  A failed refresh keeps the previous copy on screen, which is what makes the widget useful offline.
+- Overdue is computed at PAINT time against the current clock, not when the copy was saved, so a
+  copy from last night still highlights what became overdue this morning. `ReminderDue.isOverdue`
+  is public so the widget reuses it instead of copying the subtle all-day rule.
+- Completing from the widget is optimistic with rollback and writes `completedAt` with the client
+  clock, exactly like `RemindersViewModel.setReminderCompleted`, and keeps the reminder `order`.
+- NEVER call `goAsync()` in `RemindersWidgetReceiver`. `GlanceAppWidgetReceiver.onUpdate` already
+  calls it to apply the views, and `goAsync()` hands out the `PendingResult` ONCE and then nulls
+  it: a second call returns null and the process dies on `finish()`, right after the data was
+  saved and before the views were applied. That crash loop looks exactly like "the widget renders
+  but stays empty forever". The refresh runs on the `RemindersWidgetUpdater` scope instead.
+- Refresh triggers: `updatePeriodMillis` (30 min, the system minimum), `MainActivity.onStop`
+  (skipped on configuration changes), reminder pushes in `SecretariaMessagingService`, and the
+  header button. `RemindersWidgetUpdater` guards every one of them with a check for at least one
+  placed widget, because `getReminders()` is two Firestore reads and users without the widget must
+  not pay for them.
+- Widget strings and the two date/clock format tokens are duplicated in `androidApp/res/values*`,
+  like the notification channel names: the host owns its resources, and the widget has to render
+  dates the same way as the app it sits next to.
+- The palette is a copy of `SecretariaTheme` in `WidgetColors`. No `GlanceTheme` and no dynamic
+  color on purpose: the app has one fixed light theme.
+- `onDisabled` clears the stored copy: with no widget placed there is no reason to keep reminder
+  text on disk.
+- `androidApp` now has JVM unit tests (`:androidApp:testDebugUnitTest`). They need
+  `kotlin-test-junit` plus `junit` because the host has no Kotlin Multiplatform plugin to resolve
+  the variant, and a real `org.json` because `android.jar` only ships stubs.
+
 ## Reminder Due Notifications
 
 - Implemented as PUSH, not as local alarms. An earlier draft of this file planned `AlarmManager` / `UNUserNotificationCenter`; that was dropped on purpose. Push works with the app closed, needs no `BOOT_COMPLETED` receiver and no per-platform scheduler, and delivers to every contributor of a shared reminder. The cost is that it only reaches targets that register an FCM token: today that is Android only, because JVM/JS/Wasm/iOS still use `NoopFcmTokenRegister`. Wiring a token register on iOS is what would extend this to iOS; nothing else has to change.
@@ -295,6 +336,7 @@
 ## Validation Commands
 
 - Android host: `./gradlew :androidApp:assembleDebug`
+- Android host tests (widget): `./gradlew :androidApp:testDebugUnitTest`
 - Shared Android target: `./gradlew :composeApp:compileAndroidMain`
 - JVM/Desktop: `./gradlew :composeApp:compileKotlinJvm :composeApp:jvmTest`
 - iOS simulator: `./gradlew :composeApp:compileKotlinIosSimulatorArm64 :composeApp:iosSimulatorArm64Test`
@@ -312,6 +354,8 @@
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/noteslists/`
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/notes/`
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/reminders/`
+- Android host tests:
+  - `androidApp/src/test/java/com/chemecador/secretaria/widget/`
 - iOS native repository tests:
   - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/login/`
   - `composeApp/src/iosSimulatorArm64Test/kotlin/com/chemecador/secretaria/noteslists/`
