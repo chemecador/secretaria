@@ -1,7 +1,6 @@
 package com.chemecador.secretaria.widget
 
 import android.content.Context
-import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,10 +36,8 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import com.chemecador.secretaria.MainActivity
 import com.chemecador.secretaria.R
 import com.chemecador.secretaria.format.DateTimeFormat
-import com.chemecador.secretaria.messaging.NotificationOpenRemindersIntent
 import com.chemecador.secretaria.reminders.isOverdue
 import kotlin.time.Clock
 
@@ -98,13 +95,25 @@ private fun WidgetHeader(pendingCount: Int) {
             maxLines = 1,
             modifier = GlanceModifier
                 .defaultWeight()
-                .clickable(actionStartActivity(openRemindersIntent(context))),
+                .clickable(actionStartActivity(WidgetRemindersIntent.openReminders(context))),
         )
         WidgetIconButton(
             iconRes = R.drawable.ic_widget_refresh,
             contentDescriptionRes = R.string.widget_reminders_refresh,
             tint = WidgetColors.OnTopBar,
             modifier = GlanceModifier.clickable(actionRunCallback<RefreshRemindersAction>()),
+        )
+        // Anadir no se puede resolver dentro del widget: hace falta el teclado y el selector de
+        // fecha, asi que abre la app con el dialogo de creacion ya puesto.
+        WidgetIconButton(
+            iconRes = R.drawable.ic_widget_add,
+            contentDescriptionRes = R.string.widget_reminder_add,
+            tint = WidgetColors.OnTopBar,
+            modifier = GlanceModifier.clickable(
+                actionStartActivity(
+                    WidgetRemindersIntent.openReminders(context, createReminder = true),
+                ),
+            ),
         )
     }
 }
@@ -158,7 +167,7 @@ private fun ReminderRow(
                 modifier = GlanceModifier
                     .defaultWeight()
                     .padding(vertical = 8.dp)
-                    .clickable(actionStartActivity(openRemindersIntent(context))),
+                    .clickable(actionStartActivity(WidgetRemindersIntent.openReminders(context))),
             ) {
                 Text(
                     text = item.text,
@@ -242,7 +251,7 @@ private fun WidgetMessage(messageRes: Int) {
         modifier = GlanceModifier
             .fillMaxSize()
             .padding(16.dp)
-            .clickable(actionStartActivity(openRemindersIntent(context))),
+            .clickable(actionStartActivity(WidgetRemindersIntent.openReminders(context))),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -276,15 +285,3 @@ private fun WidgetIconButton(
         )
     }
 }
-
-/** Reutiliza el mismo camino que el aviso de vencimiento: accion propia leida en `MainActivity`. */
-private fun openRemindersIntent(context: Context): Intent =
-    Intent(context, MainActivity::class.java).apply {
-        action = NotificationOpenRemindersIntent.ACTION_OPEN_REMINDERS
-        addFlags(
-            Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP,
-        )
-        putExtra(NotificationOpenRemindersIntent.EXTRA_OPEN_REMINDERS, true)
-    }

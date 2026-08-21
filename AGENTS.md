@@ -288,6 +288,12 @@
   it: a second call returns null and the process dies on `finish()`, right after the data was
   saved and before the views were applied. That crash loop looks exactly like "the widget renders
   but stays empty forever". The refresh runs on the `RemindersWidgetUpdater` scope instead.
+- The header "+" opens the app with the create dialog already up. Adding cannot be resolved inside
+  a widget (it needs a keyboard and a date picker), so the request travels as an intent extra:
+  `WidgetRemindersIntent` -> `MainActivity` -> `App(openReminderComposerRequest = ...)` ->
+  `RemindersScreen(openComposerRequest = ...)`. It reuses the OPEN_REMINDERS action instead of
+  declaring another, and the screen consumes the request, which is also what stops the dialog from
+  reopening the next time the app is brought forward.
 - Refresh triggers: `updatePeriodMillis` (30 min, the system minimum), `MainActivity.onStop`
   (skipped on configuration changes), reminder pushes in `SecretariaMessagingService`, and the
   header button. `RemindersWidgetUpdater` guards every one of them with a check for at least one
@@ -325,6 +331,11 @@
 - The dialog only informs; the due date is saved either way, since what is lost without permission is the push, not the date. `requestNotifications()` re-asks the system while `shouldShowRequestPermissionRationale` allows it and falls back to the app notification settings screen (and then to the app details screen, which some manufacturers are the only ones to resolve).
 
 ## Build And Test Pitfalls
+
+- Do NOT use `adb shell am force-stop` while testing the widget. A force-stopped package cannot be
+  started by the PendingIntents the launcher holds, so every widget click silently does nothing and
+  it looks exactly like a broken intent. Verified: the same tap works before the force-stop and
+  fails after it. Kill the app from recents instead, or just leave it running.
 
 - In `composeApp`, Android resources must keep `androidResources { enable = true }` or Compose resources can fail at runtime with missing `.cvr` files.
 - `androidApp` owns the real Android launcher icon/resources.

@@ -12,6 +12,7 @@
     <string name="widget_reminders_description">Your pending reminders, in the same order as in the app.</string>
     <string name="widget_reminders_title">Reminders (%1$d)</string>
     <string name="widget_reminders_refresh">Refresh</string>
+    <string name="widget_reminder_add">New reminder</string>
     <string name="widget_reminders_empty">No pending reminders.</string>
     <string name="widget_reminders_loading">Loading your reminders…</string>
     <string name="widget_reminders_signed_out">Sign in to see your reminders.</string>

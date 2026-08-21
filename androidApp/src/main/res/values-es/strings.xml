@@ -12,6 +12,7 @@
     <string name="widget_reminders_description">Tus recordatorios pendientes, en el mismo orden que en la app.</string>
     <string name="widget_reminders_title">Recordatorios (%1$d)</string>
     <string name="widget_reminders_refresh">Actualizar</string>
+    <string name="widget_reminder_add">Nuevo recordatorio</string>
     <string name="widget_reminders_empty">No tienes recordatorios pendientes.</string>
     <string name="widget_reminders_loading">Cargando tus recordatorios…</string>
     <string name="widget_reminders_signed_out">Inicia sesión para ver tus recordatorios.</string>

@@ -169,6 +169,12 @@ fun RemindersScreen(
     /** Nulo cuando la pantalla es un destino raiz: sin flecha atras y sin back handler. */
     onBack: (() -> Unit)? = null,
     bottomBar: @Composable () -> Unit = {},
+    /**
+     * El widget de Android abre la pantalla con el dialogo de creacion ya puesto, para que anadir
+     * un recordatorio desde el escritorio sea un solo toque.
+     */
+    openComposerRequest: Boolean = false,
+    onOpenComposerConsumed: () -> Unit = {},
 ) {
     val currentUserId = koinInject<AuthRepository>().currentUserId
     val state by viewModel.state.collectAsState()
@@ -182,6 +188,12 @@ fun RemindersScreen(
 
     LaunchedEffect(viewModel) {
         viewModel.load()
+    }
+
+    LaunchedEffect(openComposerRequest) {
+        if (!openComposerRequest) return@LaunchedEffect
+        showCreateDialog = true
+        onOpenComposerConsumed()
     }
 
     ReminderFeedbackHost(

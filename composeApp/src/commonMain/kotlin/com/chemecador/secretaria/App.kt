@@ -98,6 +98,8 @@ fun App(
     onOpenListRequestConsumed: () -> Unit = {},
     openRemindersRequest: Boolean = false,
     onOpenRemindersRequestConsumed: () -> Unit = {},
+    openReminderComposerRequest: Boolean = false,
+    onOpenReminderComposerConsumed: () -> Unit = {},
 ) {
     val inspectionMode = LocalInspectionMode.current
     val previewLanguageCode = stringResource(Res.string.preview_language_code)
@@ -118,6 +120,8 @@ fun App(
             onOpenListRequestConsumed = onOpenListRequestConsumed,
             openRemindersRequest = openRemindersRequest,
             onOpenRemindersRequestConsumed = onOpenRemindersRequestConsumed,
+            openReminderComposerRequest = openReminderComposerRequest,
+            onOpenReminderComposerConsumed = onOpenReminderComposerConsumed,
         )
     }
 }
@@ -130,6 +134,8 @@ private fun AppContent(
     onOpenListRequestConsumed: () -> Unit,
     openRemindersRequest: Boolean,
     onOpenRemindersRequestConsumed: () -> Unit,
+    openReminderComposerRequest: Boolean,
+    onOpenReminderComposerConsumed: () -> Unit,
 ) {
     KoinApplication(koinConfig) {
         val authRepository = koinInject<AuthRepository>()
@@ -355,6 +361,11 @@ private fun AppContent(
                                 onOpenFriends = openFriends,
                                 onOpenSettings = openSettings,
                                 onLogout = logout,
+                                // La peticion viaja intacta hasta aqui: la pantalla solo existe
+                                // cuando ya se ha navegado a ella, asi que consumirla ahi es
+                                // justo cuando el dialogo puede abrirse de verdad.
+                                openComposerRequest = openReminderComposerRequest,
+                                onOpenComposerConsumed = onOpenReminderComposerConsumed,
                                 bottomBar = {
                                     SecretariaBottomBar(
                                         selected = SecretariaRootMode.REMINDERS,

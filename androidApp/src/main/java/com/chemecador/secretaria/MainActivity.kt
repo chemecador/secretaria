@@ -17,11 +17,13 @@ import com.chemecador.secretaria.messaging.NotificationOpenListIntent.toOpenList
 import com.chemecador.secretaria.messaging.NotificationOpenRemindersIntent.isOpenRemindersRequest
 import com.chemecador.secretaria.messaging.SecretariaNotificationChannels
 import com.chemecador.secretaria.widget.RemindersWidgetUpdater
+import com.chemecador.secretaria.widget.WidgetRemindersIntent.isCreateReminderRequest
 
 class MainActivity : ComponentActivity() {
 
     private var pendingOpenListRequest by mutableStateOf<OpenListRequest?>(null)
     private var pendingOpenRemindersRequest by mutableStateOf(false)
+    private var pendingCreateReminderRequest by mutableStateOf(false)
 
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* result ignored */ }
@@ -34,6 +36,7 @@ class MainActivity : ComponentActivity() {
         maybeRequestNotificationPermission()
         pendingOpenListRequest = intent.toOpenListRequest()
         pendingOpenRemindersRequest = intent.isOpenRemindersRequest()
+        pendingCreateReminderRequest = intent.isCreateReminderRequest()
 
         setContent {
             App(
@@ -42,6 +45,8 @@ class MainActivity : ComponentActivity() {
                 onOpenListRequestConsumed = { pendingOpenListRequest = null },
                 openRemindersRequest = pendingOpenRemindersRequest,
                 onOpenRemindersRequestConsumed = { pendingOpenRemindersRequest = false },
+                openReminderComposerRequest = pendingCreateReminderRequest,
+                onOpenReminderComposerConsumed = { pendingCreateReminderRequest = false },
             )
         }
     }
@@ -64,6 +69,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         pendingOpenListRequest = intent.toOpenListRequest()
         pendingOpenRemindersRequest = intent.isOpenRemindersRequest()
+        pendingCreateReminderRequest = intent.isCreateReminderRequest()
     }
 
     private fun maybeRequestNotificationPermission() {
