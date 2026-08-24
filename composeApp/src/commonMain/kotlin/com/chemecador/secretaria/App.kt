@@ -26,8 +26,9 @@ import com.chemecador.secretaria.format.LocalDateTimeFormat
 import com.chemecador.secretaria.format.rememberDateTimeFormat
 import com.chemecador.secretaria.friends.FriendsScreen
 import com.chemecador.secretaria.friends.FriendsViewModel
+import com.chemecador.secretaria.login.AuthChoiceScreen
 import com.chemecador.secretaria.login.AuthRepository
-import com.chemecador.secretaria.login.LoginScreen
+import com.chemecador.secretaria.login.EmailLoginScreen
 import com.chemecador.secretaria.login.LoginViewModel
 import com.chemecador.secretaria.login.rememberGoogleSignInController
 import com.chemecador.secretaria.messaging.FcmTokenRegister
@@ -40,6 +41,9 @@ import com.chemecador.secretaria.noteslists.NotesListsScreen
 import com.chemecador.secretaria.noteslists.NotesListsSection
 import com.chemecador.secretaria.noteslists.NotesListsSectionPreferenceStore
 import com.chemecador.secretaria.noteslists.NotesListsViewModel
+import com.chemecador.secretaria.onboarding.OnboardingPage
+import com.chemecador.secretaria.onboarding.OnboardingPreferenceStore
+import com.chemecador.secretaria.onboarding.OnboardingScreen
 import com.chemecador.secretaria.reminders.CompletedRemindersScreen
 import com.chemecador.secretaria.reminders.RemindersScreen
 import com.chemecador.secretaria.reminders.RemindersViewModel
@@ -58,7 +62,12 @@ import secretaria.composeapp.generated.resources.preview_language_code
 
 private sealed class Screen {
     data object Restoring : Screen()
-    data object Login : Screen()
+    data class Onboarding(
+        val startPage: OnboardingPage = OnboardingPage.LISTS,
+    ) : Screen()
+
+    data object Auth : Screen()
+    data class EmailLogin(val backTarget: Screen) : Screen()
     data object Lists : Screen()
     data object Friends : Screen()
     data object Settings : Screen()
@@ -89,6 +98,16 @@ private sealed class Screen {
         val backTarget: Screen = Lists,
     ) : Screen()
 }
+
+/**
+ * Pantallas anteriores a tener sesion. Nada que llegue de fuera -una notificacion, el widget-
+ * puede colarse mientras se esta en una de ellas.
+ */
+private val Screen.isPreLogin: Boolean
+    get() = this is Screen.Restoring ||
+        this is Screen.Onboarding ||
+        this is Screen.Auth ||
+        this is Screen.EmailLogin
 
 @Composable
 @Preview
@@ -147,6 +166,9 @@ private fun AppContent(
         }
         val rootModePreferenceStore = remember(uiPreferences) {
             RootModePreferenceStore(uiPreferences)
+        }
+        val onboardingPreferenceStore = remember(uiPreferences) {
+            OnboardingPreferenceStore(uiPreferences)
         }
         val loginViewModel = koinViewModel<LoginViewModel>()
         val listsViewModel = koinViewModel<NotesListsViewModel>()
@@ -224,7 +246,7 @@ private fun AppContent(
                 return
             }
 
-            if (screen !is Screen.Restoring && screen !is Screen.Login) {
+            if (!screen.isPreLogin) {
                 utilityBackStack = utilityBackStack + screen
             }
             screen = destination
@@ -264,11 +286,43 @@ private fun AppContent(
                 rootMode = SecretariaRootMode.LISTS
                 notesListsSectionPreferenceStore.clear()
                 rootModePreferenceStore.clear()
-                screen = Screen.Login
+                // Cerrar sesion no devuelve la bienvenida: se vuelve a la eleccion de acceso, que
+                // es su ultima pagina, no al principio de la explicacion.
+                screen = Screen.Auth
+            }
+        }
+        val onLoginSuccess: () -> Unit = {
+            utilityBackStack = emptyList()
+            openListRequest?.let(::openRequestedList) ?: run {
+                updateRootMode(SecretariaRootMode.LISTS)
+                screen = Screen.Lists
+            }
+            coroutineScope.launch {
+                fcmTokenRegister.registerCurrentToken()
+            }
+        }
+        val onGoogleLogin: () -> Unit = {
+            loginViewModel.loginWithGoogle(
+                tokenProvider = googleSignInController?.let { controller ->
+                    suspend { controller.getIdToken() }
+                },
+            )
+        }
+        val openEmailLogin: (Screen) -> Unit = { backTarget ->
+            screen = Screen.EmailLogin(backTarget)
+        }
+        val markOnboardingCompleted: () -> Unit = {
+            coroutineScope.launch {
+                onboardingPreferenceStore.markCompleted()
             }
         }
 
-        LaunchedEffect(authRepository, notesListsSectionPreferenceStore, rootModePreferenceStore) {
+        LaunchedEffect(
+            authRepository,
+            notesListsSectionPreferenceStore,
+            rootModePreferenceStore,
+            onboardingPreferenceStore,
+        ) {
             val restored = authRepository.restoreSession().getOrDefault(false)
             val restoredMode: SecretariaRootMode
             if (restored) {
@@ -281,7 +335,11 @@ private fun AppContent(
                 restoredMode = SecretariaRootMode.LISTS
             }
             rootMode = restoredMode
-            screen = if (restored) homeScreenFor(restoredMode) else Screen.Login
+            screen = when {
+                restored -> homeScreenFor(restoredMode)
+                onboardingPreferenceStore.isCompleted() -> Screen.Auth
+                else -> Screen.Onboarding()
+            }
             utilityBackStack = emptyList()
             if (restored) {
                 fcmTokenRegister.registerCurrentToken()
@@ -290,13 +348,13 @@ private fun AppContent(
 
         LaunchedEffect(openListRequest, screen) {
             val request = openListRequest ?: return@LaunchedEffect
-            if (screen is Screen.Restoring || screen is Screen.Login) return@LaunchedEffect
+            if (screen.isPreLogin) return@LaunchedEffect
             openRequestedList(request)
         }
 
         LaunchedEffect(openRemindersRequest, screen) {
             if (!openRemindersRequest) return@LaunchedEffect
-            if (screen is Screen.Restoring || screen is Screen.Login) return@LaunchedEffect
+            if (screen.isPreLogin) return@LaunchedEffect
             openRequestedReminders()
         }
 
@@ -321,25 +379,36 @@ private fun AppContent(
                             }
                         }
 
-                        is Screen.Login -> {
-                            LoginScreen(
+                        is Screen.Onboarding -> {
+                            OnboardingScreen(
                                 viewModel = loginViewModel,
-                                onLoginSuccess = {
-                                    utilityBackStack = emptyList()
-                                    openListRequest?.let(::openRequestedList) ?: run {
-                                        updateRootMode(SecretariaRootMode.LISTS)
-                                        screen = Screen.Lists
-                                    }
-                                    coroutineScope.launch {
-                                        fcmTokenRegister.registerCurrentToken()
-                                    }
+                                onLoginSuccess = onLoginSuccess,
+                                onGoogleLogin = onGoogleLogin,
+                                onEmailLogin = {
+                                    openEmailLogin(Screen.Onboarding(OnboardingPage.AUTH))
                                 },
-                                onGoogleLogin = {
-                                    loginViewModel.loginWithGoogle(
-                                        tokenProvider = googleSignInController?.let { controller ->
-                                            suspend { controller.getIdToken() }
-                                        },
-                                    )
+                                onCompleted = markOnboardingCompleted,
+                                startPage = current.startPage,
+                            )
+                        }
+
+                        is Screen.Auth -> {
+                            AuthChoiceScreen(
+                                viewModel = loginViewModel,
+                                onLoginSuccess = onLoginSuccess,
+                                onGoogleLogin = onGoogleLogin,
+                                onEmailLogin = { openEmailLogin(Screen.Auth) },
+                            )
+                        }
+
+                        is Screen.EmailLogin -> {
+                            EmailLoginScreen(
+                                viewModel = loginViewModel,
+                                onLoginSuccess = onLoginSuccess,
+                                onBack = {
+                                    // Un error del formulario no debe seguir al usuario de vuelta.
+                                    loginViewModel.resetState()
+                                    screen = current.backTarget
                                 },
                             )
                         }

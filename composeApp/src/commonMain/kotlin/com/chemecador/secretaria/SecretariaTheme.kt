@@ -36,6 +36,12 @@ private val SecretariaColorScheme = lightColorScheme(
 internal val SecretariaTopBarColor = Color(0xFF1B452A)
 internal val SecretariaTopBarContentColor = Color(0xFFF5F1E8)
 
+/**
+ * Un paso mas apagado que `onSurfaceVariant`, para la letra pequena que acompana a una accion sin
+ * competir con ella. No es un rol de Material, por eso vive suelto igual que los dos de arriba.
+ */
+internal val SecretariaMutedTextColor = Color(0xFF7A7266)
+
 @Composable
 fun SecretariaTheme(
     content: @Composable () -> Unit,

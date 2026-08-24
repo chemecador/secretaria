@@ -153,9 +153,31 @@
     <string name="label_password">Contraseña</string>
     <string name="label_login">Iniciar sesión</string>
     <string name="label_sign_up">Registrarse</string>
-    <string name="label_login_google">Iniciar sesión con Google</string>
-    <string name="label_login_guest">Acceder como invitado</string>
-    <string name="login_or_divider">O</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_lists_title">Listas para todo,\ny para compartir</string>
+    <string name="onboarding_lists_body">La compra, el viaje, las ideas de las tres de la mañana. Y si compartes una lista con un amigo, se actualiza en los dos móviles a la vez.</string>
+    <string name="onboarding_notes_title">Notas con foto,\ny con color</string>
+    <string name="onboarding_notes_body">Apunta la nota y añádele hasta tres fotos. Porque «el azul, el de la caja rara» no vale como descripción.</string>
+    <string name="onboarding_reminders_title">Recordatorios\nque te avisan</string>
+    <string name="onboarding_reminders_body">Ponle fecha y hora y te llega una notificación cuando toca. Renovar el DNI ya no depende de tu memoria.</string>
+    <string name="onboarding_summary_title">Y además…</string>
+    <string name="onboarding_free">Gratis</string>
+    <string name="onboarding_free_detail">Todas las funciones, sin pagar nada.</string>
+    <string name="onboarding_no_ads">Sin anuncios</string>
+    <string name="onboarding_no_ads_detail">Ni banners ni cosas que se abren solas.</string>
+    <string name="onboarding_open_source">Código abierto</string>
+    <string name="onboarding_open_source_detail">Cualquiera puede revisar cómo funciona.</string>
+    <string name="onboarding_no_personal_data">Sin datos personales</string>
+    <string name="onboarding_no_personal_data_detail">No pedimos nombre, teléfono ni ubicación.</string>
+    <string name="onboarding_skip">Saltar</string>
+    <string name="onboarding_next">Siguiente</string>
+    <string name="onboarding_start">Comenzar</string>
+    <string name="onboarding_auth_title">¿Cómo quieres entrar?</string>
+    <string name="onboarding_login_google">Continuar con Google</string>
+    <string name="onboarding_login_email">Acceder con email</string>
+    <string name="onboarding_guest_disclaimer">Puedes guardar tus notas y recordatorios en tu teléfono, pero no podrás compartirlos con amigos.</string>
+    <string name="onboarding_login_guest">Empezar sin cuenta</string>
 
     <!-- Menu -->
     <string name="menu_friends">Amigos</string>

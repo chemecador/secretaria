@@ -45,7 +45,7 @@
 
 ## Current Product State
 
-- Shared flows implemented: login -> lists -> notes -> note detail, plus friends.
+- Shared flows implemented: onboarding -> login -> lists -> notes -> note detail, plus friends.
 - Android push notifications already cover shared lists, incoming friend requests, new notes in shared lists, shared reminders, and reminder due dates.
 - Lists support:
   - read, create, delete
@@ -77,7 +77,10 @@
   - sharing pushes a notification, and so does the due date (see "Reminder Due Notifications")
 - Android has a home screen widget for reminders (see "Reminders Widget").
 - Note detail supports editing title/content and delete confirmation.
-- Logout has confirmation and clears auth session on all platforms.
+- Logout has confirmation and clears auth session on all platforms. It returns to the access
+  chooser, never to the onboarding: the welcome belongs to the device, not to the session.
+- First open shows a five-page onboarding (three value screens, a summary, and the access
+  chooser) instead of dropping the user straight into a form. See "Onboarding".
 - Settings screen shows account email, user code, version, author, contact, and project info.
 - Still pending or partial:
   - Google Sign-In on Wasm
@@ -87,7 +90,10 @@
 ## Navigation And Shared Architecture
 
 - No navigation library yet. `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/App.kt` uses a sealed `Screen`.
-- Current screens: `Login`, `Lists`, `ListGroup`, `Notes`, `NoteDetail`, `Reminders`, `CompletedReminders`.
+- Current screens: `Onboarding`, `Auth`, `EmailLogin`, `Lists`, `ListGroup`, `Notes`,
+  `NoteDetail`, `Reminders`, `CompletedReminders`.
+- The three access screens are guarded together by the `Screen.isPreLogin` extension: a
+  notification or widget intent must never land on a screen before there is a session.
 - Keep this simple approach until navigation complexity clearly grows.
 - `SecretariaRootMode` (`REMINDERS` / `LISTS`) is the top level: the bottom bar is the only way to
   switch, and switching empties `utilityBackStack` instead of pushing. The active mode is PERSISTED
@@ -95,12 +101,15 @@
   Only the mode is stored, never the concrete screen: reopening on a note detail days later would be
   more confusing than useful. Everything that lands on a mode's screen goes through `updateRootMode`,
   including notification and widget intents, or the stored mode would drift from what the user sees.
-- Both persisted UI preferences (the root mode and the lists section) sit on one tiny
-  `UiPreferences` string key-value `expect`/`actual` in the root package: SharedPreferences on
-  Android, a properties file under `~/.secretaria` on JVM, `NSUserDefaults` on iOS, `localStorage`
-  on JS, no-op on Wasm. Add a key and a small typed store, never a sixth `expect`/`actual`. Both are
-  cleared on logout: they describe a session, not a device.
-- Package by feature, not by technical layer. Current feature packages: `login`, `noteslists`, `notes`, `friends`, `reminders`.
+- Every persisted UI preference sits on one tiny `UiPreferences` string key-value
+  `expect`/`actual` in the root package: SharedPreferences on Android, a properties file under
+  `~/.secretaria` on JVM, `NSUserDefaults` on iOS, `localStorage` on JS, no-op on Wasm. Add a key
+  and a small typed store, never a sixth `expect`/`actual`. There are three today:
+  `RootModePreferenceStore` and `NotesListsSectionPreferenceStore` are cleared on logout because
+  they describe a session, while `OnboardingPreferenceStore` is NOT, because it describes the
+  device. That is why it has no `clear()`.
+- Package by feature, not by technical layer. Current feature packages: `login`, `onboarding`,
+  `noteslists`, `notes`, `friends`, `reminders`.
 - Typical feature shape: model, repository interface, fake repository, state, ViewModel, screen.
 - Shared conventions:
   - immutable UI state with `data class`
@@ -133,9 +142,35 @@
   the full list, because reordering and the photo-count sync both address notes by id.
 - Do not hardcode user-facing strings in shared UI; use `composeApp/src/commonMain/composeResources/values/strings.xml`.
 - Never hardcode a user-facing message in a ViewModel either. Typed errors resolved in the screen
-  are the pattern: `login.AuthError` and `noteslists.NotesListsError`, both mapped by a private
-  `toStringRes()` in their screen. Raw `throwable.message` is only for repository failures.
+  are the pattern: `login.AuthError` and `noteslists.NotesListsError`, mapped by a `toStringRes()`.
+  `NotesListsError` keeps it private to its screen; `AuthError` moved to `login/AuthErrorStrings.kt`
+  once two access screens needed the same mapping. Raw `throwable.message` is only for repository
+  failures.
 - Use Material icons, not text-character substitutes.
+
+## Onboarding
+
+- `onboarding/OnboardingScreen.kt` is a `HorizontalPager` over `OnboardingPage`: three value
+  screens, a summary, and `AUTH`. The design is a Claude Design handoff; measurements come from a
+  370 px canvas translated 1:1 to `dp`.
+- The access page is NOT a page of its own composable. `login/AuthChoiceScreen.kt` holds
+  `AuthChoiceContent`, used both as the pager's last page and as the standalone `Screen.Auth` that
+  a returning logged-out user gets. Without that split, logging out would strand the user on the
+  email form with no Google and no guest access.
+- `EmailLoginScreen` is only the email/password form; it carries a `backTarget` so it returns to
+  whichever access surface opened it, and resets `LoginState` on the way back so a stale error does
+  not follow the user.
+- The welcome is marked as seen on reaching `AUTH`, not on signing in: someone who got that far has
+  read (or skipped) the explanation, and repeating it because they closed the app while deciding
+  would punish hesitation.
+- The footer -dots plus actions- lives outside the pager and its action slot is a fixed 56 dp even
+  on the access page, where it is empty. A slot that resized mid-swipe would jerk the content above
+  it. The dots carry a touch target far larger than the 7 dp circle they draw.
+- The mockups take `weight(1f, fill = false)` capped at 380 dp, so on a short screen they shrink
+  instead of pushing the title off the bottom. Regenerate them with
+  `play-store/scripts/Generate-StoreAssets.ps1`, never by hand.
+- The Google "G" is `composeResources/drawable/ic_google.xml`, drawn with `Image`, never `Icon`:
+  tinting it would flatten the official four colours.
 
 ## Localization
 
@@ -147,6 +182,9 @@
   the Compose Gradle plugin). `\'` is NOT unescaped, so apostrophes go in raw: write `don't`, not
   the escaped form, or the backslash shows up on screen. Real Android resources under `res/values*`
   are the opposite and still need the escape.
+- Drawables can be localized too, and the onboarding mockups are: `composeResources/drawable`
+  holds the English screenshots and `drawable-es` the Spanish ones. A screenshot IS text, so a
+  Spanish capture in an English onboarding would undo the whole point of the default locale.
 - Android host resources are separate and also split by locale: `androidApp/src/main/res/values`
   (English) and `values-es` hold the four notification channel names and descriptions.
 - Dates and clock times are not fixed: `format/DateTimeFormat.kt` resolves them from two tokens in
@@ -384,6 +422,7 @@
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/login/`
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/noteslists/`
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/notes/`
+  - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/onboarding/`
   - `composeApp/src/commonTest/kotlin/com/chemecador/secretaria/reminders/`
 - Android host tests:
   - `androidApp/src/test/java/com/chemecador/secretaria/widget/`
@@ -398,7 +437,7 @@
   - `androidApp/build.gradle.kts`
   - `settings.gradle.kts`
   - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/App.kt`
-  - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/{login,noteslists,notes,friends}/`
+  - `composeApp/src/commonMain/kotlin/com/chemecador/secretaria/{onboarding,login,noteslists,notes,friends}/`
   - `composeApp/src/commonMain/composeResources/values/strings.xml`
   - platform feature folders in `androidMain`, `jvmMain`, `jsMain`, and `iosMain`
   - `androidApp/src/main/AndroidManifest.xml`

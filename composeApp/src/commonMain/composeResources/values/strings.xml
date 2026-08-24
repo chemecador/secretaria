@@ -155,9 +155,31 @@
     <string name="label_password">Password</string>
     <string name="label_login">Log in</string>
     <string name="label_sign_up">Sign up</string>
-    <string name="label_login_google">Sign in with Google</string>
-    <string name="label_login_guest">Continue as guest</string>
-    <string name="login_or_divider">OR</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_lists_title">Lists for anything,\nand for sharing</string>
+    <string name="onboarding_lists_body">The groceries, the trip, the ideas that hit at three in the morning. Share a list with a friend and it updates on both phones at once.</string>
+    <string name="onboarding_notes_title">Notes with photos,\nand with color</string>
+    <string name="onboarding_notes_body">Write the note down and add up to three photos. Because “the blue one, in the odd box” doesn't work as a description.</string>
+    <string name="onboarding_reminders_title">Reminders\nthat nudge you</string>
+    <string name="onboarding_reminders_body">Give it a date and a time and a notification arrives when it's due. Renewing your passport no longer depends on your memory.</string>
+    <string name="onboarding_summary_title">And also…</string>
+    <string name="onboarding_free">Free</string>
+    <string name="onboarding_free_detail">Every feature, without paying a thing.</string>
+    <string name="onboarding_no_ads">No ads</string>
+    <string name="onboarding_no_ads_detail">No banners, nothing that opens on its own.</string>
+    <string name="onboarding_open_source">Open source</string>
+    <string name="onboarding_open_source_detail">Anyone can check how it works.</string>
+    <string name="onboarding_no_personal_data">No personal data</string>
+    <string name="onboarding_no_personal_data_detail">We don't ask for your name, phone or location.</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_start">Get started</string>
+    <string name="onboarding_auth_title">Choose how to sign in</string>
+    <string name="onboarding_login_google">Continue with Google</string>
+    <string name="onboarding_login_email">Sign in with email</string>
+    <string name="onboarding_guest_disclaimer">You can keep your notes and reminders on your phone, but you won't be able to share them with friends.</string>
+    <string name="onboarding_login_guest">Start without an account</string>
 
     <!-- Menu -->
     <string name="menu_friends">Friends</string>
