@@ -71,13 +71,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
@@ -185,6 +189,7 @@ fun RemindersScreen(
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showCreateDialog by remember { mutableStateOf(false) }
+    var focusCreateText by remember { mutableStateOf(false) }
     var reminderToEdit by remember { mutableStateOf<Reminder?>(null) }
     var reminderToDelete by remember { mutableStateOf<Reminder?>(null) }
     var reminderForOptions by remember { mutableStateOf<Reminder?>(null) }
@@ -202,6 +207,7 @@ fun RemindersScreen(
     LaunchedEffect(openComposerRequest) {
         if (!openComposerRequest) return@LaunchedEffect
         showCreateDialog = true
+        focusCreateText = true
         onOpenComposerConsumed()
     }
 
@@ -274,6 +280,7 @@ fun RemindersScreen(
         if (showCreateDialog) {
             val closeCreateDialog = {
                 showCreateDialog = false
+                focusCreateText = false
                 isPickingFriendsForNewReminder = false
                 newReminderShareWith = emptyList()
                 viewModel.clearShareState()
@@ -283,6 +290,7 @@ fun RemindersScreen(
                 confirmLabel = stringResource(Res.string.create_reminder_button),
                 initialText = "",
                 initialDue = null,
+                autoFocusText = focusCreateText,
                 sharingSummary = editorSharingSummary(
                     collaborators = newReminderShareWith.asCollaborators(),
                     sharedCount = newReminderShareWith.size,
@@ -830,6 +838,7 @@ private fun ReminderEditorDialog(
     onConfirm: (String, ReminderDue?) -> Unit,
     /** Nulo cuando el recordatorio no es propio: solo el propietario puede repartirlo. */
     onOpenSharing: (() -> Unit)? = null,
+    autoFocusText: Boolean = false,
 ) {
     var text by remember { mutableStateOf(initialText) }
     var due by remember { mutableStateOf(initialDue) }
@@ -838,6 +847,15 @@ private fun ReminderEditorDialog(
     var showTimePicker by remember { mutableStateOf(false) }
     var showNotificationsDisabled by remember { mutableStateOf(false) }
     val notificationPermission = rememberNotificationPermissionController()
+    val textFocusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(autoFocusText) {
+        if (!autoFocusText) return@LaunchedEffect
+        withFrameNanos { }
+        textFocusRequester.requestFocus()
+        keyboard?.show()
+    }
 
     if (showNotificationsDisabled) {
         NotificationsDisabledDialog(
@@ -893,7 +911,9 @@ private fun ReminderEditorDialog(
                         cursorColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                     ),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(textFocusRequester),
                 )
 
                 Spacer(Modifier.height(8.dp))
