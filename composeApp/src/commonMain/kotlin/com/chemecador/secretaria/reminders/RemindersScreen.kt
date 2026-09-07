@@ -71,6 +71,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +83,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
@@ -99,6 +101,7 @@ import com.chemecador.secretaria.notes.NotesReorderState
 import com.chemecador.secretaria.noteslists.ListCollaborator
 import com.chemecador.secretaria.noteslists.formatNotesListDate
 import com.chemecador.secretaria.rememberNotificationPermissionController
+import kotlinx.coroutines.flow.first
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -865,15 +868,6 @@ private fun ReminderEditorDialog(
     var showTimePicker by remember { mutableStateOf(false) }
     var showNotificationsDisabled by remember { mutableStateOf(false) }
     val notificationPermission = rememberNotificationPermissionController()
-    val textFocusRequester = remember { FocusRequester() }
-    val keyboard = LocalSoftwareKeyboardController.current
-
-    LaunchedEffect(autoFocusText) {
-        if (!autoFocusText) return@LaunchedEffect
-        withFrameNanos { }
-        textFocusRequester.requestFocus()
-        keyboard?.show()
-    }
 
     if (showNotificationsDisabled) {
         NotificationsDisabledDialog(
@@ -915,6 +909,20 @@ private fun ReminderEditorDialog(
         textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { Text(title) },
         text = {
+            val textFocusRequester = remember { FocusRequester() }
+            val keyboard = LocalSoftwareKeyboardController.current
+            val windowInfo = LocalWindowInfo.current
+
+            LaunchedEffect(autoFocusText) {
+                if (!autoFocusText) return@LaunchedEffect
+                // El dialogo tiene su propia ventana y teclado. Desde el widget puede abrirse
+                // antes de recibir foco; esperar solo un fotograma de la actividad no basta.
+                snapshotFlow { windowInfo.isWindowFocused }.first { it }
+                withFrameNanos { }
+                textFocusRequester.requestFocus()
+                keyboard?.show()
+            }
+
             // Con descripcion, vencimiento y reparto el dialogo ya no cabe entero en pantallas
             // bajas o con el teclado abierto, asi que el contenido scrollea.
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
