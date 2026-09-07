@@ -159,6 +159,7 @@ service cloud.firestore {
       let newContributors = request.resource.data.get('contributors', []);
       let editsContent = changedOnly([
         'text',
+        'description',
         'dueDate',
         'dueTime',
         'completed',

@@ -283,6 +283,7 @@
     <string name="create_reminder_button">Create</string>
     <string name="edit_reminder_title">Edit reminder</string>
     <string name="edit_reminder_text_hint">Reminder</string>
+    <string name="edit_reminder_description_hint">Description (optional)</string>
     <string name="edit_reminder_button">Save</string>
     <string name="delete_reminder_title">Delete reminder</string>
     <string name="delete_reminder_message">Delete “%1$s”?</string>

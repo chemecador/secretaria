@@ -56,7 +56,11 @@ internal class FirestoreIosRemindersRepository(
                 .distinctBy(Reminder::key)
         }
 
-    override suspend fun createReminder(text: String, due: ReminderDue?): Result<Reminder> =
+    override suspend fun createReminder(
+        text: String,
+        description: String?,
+        due: ReminderDue?,
+    ): Result<Reminder> =
         runCatching {
             val userId = requireUserId()
             val nextOrder = nextPendingOrder(userId)
@@ -65,6 +69,7 @@ internal class FirestoreIosRemindersRepository(
                 collectionId = REMINDERS,
                 fields = buildJsonObject {
                     put("text", firestoreString(text))
+                    put("description", description.descriptionField())
                     put("dueDate", due.dueDateField())
                     put("dueTime", due.dueTimeField())
                     put("completed", firestoreBoolean(false))
@@ -79,6 +84,7 @@ internal class FirestoreIosRemindersRepository(
     override suspend fun updateReminder(
         key: ReminderKey,
         text: String,
+        description: String?,
         due: ReminderDue?,
     ): Result<Reminder> =
         runCatching {
@@ -86,10 +92,11 @@ internal class FirestoreIosRemindersRepository(
                 documentPath = reminderDocumentPath(key),
                 fields = buildJsonObject {
                     put("text", firestoreString(text))
+                    put("description", description.descriptionField())
                     put("dueDate", due.dueDateField())
                     put("dueTime", due.dueTimeField())
                 },
-                updateMask = listOf("text", "dueDate", "dueTime"),
+                updateMask = listOf("text", "description", "dueDate", "dueTime"),
             ).toReminder(requireUserId())
         }
 
@@ -222,6 +229,9 @@ private fun contributorsField(ownerId: String, contributors: List<String>): Json
 private fun JsonObject.contributors(ownerId: String): List<String> =
     effectiveReminderContributors(ownerId, firestoreStringList("contributors"))
 
+private fun String?.descriptionField() =
+    this?.takeIf { it.isNotBlank() }?.let(::firestoreString) ?: firestoreNull()
+
 private fun ReminderDue?.dueDateField() =
     this?.let { firestoreString(it.date.toString()) } ?: firestoreNull()
 
@@ -236,6 +246,7 @@ private fun FirestoreIosDocument.toReminder(currentUserId: String): Reminder {
         id = id,
         ownerId = ownerId,
         text = fields.firestoreString("text").orEmpty(),
+        description = fields.firestoreString("description")?.takeIf { it.isNotBlank() },
         createdAt = fields.firestoreInstant("date") ?: Instant.fromEpochMilliseconds(0),
         due = dueDate?.let { date ->
             ReminderDue(date, fields.firestoreString("dueTime")?.let(LocalTime::parse))

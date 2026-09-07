@@ -5,8 +5,20 @@ import kotlin.time.Instant
 interface RemindersRepository {
     /** Devuelve los propios mas los que amigos han compartido con el usuario actual. */
     suspend fun getReminders(): Result<List<Reminder>>
-    suspend fun createReminder(text: String, due: ReminderDue?): Result<Reminder>
-    suspend fun updateReminder(key: ReminderKey, text: String, due: ReminderDue?): Result<Reminder>
+
+    /** [description] nula se persiste como nula: no se guarda cadena vacia. */
+    suspend fun createReminder(
+        text: String,
+        description: String?,
+        due: ReminderDue?,
+    ): Result<Reminder>
+
+    suspend fun updateReminder(
+        key: ReminderKey,
+        text: String,
+        description: String?,
+        due: ReminderDue?,
+    ): Result<Reminder>
 
     /**
      * [completedAt] y [order] los calcula el ViewModel para que el valor que se pinta de forma

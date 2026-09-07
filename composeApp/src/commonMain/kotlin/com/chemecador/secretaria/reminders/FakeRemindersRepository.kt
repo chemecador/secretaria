@@ -26,13 +26,18 @@ class FakeRemindersRepository(
         )
     }
 
-    override suspend fun createReminder(text: String, due: ReminderDue?): Result<Reminder> {
+    override suspend fun createReminder(
+        text: String,
+        description: String?,
+        due: ReminderDue?,
+    ): Result<Reminder> {
         ensureSeeded()
         val nextOrder = (reminders.filterNot(Reminder::completed).maxOfOrNull(Reminder::order) ?: -1) + 1
         val newReminder = Reminder(
             id = "reminder-${++lastId}",
             ownerId = CURRENT_USER_ID,
             text = text,
+            description = description,
             createdAt = nowProvider(),
             due = due,
             order = nextOrder,
@@ -44,12 +49,13 @@ class FakeRemindersRepository(
     override suspend fun updateReminder(
         key: ReminderKey,
         text: String,
+        description: String?,
         due: ReminderDue?,
     ): Result<Reminder> {
         ensureSeeded()
         val index = reminders.indexOfFirst { it.key == key }
         if (index == -1) return Result.failure(IllegalStateException("Reminder not found"))
-        val updated = reminders[index].copy(text = text, due = due)
+        val updated = reminders[index].copy(text = text, description = description, due = due)
         reminders[index] = updated
         return Result.success(updated)
     }
@@ -157,6 +163,11 @@ class FakeRemindersRepository(
                 id = "reminder-3",
                 ownerId = CURRENT_USER_ID,
                 text = if (english) "Milk, eggs and bread" else "Leche, huevos y pan",
+                description = if (english) {
+                    "Semi-skimmed milk and wholemeal bread"
+                } else {
+                    "Leche semidesnatada y pan integral"
+                },
                 createdAt = now - 1.days,
                 order = 2,
                 contributors = listOf(CURRENT_USER_ID, "Marta"),

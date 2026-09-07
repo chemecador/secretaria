@@ -8,6 +8,8 @@ data class Reminder(
     val id: String,
     val ownerId: String,
     val text: String,
+    /** Detalle opcional bajo el texto. Nulo y cadena vacia son lo mismo: no hay descripcion. */
+    val description: String? = null,
     val createdAt: Instant,
     val due: ReminderDue? = null,
     val completed: Boolean = false,

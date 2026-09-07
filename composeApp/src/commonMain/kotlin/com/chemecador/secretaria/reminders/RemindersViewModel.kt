@@ -44,6 +44,7 @@ class RemindersViewModel(
      */
     fun createReminder(
         text: String,
+        description: String? = null,
         due: ReminderDue? = null,
         shareWith: List<FriendSummary> = emptyList(),
     ) {
@@ -51,7 +52,7 @@ class RemindersViewModel(
         if (trimmedText.isEmpty()) return
 
         viewModelScope.launch {
-            repository.createReminder(trimmedText, due)
+            repository.createReminder(trimmedText, description.normalizedDescription(), due)
                 .onSuccess { created ->
                     shareNewReminder(created.id, shareWith)
                     fetchReminders()
@@ -84,12 +85,12 @@ class RemindersViewModel(
         }
     }
 
-    fun updateReminder(key: ReminderKey, text: String, due: ReminderDue?) {
+    fun updateReminder(key: ReminderKey, text: String, description: String?, due: ReminderDue?) {
         val trimmedText = text.trim()
         if (trimmedText.isEmpty()) return
 
         viewModelScope.launch {
-            repository.updateReminder(key, trimmedText, due)
+            repository.updateReminder(key, trimmedText, description.normalizedDescription(), due)
                 .onSuccess { fetchReminders() }
                 .onFailure { throwable ->
                     _state.update { it.copy(errorMessage = throwable.message) }
@@ -585,6 +586,9 @@ class RemindersViewModel(
         const val OWNERSHIP_ERROR_MESSAGE = "Only the owner can manage sharing"
     }
 }
+
+/** Una descripcion en blanco no es una descripcion: se guarda nula y no ocupa sitio en la tarjeta. */
+private fun String?.normalizedDescription(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
 
 private fun List<FriendSummary>.sortedByName(): List<FriendSummary> =
     sortedBy { friend -> friend.name.lowercase() }

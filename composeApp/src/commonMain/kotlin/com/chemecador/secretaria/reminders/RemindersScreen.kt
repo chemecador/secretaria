@@ -86,6 +86,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.chemecador.secretaria.PlatformBackHandler
@@ -115,6 +116,7 @@ import secretaria.composeapp.generated.resources.delete_reminder_message
 import secretaria.composeapp.generated.resources.delete_reminder_title
 import secretaria.composeapp.generated.resources.done
 import secretaria.composeapp.generated.resources.edit_reminder_button
+import secretaria.composeapp.generated.resources.edit_reminder_description_hint
 import secretaria.composeapp.generated.resources.edit_reminder_text_hint
 import secretaria.composeapp.generated.resources.edit_reminder_title
 import secretaria.composeapp.generated.resources.leave_shared_reminder
@@ -289,6 +291,7 @@ fun RemindersScreen(
                 title = stringResource(Res.string.create_reminder_title),
                 confirmLabel = stringResource(Res.string.create_reminder_button),
                 initialText = "",
+                initialDescription = null,
                 initialDue = null,
                 autoFocusText = focusCreateText,
                 sharingSummary = editorSharingSummary(
@@ -300,8 +303,8 @@ fun RemindersScreen(
                     viewModel.loadShareableFriendsForNewReminder()
                 },
                 onDismiss = closeCreateDialog,
-                onConfirm = { text, due ->
-                    viewModel.createReminder(text, due, newReminderShareWith)
+                onConfirm = { text, description, due ->
+                    viewModel.createReminder(text, description, due, newReminderShareWith)
                     closeCreateDialog()
                 },
             )
@@ -316,6 +319,7 @@ fun RemindersScreen(
                 title = stringResource(Res.string.edit_reminder_title),
                 confirmLabel = stringResource(Res.string.edit_reminder_button),
                 initialText = reminder.text,
+                initialDescription = reminder.description,
                 initialDue = reminder.due,
                 sharingSummary = editorSharingSummary(
                     collaborators = state.collaboratorsByReminderId[reminder.id].orEmpty(),
@@ -329,8 +333,8 @@ fun RemindersScreen(
                     null
                 },
                 onDismiss = { reminderToEdit = null },
-                onConfirm = { text, due ->
-                    viewModel.updateReminder(reminder.key, text, due)
+                onConfirm = { text, description, due ->
+                    viewModel.updateReminder(reminder.key, text, description, due)
                     reminderToEdit = null
                 },
             )
@@ -806,6 +810,18 @@ internal fun ReminderCard(
                     style = MaterialTheme.typography.bodyLarge,
                     textDecoration = textDecoration,
                 )
+                // La descripcion se recorta a dos lineas: la tarjeta es un resumen, el detalle
+                // completo se lee al abrir el recordatorio.
+                reminder.description?.takeIf { it.isNotBlank() }?.let { description ->
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textDecoration = textDecoration,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 sharingSummary?.let { summary -> ReminderSharingBadge(summary) }
                 secondaryContent?.invoke()
             }
@@ -832,15 +848,17 @@ private fun ReminderEditorDialog(
     title: String,
     confirmLabel: String,
     initialText: String,
+    initialDescription: String?,
     initialDue: ReminderDue?,
     sharingSummary: String,
     onDismiss: () -> Unit,
-    onConfirm: (String, ReminderDue?) -> Unit,
+    onConfirm: (String, String?, ReminderDue?) -> Unit,
     /** Nulo cuando el recordatorio no es propio: solo el propietario puede repartirlo. */
     onOpenSharing: (() -> Unit)? = null,
     autoFocusText: Boolean = false,
 ) {
     var text by remember { mutableStateOf(initialText) }
+    var description by remember { mutableStateOf(initialDescription.orEmpty()) }
     var due by remember { mutableStateOf(initialDue) }
     var isDueEnabled by remember { mutableStateOf(initialDue != null) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -897,7 +915,9 @@ private fun ReminderEditorDialog(
         textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { Text(title) },
         text = {
-            Column {
+            // Con descripcion, vencimiento y reparto el dialogo ya no cabe entero en pantallas
+            // bajas o con el teclado abierto, asi que el contenido scrollea.
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
@@ -914,6 +934,27 @@ private fun ReminderEditorDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(textFocusRequester),
+                )
+
+                Spacer(Modifier.height(8.dp))
+                // Opcional y multilinea: el recordatorio es el titulo, aqui va el detalle que no
+                // cabe en una linea. Se limita en alto para que el dialogo no crezca sin fin.
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text(stringResource(Res.string.edit_reminder_description_hint)) },
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                    ),
+                    minLines = 2,
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 Spacer(Modifier.height(8.dp))
@@ -976,7 +1017,13 @@ private fun ReminderEditorDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(text.trim(), due.takeIf { isDueEnabled }) },
+                onClick = {
+                    onConfirm(
+                        text.trim(),
+                        description.trim().takeIf { it.isNotEmpty() },
+                        due.takeIf { isDueEnabled },
+                    )
+                },
                 enabled = text.isNotBlank(),
             ) {
                 Text(confirmLabel)

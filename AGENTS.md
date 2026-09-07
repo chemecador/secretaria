@@ -68,6 +68,7 @@
   - Android Photo Picker reencodes to JPEG <=1600 px, targets 600 KiB and hard-caps at 1 MiB
 - Reminders support:
   - flat collection, not attached to any list; shareable with friends one by one
+  - optional free-text description under the reminder text, shown on the card clipped to two lines
   - a shared reminder is a single document: completion, edits and manual order are shared
   - single list ordered manually by drag and drop; no automatic sections or sorting
   - optional floating due date with optional time; overdue items are highlighted but never reordered or archived
@@ -289,8 +290,10 @@
 ## Reminders
 
 - Firestore path is `users/{userId}/reminders/{reminderId}`. `ownerId` is derived from the path, never stored.
-- Document fields: `text`, `dueDate` (string `"yyyy-MM-dd"` or null), `dueTime` (string `"HH:mm"` or null), `completed`, `completedAt` (timestamp or null), `order` (int), `date` (createdAt), `contributors` (array of uids including the owner).
+- Document fields: `text`, `description` (string or null), `dueDate` (string `"yyyy-MM-dd"` or null), `dueTime` (string `"HH:mm"` or null), `completed`, `completedAt` (timestamp or null), `order` (int), `date` (createdAt), `contributors` (array of uids including the owner).
 - The due date is a FLOATING local date/time (`LocalDate` + optional `LocalTime`), not an `Instant`. Deliberate: it renders the same calendar day on every target regardless of device timezone, and manual ordering means the server never sorts by it. There is intentionally no `timeZoneId`. `createdAt` and `completedAt` are still `Instant`.
+- `description` is optional and normalised in `RemindersViewModel`: blank is persisted as null, so nothing downstream has to tell `""` and `null` apart. Documents written before the field existed simply read back null; no migration. It is NOT in the widget row or in the push bodies, which stay one-line summaries built from `text`; adding it there means touching `RemindersWidgetSnapshot` and `firebase/functions/src/index.ts`.
+- A contributor editing a shared reminder writes `description` too, so it has to be in the `changedOnly` allowlist of `validSharedReminderUpdate` in `firebase/firestore.rules`. Any new user-editable field needs the same entry or shared edits get denied.
 - `dueTime == null` means "all day": never render `00:00`, and it only counts as overdue once the whole day has passed.
 - `completedAt` is written with the CLIENT clock on all five targets and is produced by `RemindersViewModel`, not by the repositories, so the optimistic UI value is identical to the persisted one and to what the 30-day purge compares against.
 - The 30-day purge is client-side: `remindersToPurge()` (pure, `commonMain`) computes the ids and `RemindersViewModel.load()` calls `deleteReminders(ids)` once. `getReminders()` already returns pending + completed in one read, so the purge costs no extra request. Purge failures are swallowed and never surface as an error.

@@ -267,6 +267,7 @@ test("shared reminders allow edits and leaving but not resharing", async () => {
   const reminder = context("collaborator").firestore()
     .doc("users/owner/reminders/reminder-1");
   await assertSucceeds(reminder.update({ text: "Shared edit" }));
+  await assertSucceeds(reminder.update({ description: "Shared description" }));
   await assertFails(reminder.update({
     contributors: ["owner", "collaborator", "outsider"],
   }));

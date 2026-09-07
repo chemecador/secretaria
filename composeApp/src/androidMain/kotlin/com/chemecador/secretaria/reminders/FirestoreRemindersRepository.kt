@@ -58,7 +58,11 @@ class FirestoreRemindersRepository(
         }
     }
 
-    override suspend fun createReminder(text: String, due: ReminderDue?): Result<Reminder> {
+    override suspend fun createReminder(
+        text: String,
+        description: String?,
+        due: ReminderDue?,
+    ): Result<Reminder> {
         return try {
             val userId = requireUserId()
             val collection = remindersCollection(userId)
@@ -71,6 +75,7 @@ class FirestoreRemindersRepository(
             val docRef = collection.document()
             val data = hashMapOf<String, Any?>(
                 "text" to text,
+                "description" to description,
                 "dueDate" to due?.date?.toString(),
                 "dueTime" to due?.time?.toString(),
                 "completed" to false,
@@ -89,12 +94,14 @@ class FirestoreRemindersRepository(
     override suspend fun updateReminder(
         key: ReminderKey,
         text: String,
+        description: String?,
         due: ReminderDue?,
     ): Result<Reminder> {
         return try {
             val docRef = reminderDocument(key)
             docRef.update(
                 "text", text,
+                "description", description,
                 "dueDate", due?.date?.toString(),
                 "dueTime", due?.time?.toString(),
             ).await()
@@ -227,6 +234,7 @@ private fun DocumentSnapshot.toReminder(currentUserId: String): Reminder {
         id = id,
         ownerId = ownerId,
         text = getString("text").orEmpty(),
+        description = getString("description")?.takeIf { it.isNotBlank() },
         createdAt = getTimestamp("date")
             ?.let { Instant.fromEpochMilliseconds(it.toDate().time) }
             ?: Instant.fromEpochMilliseconds(0),

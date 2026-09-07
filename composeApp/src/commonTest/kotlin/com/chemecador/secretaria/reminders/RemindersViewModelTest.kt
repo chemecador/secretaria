@@ -488,12 +488,16 @@ class RemindersViewModelTest {
             return result
         }
 
-        override suspend fun createReminder(text: String, due: ReminderDue?): Result<Reminder> =
-            throw UnsupportedOperationException()
+        override suspend fun createReminder(
+            text: String,
+            description: String?,
+            due: ReminderDue?,
+        ): Result<Reminder> = throw UnsupportedOperationException()
 
         override suspend fun updateReminder(
             key: ReminderKey,
             text: String,
+            description: String?,
             due: ReminderDue?,
         ): Result<Reminder> = throw UnsupportedOperationException()
 
@@ -541,11 +545,16 @@ class RemindersViewModelTest {
         override suspend fun getReminders(): Result<List<Reminder>> =
             getFailure?.let { Result.failure(it) } ?: Result.success(reminders.toList())
 
-        override suspend fun createReminder(text: String, due: ReminderDue?): Result<Reminder> {
+        override suspend fun createReminder(
+            text: String,
+            description: String?,
+            due: ReminderDue?,
+        ): Result<Reminder> {
             val created = Reminder(
                 id = "created-${reminders.size + 1}",
                 ownerId = OWNER_ID,
                 text = text,
+                description = description,
                 createdAt = Instant.fromEpochMilliseconds(0),
                 due = due,
                 order = reminders.size,
@@ -557,11 +566,12 @@ class RemindersViewModelTest {
         override suspend fun updateReminder(
             key: ReminderKey,
             text: String,
+            description: String?,
             due: ReminderDue?,
         ): Result<Reminder> {
             val index = reminders.indexOfFirst { it.key == key }
             if (index == -1) return Result.failure(IllegalStateException("Reminder not found"))
-            val updated = reminders[index].copy(text = text, due = due)
+            val updated = reminders[index].copy(text = text, description = description, due = due)
             reminders[index] = updated
             return Result.success(updated)
         }

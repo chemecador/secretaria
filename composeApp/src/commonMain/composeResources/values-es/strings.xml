@@ -281,6 +281,7 @@
     <string name="create_reminder_button">Crear</string>
     <string name="edit_reminder_title">Editar recordatorio</string>
     <string name="edit_reminder_text_hint">Recordatorio</string>
+    <string name="edit_reminder_description_hint">Descripción (opcional)</string>
     <string name="edit_reminder_button">Guardar</string>
     <string name="delete_reminder_title">Eliminar recordatorio</string>
     <string name="delete_reminder_message">¿Eliminar «%1$s»?</string>

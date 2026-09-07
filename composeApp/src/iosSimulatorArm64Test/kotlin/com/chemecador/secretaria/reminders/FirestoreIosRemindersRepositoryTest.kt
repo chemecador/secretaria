@@ -28,6 +28,7 @@ class FirestoreIosRemindersRepositoryTest {
                           "name": "$DOCUMENTS/users/user-123/reminders/reminder-1",
                           "fields": {
                             "text": { "stringValue": "Llamar al fontanero" },
+                            "description": { "stringValue": "Gotea el grifo de la cocina" },
                             "dueDate": { "stringValue": "2026-08-20" },
                             "dueTime": { "stringValue": "09:30" },
                             "completed": { "booleanValue": false },
@@ -44,6 +45,7 @@ class FirestoreIosRemindersRepositoryTest {
 
         val result = repository.createReminder(
             text = "Llamar al fontanero",
+            description = "Gotea el grifo de la cocina",
             due = ReminderDue(LocalDate.parse("2026-08-20"), LocalTime.parse("09:30")),
         )
 
@@ -52,11 +54,13 @@ class FirestoreIosRemindersRepositoryTest {
         assertEquals("reminder-1", reminder.id)
         assertEquals(LocalDate.parse("2026-08-20"), reminder.due?.date)
         assertEquals(LocalTime.parse("09:30"), reminder.due?.time)
+        assertEquals("Gotea el grifo de la cocina", reminder.description)
 
         assertEquals("$REMINDERS_URL", transport.requests[0].url)
         assertEquals("$REMINDERS_URL", transport.requests[1].url)
         assertEquals("Bearer ios-token", transport.requests[1].headers["Authorization"])
         val body = transport.requests[1].body!!
+        assertTrue(body.contains(""""description":{"stringValue":"Gotea el grifo de la cocina"}"""))
         assertTrue(body.contains(""""dueDate":{"stringValue":"2026-08-20"}"""))
         assertTrue(body.contains(""""dueTime":{"stringValue":"09:30"}"""))
         assertTrue(body.contains(""""completedAt":{"nullValue":"NULL_VALUE"}"""))
@@ -100,6 +104,7 @@ class FirestoreIosRemindersRepositoryTest {
                           "name": "$DOCUMENTS/users/user-123/reminders/reminder-3",
                           "fields": {
                             "text": { "stringValue": "Comprar pilas" },
+                            "description": { "nullValue": "NULL_VALUE" },
                             "dueDate": { "nullValue": "NULL_VALUE" },
                             "dueTime": { "nullValue": "NULL_VALUE" },
                             "completed": { "booleanValue": false },
@@ -112,13 +117,19 @@ class FirestoreIosRemindersRepositoryTest {
         )
         val repository = buildRepository(transport)
 
-        val result = repository.createReminder(text = "Comprar pilas", due = null)
+        val result = repository.createReminder(
+            text = "Comprar pilas",
+            description = null,
+            due = null,
+        )
 
         assertTrue(result.isSuccess)
         assertNull(result.getOrThrow().due)
+        assertNull(result.getOrThrow().description)
         val body = transport.requests[1].body!!
         // El completado con order 9 no cuenta: el siguiente hueco sale del maximo pendiente.
         assertTrue(body.contains(""""order":{"integerValue":"5"}"""))
+        assertTrue(body.contains(""""description":{"nullValue":"NULL_VALUE"}"""))
         assertTrue(body.contains(""""dueDate":{"nullValue":"NULL_VALUE"}"""))
         assertTrue(body.contains(""""dueTime":{"nullValue":"NULL_VALUE"}"""))
     }
