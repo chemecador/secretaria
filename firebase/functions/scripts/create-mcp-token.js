@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
 /*
  * Crea un token personal para el servidor MCP y lo imprime UNA vez.
  * Solo se guarda su hash en `mcpTokens/{sha256}`; no se puede recuperar.

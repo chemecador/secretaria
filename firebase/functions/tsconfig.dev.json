@@ -4,5 +4,5 @@
     "allowJs": true,
     "checkJs": false
   },
-  "include": [".eslintrc.js", "test/**/*.js"]
+  "include": [".eslintrc.js", "test/**/*.js", "scripts/**/*.js"]
 }
