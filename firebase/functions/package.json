@@ -8,6 +8,7 @@
     "test:rules": "node --test test/security-rules.test.js",
     "test:integration:note-photos": "npm run build && firebase emulators:exec --config ../firebase.note-photos.emulators.json --project demo-secretaria --only auth,firestore,storage,functions \"node --test test/note-photos.integration.test.js\"",
     "test:integration:mcp": "npm run build && firebase emulators:exec --config ../firebase.note-photos.emulators.json --project demo-secretaria --only firestore,functions \"node --test test/mcp.integration.test.js\"",
+    "test:integration:oauth": "npm run build && firebase emulators:exec --config ../firebase.note-photos.emulators.json --project demo-secretaria --only auth,firestore,functions \"node --test test/oauth.integration.test.js\"",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",

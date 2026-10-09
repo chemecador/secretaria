@@ -6,6 +6,25 @@
   "storage": {
     "rules": "storage.rules"
   },
+  "hosting": {
+    "site": "kotlin-secretaria",
+    "public": "hosting",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "/mcp",
+        "function": { "functionId": "mcp", "region": "europe-west1" }
+      },
+      {
+        "source": "/oauth/**",
+        "function": { "functionId": "oauth", "region": "europe-west1" }
+      },
+      {
+        "source": "/.well-known/**",
+        "function": { "functionId": "oauth", "region": "europe-west1" }
+      }
+    ]
+  },
   "functions": [
     {
       "source": "functions",

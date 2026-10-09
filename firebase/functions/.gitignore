@@ -3,3 +3,4 @@ lib/
 .eslintcache
 firebase-debug.log*
 *.log
+.env.kotlin-secretaria

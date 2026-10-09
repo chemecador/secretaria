@@ -4,8 +4,13 @@ import * as admin from "firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { createHash } from "crypto";
 
-const REGION = "europe-west1";
-const MCP_TOKENS_COLLECTION = "mcpTokens";
+import {
+  MCP_TOKENS_COLLECTION,
+  MCP_USAGE_COLLECTION,
+  PROTECTED_RESOURCE_METADATA_URL,
+  REGION,
+} from "./mcpConfig";
+
 const USERS_COLLECTION = "users";
 const REMINDERS_COLLECTION = "reminders";
 
@@ -14,7 +19,10 @@ const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const MAX_TEXT_LENGTH = 500;
 const MAX_DESCRIPTION_LENGTH = 2000;
-/** Tope de recordatorios creados por token y dia (UTC): frena a una IA en bucle. */
+/**
+ * Tope de recordatorios creados por usuario y dia (UTC): frena a una IA en
+ * bucle. Es por usuario y no por token porque los tokens OAuth rotan cada hora.
+ */
 const DAILY_CREATE_LIMIT = 100;
 
 const DEFAULT_LIST_LIMIT = 50;
@@ -212,14 +220,14 @@ export function parseReminderInput(args: Record<string, unknown>): ReminderInput
 }
 
 /**
- * Cuenta una creacion contra el tope diario del token. Va en transaccion para
- * que dos llamadas simultaneas no se salten el limite.
- * @param {string} tokenHash Hash del token que hace la llamada.
- * @return {Promise<boolean>} False si el token ya agoto el dia.
+ * Cuenta una creacion contra el tope diario del usuario. Va en transaccion
+ * para que dos llamadas simultaneas no se salten el limite.
+ * @param {string} uid Usuario que hace la llamada.
+ * @return {Promise<boolean>} False si el usuario ya agoto el dia.
  */
-async function consumeDailyBudget(tokenHash: string): Promise<boolean> {
+async function consumeDailyBudget(uid: string): Promise<boolean> {
   const db = admin.firestore();
-  const ref = db.collection(MCP_TOKENS_COLLECTION).doc(tokenHash);
+  const ref = db.collection(MCP_USAGE_COLLECTION).doc(uid);
   const today = utcDay(new Date());
   return db.runTransaction(async (transaction) => {
     const data = (await transaction.get(ref)).data() ?? {};
@@ -227,7 +235,7 @@ async function consumeDailyBudget(tokenHash: string): Promise<boolean> {
     const used = sameDay && typeof data.usageCount === "number" ?
       data.usageCount : 0;
     if (used >= DAILY_CREATE_LIMIT) return false;
-    transaction.update(ref, { usageDay: today, usageCount: used + 1 });
+    transaction.set(ref, { usageDay: today, usageCount: used + 1 });
     return true;
   });
 }
@@ -405,13 +413,11 @@ async function callListTool(uid: string, args: Record<string, unknown>):
 
 /**
  * @param {string} uid Dueño del token.
- * @param {string} tokenHash Hash del token, para el tope diario.
  * @param {Record<string, unknown> | undefined} params Parametros de tools/call.
  * @return {Promise<Record<string, unknown>>} Resultado MCP de la herramienta.
  */
 async function callTool(
   uid: string,
-  tokenHash: string,
   params: Record<string, unknown> | undefined,
 ): Promise<Record<string, unknown>> {
   const rawArgs = params?.arguments;
@@ -425,7 +431,7 @@ async function callTool(
   }
   try {
     const input = parseReminderInput(args);
-    if (!await consumeDailyBudget(tokenHash)) {
+    if (!await consumeDailyBudget(uid)) {
       throw new ToolInputError(
         `Daily limit of ${DAILY_CREATE_LIMIT} reminders reached.`);
     }
@@ -451,14 +457,12 @@ async function callTool(
 
 /**
  * @param {string} uid Dueño del token.
- * @param {string} tokenHash Hash del token.
  * @param {JsonRpcRequest} request Mensaje JSON-RPC.
  * @return {Promise<Record<string, unknown> | undefined>} Respuesta, o
  *   undefined si era una notificacion.
  */
 async function handleRpc(
   uid: string,
-  tokenHash: string,
   request: JsonRpcRequest,
 ): Promise<Record<string, unknown> | undefined> {
   const { id, method, params } = request;
@@ -485,7 +489,7 @@ async function handleRpc(
       result = { tools: [CREATE_REMINDER_TOOL, LIST_REMINDERS_TOOL] };
       break;
     case "tools/call":
-      result = await callTool(uid, tokenHash, params);
+      result = await callTool(uid, params);
       break;
     default:
       if (isNotification) return undefined;
@@ -515,23 +519,28 @@ async function handleRpc(
 }
 
 /**
- * Devuelve el uid del dueño del token, o null si no existe o esta revocado.
+ * Devuelve el uid del dueño del token, o null si no existe, esta revocado o
+ * ha caducado. Los tokens personales (fase 1) no caducan; los OAuth (fase 2)
+ * llevan `expiresAt`.
  * @param {string | undefined} header Cabecera Authorization.
- * @return {Promise<{uid: string, tokenHash: string} | null>} Dueño del token.
+ * @return {Promise<string | null>} Uid del dueño del token.
  */
 async function resolveToken(header: string | undefined):
-  Promise<{ uid: string; tokenHash: string } | null> {
+  Promise<string | null> {
   const match = /^Bearer (\S+)$/.exec(header ?? "");
   if (!match) return null;
-  const tokenHash = hashMcpToken(match[1]);
   const snapshot = await admin.firestore()
-    .collection(MCP_TOKENS_COLLECTION).doc(tokenHash).get();
+    .collection(MCP_TOKENS_COLLECTION).doc(hashMcpToken(match[1])).get();
   const uid = snapshot.get("uid");
+  const expiresAt = snapshot.get("expiresAt");
   if (!snapshot.exists || snapshot.get("revoked") === true ||
     typeof uid !== "string" || uid.length === 0) {
     return null;
   }
-  return { uid, tokenHash };
+  if (expiresAt instanceof Timestamp && expiresAt.toMillis() <= Date.now()) {
+    return null;
+  }
+  return uid;
 }
 
 /**
@@ -545,9 +554,13 @@ export const mcp = onRequest(
       res.set("Allow", "POST").status(405).send("Method Not Allowed");
       return;
     }
-    const auth = await resolveToken(req.get("authorization"));
-    if (!auth) {
-      res.set("WWW-Authenticate", "Bearer").status(401).send("Unauthorized");
+    const uid = await resolveToken(req.get("authorization"));
+    if (uid === null) {
+      // `resource_metadata` es lo que permite a un cliente OAuth (claude.ai)
+      // descubrir el servidor de autorizacion a partir de este 401.
+      res.set("WWW-Authenticate",
+        `Bearer resource_metadata="${PROTECTED_RESOURCE_METADATA_URL}"`)
+        .status(401).send("Unauthorized");
       return;
     }
     const body = req.body as JsonRpcRequest | JsonRpcRequest[] | undefined;
@@ -562,7 +575,7 @@ export const mcp = onRequest(
       return;
     }
     const responses = (await Promise.all(requests.map((r) =>
-      handleRpc(auth.uid, auth.tokenHash, r as JsonRpcRequest))))
+      handleRpc(uid, r as JsonRpcRequest))))
       .filter((r) => r !== undefined);
     if (responses.length === 0) {
       res.status(202).send();
