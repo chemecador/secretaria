@@ -25,6 +25,12 @@ const CREATE_REMINDER_TOOL = {
     "when given, the user is notified at that local time on their own " +
     "device, wherever they are. Resolve relative dates such as " +
     "\"tomorrow\" to an absolute date before calling.",
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     properties: {
@@ -66,7 +72,7 @@ interface JsonRpcRequest {
 }
 
 /** Error de validacion que se devuelve al modelo como resultado, no como fallo. */
-class ToolInputError extends Error {}
+export class ToolInputError extends Error {}
 
 /** Fallo de protocolo JSON-RPC (metodo desconocido, parametros invalidos...). */
 class RpcError extends Error {
@@ -99,7 +105,7 @@ function utcDay(now: Date): string {
  * @param {string} value Fecha candidata.
  * @return {boolean} Si existe en el calendario.
  */
-function isRealDate(value: string): boolean {
+export function isRealDate(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return false;
   const [year, month, day] = [match[1], match[2], match[3]].map(Number);
@@ -150,7 +156,7 @@ interface ReminderInput {
  * @param {Record<string, unknown>} args Argumentos de la llamada.
  * @return {ReminderInput} Datos validados.
  */
-function parseReminderInput(args: Record<string, unknown>): ReminderInput {
+export function parseReminderInput(args: Record<string, unknown>): ReminderInput {
   const text = optionalString(args, "text", MAX_TEXT_LENGTH);
   if (text === null) throw new ToolInputError("text is required.");
   const description = optionalString(args, "description",
@@ -201,23 +207,28 @@ async function createReminder(uid: string, input: ReminderInput):
   const collection = admin.firestore()
     .collection(USERS_COLLECTION).doc(uid)
     .collection(REMINDERS_COLLECTION);
-  const pending = await collection.where("completed", "==", false).get();
-  let maxOrder = -1;
-  for (const doc of pending.docs) {
-    const order = doc.get("order");
-    if (typeof order === "number" && order > maxOrder) maxOrder = order;
-  }
   const ref = collection.doc();
-  await ref.set({
-    text: input.text,
-    description: input.description,
-    dueDate: input.dueDate,
-    dueTime: input.dueTime,
-    completed: false,
-    completedAt: null,
-    order: maxOrder + 1,
-    date: Timestamp.now(),
-    contributors: [uid],
+  // En transaccion para que dos creaciones simultaneas no reciban el mismo
+  // `order`: la transaccion reintenta si alguien escribe entre lectura y set.
+  await admin.firestore().runTransaction(async (transaction) => {
+    const pending = await transaction.get(
+      collection.where("completed", "==", false));
+    let maxOrder = -1;
+    for (const doc of pending.docs) {
+      const order = doc.get("order");
+      if (typeof order === "number" && order > maxOrder) maxOrder = order;
+    }
+    transaction.set(ref, {
+      text: input.text,
+      description: input.description,
+      dueDate: input.dueDate,
+      dueTime: input.dueTime,
+      completed: false,
+      completedAt: null,
+      order: maxOrder + 1,
+      date: Timestamp.now(),
+      contributors: [uid],
+    });
   });
   return ref.id;
 }
