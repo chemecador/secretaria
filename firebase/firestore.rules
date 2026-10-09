@@ -273,5 +273,10 @@ service cloud.firestore {
     match /notePhotoSystem/{documentId} {
       allow read, write: if false;
     }
+
+    // Tokens del servidor MCP: solo Admin SDK. El id es el hash del token.
+    match /mcpTokens/{tokenHash} {
+      allow read, write: if false;
+    }
   }
 }

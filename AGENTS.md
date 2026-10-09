@@ -325,6 +325,17 @@
 - Deploy after touching this: `firebase deploy --only firestore:indexes,functions --project <projectId>`.
 - `sendPushToUser` is now `loadUserTokens` + `sendPushToTokens`. The split exists so the due-date sweep can read a user's tokens once per pass (it needs the timezone before deciding whether to send) and reuse them; the event-driven functions are unaffected.
 
+## MCP Server
+
+- `mcp` in `firebase/functions/src/mcp.ts` is a stateless Streamable HTTP MCP server (europe-west1) that lets an AI client create reminders. One tool today: `create_reminder(text, description?, dueDate?, dueTime?)`. JSON-RPC is hand-rolled on purpose: `functions/package.json` keeps zero extra dependencies.
+- It writes with the Admin SDK, so `firestore.rules` does not protect it and the function validates everything itself. It mirrors the client `createReminder`: `order = maxPendingOrder + 1` (completed ones ignored), `contributors = [uid]`, blank description stored as null. If the reminder document shape changes, change it here too.
+- The `uid` ALWAYS comes from the token, never from tool arguments.
+- Phase 1 auth is a personal bearer token. Only its SHA-256 lives in `mcpTokens/{hash}` (`uid`, `revoked`, `usageDay`, `usageCount`; rules deny all client access). Create one with `node scripts/create-mcp-token.js <uid> <projectId>` (needs `GOOGLE_APPLICATION_CREDENTIALS`); it prints the token once. Revoke by setting `revoked: true`.
+- Each token is capped at `DAILY_CREATE_LIMIT` creations per UTC day, counted in a transaction.
+- Phase 2, not done: claude.ai and mobile connectors only accept OAuth, so the bearer token works for Claude Code, Cursor and similar clients only. OAuth changes only how `resolveToken` gets the uid.
+- Deploy: `firebase deploy --only functions:mcp,firestore:rules --project <projectId>`. The function is `invoker: "public"` because it authenticates itself.
+- Local test: `firebase-tools@latest` currently fails to install (404 on `express@5.3.0`); `npx firebase-tools@13 emulators:exec ... --only firestore,functions` works. With the isolated emulator config, functions listen on port 15001, not 5001.
+
 ## Reminders Widget
 
 - Android only, built with Glance (`androidx.glance:glance-appwidget`), and it lives entirely in
