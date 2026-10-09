@@ -327,7 +327,7 @@
 
 ## MCP Server
 
-- `mcp` in `firebase/functions/src/mcp.ts` is a stateless Streamable HTTP MCP server (europe-west1) that lets an AI client create reminders. One tool today: `create_reminder(text, description?, dueDate?, dueTime?)`. JSON-RPC is hand-rolled on purpose: `functions/package.json` keeps zero extra dependencies.
+- `mcp` in `firebase/functions/src/mcp.ts` is a stateless Streamable HTTP MCP server (europe-west1) that lets an AI client create and read reminders. Two tools: `create_reminder(text, description?, dueDate?, dueTime?)` and the read-only `list_reminders(status?, limit?)`. The listing mirrors the client `getReminders()`: own reminders by path plus the `contributors` collection-group query, merged by owner/id, pending in manual order, completed most recent first, and each row flags `shared`. It is not counted against the daily budget. JSON-RPC is hand-rolled on purpose: `functions/package.json` keeps zero extra dependencies.
 - It writes with the Admin SDK, so `firestore.rules` does not protect it and the function validates everything itself. It mirrors the client `createReminder`: `order = maxPendingOrder + 1` (completed ones ignored, read and write in one transaction so concurrent calls get distinct orders), `contributors = [uid]`, blank description stored as null. If the reminder document shape changes, change it here too.
 - The `uid` ALWAYS comes from the token, never from tool arguments.
 - Phase 1 auth is a personal bearer token. Only its SHA-256 lives in `mcpTokens/{hash}` (`uid`, `revoked`, `usageDay`, `usageCount`; rules deny all client access). Create one with `node scripts/create-mcp-token.js <uid> <projectId>` (needs `GOOGLE_APPLICATION_CREDENTIALS`); it prints the token once. Revoke by setting `revoked: true`.

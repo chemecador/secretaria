@@ -109,9 +109,56 @@ test("validation errors come back as tool results", async () => {
   assert.equal(res.result.isError, true);
 });
 
+async function list(args = {}) {
+  const res = await (await rpc({
+    jsonrpc: "2.0", id: 9, method: "tools/call",
+    params: { name: "list_reminders", arguments: args },
+  })).json();
+  return res.result;
+}
+
+test("list_reminders returns pending in order, with shared ones", async () => {
+  const other = "users/other-user/reminders";
+  await db.collection(other).doc("sh").set({
+    text: "Compartido", completed: false, order: 99, contributors: ["other-user", UID],
+    date: admin.firestore.Timestamp.now(),
+  });
+  await db.collection(other).doc("private").set({
+    text: "Ajeno", completed: false, order: 0, contributors: ["other-user"],
+    date: admin.firestore.Timestamp.now(),
+  });
+  await db.collection(`users/${UID}/reminders`).doc("done").set({
+    text: "Hecho", completed: true, order: 0, contributors: [UID],
+    date: admin.firestore.Timestamp.now(),
+    completedAt: admin.firestore.Timestamp.now(),
+  });
+  const result = await list();
+  assert.notEqual(result.isError, true);
+  const rows = JSON.parse(result.content[0].text);
+  const texts = rows.map((r) => r.text);
+  assert.equal(texts[0], "Comprar pan");
+  assert.equal(texts.at(-1), "Compartido");
+  assert.ok(!texts.includes("Ajeno"));
+  assert.ok(!texts.includes("Hecho"));
+  assert.equal(rows.at(-1).shared, true);
+  assert.equal(rows[0].shared, false);
+});
+
+test("list_reminders filters by status and limit", async () => {
+  const completed = JSON.parse((await list({ status: "completed" }))
+    .content[0].text);
+  assert.deepEqual(completed.map((r) => r.text), ["Hecho"]);
+  const all = JSON.parse((await list({ status: "all", limit: 2 }))
+    .content[0].text);
+  assert.equal(all.length, 2);
+  assert.equal((await list({ status: "nope" })).isError, true);
+  assert.equal((await list({ limit: 0 })).isError, true);
+});
+
 test("concurrent creations get distinct orders", async () => {
   await Promise.all([1, 2, 3, 4].map((n) => call({ text: `p${n}` }, n)));
-  const docs = await db.collection(`users/${UID}/reminders`).get();
+  const docs = await db.collection(`users/${UID}/reminders`)
+    .where("completed", "==", false).get();
   const orders = docs.docs.map((d) => d.get("order")).sort();
   assert.deepEqual(orders, [0, 1, 2, 3, 4]);
 });

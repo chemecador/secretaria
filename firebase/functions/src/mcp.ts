@@ -17,6 +17,9 @@ const MAX_DESCRIPTION_LENGTH = 2000;
 /** Tope de recordatorios creados por token y dia (UTC): frena a una IA en bucle. */
 const DAILY_CREATE_LIMIT = 100;
 
+const DEFAULT_LIST_LIMIT = 50;
+const MAX_LIST_LIMIT = 100;
+
 const CREATE_REMINDER_TOOL = {
   name: "create_reminder",
   description:
@@ -58,6 +61,39 @@ const CREATE_REMINDER_TOOL = {
       },
     },
     required: ["text"],
+    additionalProperties: false,
+  },
+};
+
+const LIST_REMINDERS_TOOL = {
+  name: "list_reminders",
+  description:
+    "Lists the user's reminders in their Secretaria app, including the " +
+    "ones other people shared with them. Pending reminders come in the " +
+    "order the user arranged them; completed ones, most recent first. " +
+    "dueDate and dueTime are the user's local calendar and clock.",
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      status: {
+        type: "string",
+        enum: ["pending", "completed", "all"],
+        description: "Which reminders to return. Defaults to pending.",
+      },
+      limit: {
+        type: "integer",
+        minimum: 1,
+        maximum: MAX_LIST_LIMIT,
+        description: `Maximum number of reminders. Defaults to ${
+          DEFAULT_LIST_LIMIT}.`,
+      },
+    },
     additionalProperties: false,
   },
 };
@@ -233,6 +269,140 @@ async function createReminder(uid: string, input: ReminderInput):
   return ref.id;
 }
 
+type ReminderStatus = "pending" | "completed" | "all";
+
+export interface ListInput {
+  status: ReminderStatus;
+  limit: number;
+}
+
+/**
+ * @param {Record<string, unknown>} args Argumentos de la llamada.
+ * @return {ListInput} Filtros validados.
+ */
+export function parseListInput(args: Record<string, unknown>): ListInput {
+  const status = args.status ?? "pending";
+  if (status !== "pending" && status !== "completed" && status !== "all") {
+    throw new ToolInputError("status must be pending, completed or all.");
+  }
+  const limit = args.limit ?? DEFAULT_LIST_LIMIT;
+  if (typeof limit !== "number" || !Number.isInteger(limit) ||
+    limit < 1 || limit > MAX_LIST_LIMIT) {
+    throw new ToolInputError(
+      `limit must be an integer between 1 and ${MAX_LIST_LIMIT}.`);
+  }
+  return { status, limit };
+}
+
+interface ListedReminder {
+  id: string;
+  ownerId: string;
+  text: string;
+  description: string | null;
+  dueDate: string | null;
+  dueTime: string | null;
+  completed: boolean;
+  order: number;
+  createdAtMs: number;
+  completedAtMs: number;
+}
+
+/**
+ * @param {FirebaseFirestore.DocumentSnapshot} doc Recordatorio.
+ * @return {ListedReminder} Campos que se muestran, con valores por defecto.
+ */
+function toListed(doc: FirebaseFirestore.DocumentSnapshot): ListedReminder {
+  const text = doc.get("text");
+  const description = doc.get("description");
+  const dueDate = doc.get("dueDate");
+  const dueTime = doc.get("dueTime");
+  const order = doc.get("order");
+  const date = doc.get("date");
+  const completedAt = doc.get("completedAt");
+  return {
+    id: doc.id,
+    ownerId: doc.ref.parent.parent?.id ?? "",
+    text: typeof text === "string" ? text : "",
+    description: typeof description === "string" ? description : null,
+    dueDate: typeof dueDate === "string" ? dueDate : null,
+    dueTime: typeof dueTime === "string" ? dueTime : null,
+    completed: doc.get("completed") === true,
+    order: typeof order === "number" ? order : 0,
+    createdAtMs: date instanceof Timestamp ? date.toMillis() : 0,
+    completedAtMs: completedAt instanceof Timestamp ?
+      completedAt.toMillis() : 0,
+  };
+}
+
+/**
+ * Espejo de `getReminders` del cliente: los propios por ruta (los anteriores
+ * al reparto no tienen `contributors`) mas los compartidos por collection
+ * group, sin duplicados.
+ * @param {string} uid Dueño del token.
+ * @param {ListInput} input Filtros ya validados.
+ * @return {Promise<ListedReminder[]>} Recordatorios ordenados y recortados.
+ */
+async function listReminders(uid: string, input: ListInput):
+  Promise<ListedReminder[]> {
+  const db = admin.firestore();
+  const [own, shared] = await Promise.all([
+    db.collection(USERS_COLLECTION).doc(uid)
+      .collection(REMINDERS_COLLECTION).get(),
+    db.collectionGroup(REMINDERS_COLLECTION)
+      .where("contributors", "array-contains", uid).get(),
+  ]);
+  const byKey = new Map<string, ListedReminder>();
+  for (const doc of [...own.docs, ...shared.docs]) {
+    const reminder = toListed(doc);
+    byKey.set(`${reminder.ownerId}/${reminder.id}`, reminder);
+  }
+  const wanted = [...byKey.values()].filter((r) =>
+    input.status === "all" || r.completed === (input.status === "completed"));
+  // Mismo criterio que `pendingReminders`: los `order` pueden coincidir entre
+  // dueños, asi que se desempata por fecha de creacion y por id.
+  wanted.sort((a, b) => {
+    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+    if (a.completed) return b.completedAtMs - a.completedAtMs;
+    return a.order - b.order || a.createdAtMs - b.createdAtMs ||
+      a.id.localeCompare(b.id);
+  });
+  return wanted.slice(0, input.limit);
+}
+
+/**
+ * @param {string} uid Dueño del token.
+ * @param {Record<string, unknown>} args Argumentos de la llamada.
+ * @return {Promise<Record<string, unknown>>} Resultado MCP de la herramienta.
+ */
+async function callListTool(uid: string, args: Record<string, unknown>):
+  Promise<Record<string, unknown>> {
+  try {
+    const reminders = await listReminders(uid, parseListInput(args));
+    const rows = reminders.map((r) => ({
+      id: r.id,
+      text: r.text,
+      description: r.description,
+      dueDate: r.dueDate,
+      dueTime: r.dueTime,
+      completed: r.completed,
+      shared: r.ownerId !== uid,
+    }));
+    return {
+      content: [{
+        type: "text",
+        text: rows.length === 0 ? "No reminders." :
+          JSON.stringify(rows, null, 1),
+      }],
+    };
+  } catch (error) {
+    if (!(error instanceof ToolInputError)) throw error;
+    return {
+      isError: true,
+      content: [{ type: "text", text: error.message }],
+    };
+  }
+}
+
 /**
  * @param {string} uid Dueño del token.
  * @param {string} tokenHash Hash del token, para el tope diario.
@@ -244,12 +414,15 @@ async function callTool(
   tokenHash: string,
   params: Record<string, unknown> | undefined,
 ): Promise<Record<string, unknown>> {
+  const rawArgs = params?.arguments;
+  const args = typeof rawArgs === "object" && rawArgs !== null ?
+    rawArgs as Record<string, unknown> : {};
+  if (params?.name === LIST_REMINDERS_TOOL.name) {
+    return callListTool(uid, args);
+  }
   if (params?.name !== CREATE_REMINDER_TOOL.name) {
     throw new RpcError(-32602, `Unknown tool: ${String(params?.name)}`);
   }
-  const rawArgs = params.arguments;
-  const args = typeof rawArgs === "object" && rawArgs !== null ?
-    rawArgs as Record<string, unknown> : {};
   try {
     const input = parseReminderInput(args);
     if (!await consumeDailyBudget(tokenHash)) {
@@ -309,7 +482,7 @@ async function handleRpc(
       result = {};
       break;
     case "tools/list":
-      result = { tools: [CREATE_REMINDER_TOOL] };
+      result = { tools: [CREATE_REMINDER_TOOL, LIST_REMINDERS_TOOL] };
       break;
     case "tools/call":
       result = await callTool(uid, tokenHash, params);
